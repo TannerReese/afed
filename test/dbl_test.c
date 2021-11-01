@@ -53,6 +53,19 @@ int main(int argc, char *argv[]){
 	
 	puts("\n===============\n");
 	
+	decl_t decls3[] = {
+		{"___", "__-5*-5/-5%-3+4^1.3"},
+		{"__", "__OP*__OP         /4.5*__OP+3 -9.8-3"},
+		{"__OP", "4 + 6 + 8 - 9.4 - 4.56 + 3 / 5"}
+	};
+	if(test(
+		"___*__-__OP/__^__",
+		204.122506542, EVAL_ERR_OK, EVAL_ERR_OK,
+		3, decls3
+	)) failures++;
+	
+	puts("\n===============\n");
+	
 	// Check for correct parsing errors
 	printf("Checking Parsing Errors\n");
 	if(test(
@@ -130,16 +143,17 @@ static bool test(const char *expstr, double tgt, expr_err_t perr, expr_err_t eve
 	}
 	
 	// Evaluate main expression
-	if(!err && !mainexp){
+	if(!err && mainexp){
 		printf("\nEvaluating Expression\n");
-		void *res = expr_eval(mainexp, &err);
+		double res;
+		expr_eval(&res, mainexp, &err);
 		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
 		printf("Result Pointer: %p\n", res);
-		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, *(double*)res);
+		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
 		if(everr != err){
 			printf("Failed to Evaluate Expression\n");
 			return 1;
-		}else if(fabs(tgt - *(double*)res) > 0.00001){
+		}else if(fabs(tgt - res) > 0.00001){
 			printf("Failed to Evaluate Expression Correctly\n");
 			return 1;
 		}

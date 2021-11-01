@@ -4,24 +4,18 @@
 
 #include "expr_dbl.h"
 
-// Create container for double value
-void *newdbl(double val){
-	double *valp = malloc(sizeof(double));
-	*valp = val;
-	return valp;
-}
 
 // Unary operators
-expr_err_t neg_d(void *arg);
+static expr_err_t neg_d(void *arg);
 
 // Binary operators
-expr_err_t add_d(void *arg1, void *arg2);
-expr_err_t sub_d(void *arg1, void *arg2);
-expr_err_t mul_d(void *arg1, void *arg2);
-expr_err_t div_d(void *arg1, void *arg2);
-expr_err_t flrdiv_d(void *arg1, void *arg2);
-expr_err_t mod_d(void *arg1, void *arg2);
-expr_err_t pow_d(void *arg1, void *arg2);
+static expr_err_t add_d(void *arg1, void *arg2);
+static expr_err_t sub_d(void *arg1, void *arg2);
+static expr_err_t mul_d(void *arg1, void *arg2);
+static expr_err_t div_d(void *arg1, void *arg2);
+static expr_err_t flrdiv_d(void *arg1, void *arg2);
+static expr_err_t mod_d(void *arg1, void *arg2);
+static expr_err_t pow_d(void *arg1, void *arg2);
 
 // Define operators
 struct oper_info_s expr_opers[] = {
@@ -37,41 +31,42 @@ struct oper_info_s expr_opers[] = {
 };
 
 
-expr_err_t neg_d(void *arg){
+static expr_err_t neg_d(void *arg){
 	*(double*)arg = -*(double*)arg;
 	return EVAL_ERR_OK;
 }
 
-expr_err_t add_d(void *arg1, void *arg2){
+static expr_err_t add_d(void *arg1, void *arg2){
 	*(double*)arg1 += *(double*)arg2;
 	return EVAL_ERR_OK;
 }
 
-expr_err_t sub_d(void *arg1, void *arg2){
+static expr_err_t sub_d(void *arg1, void *arg2){
 	*(double*)arg1 -= *(double*)arg2;
 	return EVAL_ERR_OK;
 }
 
-expr_err_t mul_d(void *arg1, void *arg2){
+static expr_err_t mul_d(void *arg1, void *arg2){
 	*(double*)arg1 *= *(double*)arg2;
 	return EVAL_ERR_OK;
 }
-expr_err_t div_d(void *arg1, void *arg2){
+
+static expr_err_t div_d(void *arg1, void *arg2){
 	*(double*)arg1 /= *(double*)arg2;
 	return EVAL_ERR_OK;
 }
 
-expr_err_t flrdiv_d(void *arg1, void *arg2){
+static expr_err_t flrdiv_d(void *arg1, void *arg2){
 	*(double*)arg1 = floor(*(double*)arg1 / *(double*)arg2);
 	return EVAL_ERR_OK;
 }
 
-expr_err_t mod_d(void *arg1, void *arg2){
+static expr_err_t mod_d(void *arg1, void *arg2){
 	*(double*)arg1 = fmod(*(double*)arg1, *(double*)arg2);
 	return EVAL_ERR_OK;
 }
 
-expr_err_t pow_d(void *arg1, void *arg2){
+static expr_err_t pow_d(void *arg1, void *arg2){
 	*(double*)arg1 = pow(*(double*)arg1, *(double*)arg2);
 	return EVAL_ERR_OK;
 }
@@ -79,16 +74,18 @@ expr_err_t pow_d(void *arg1, void *arg2){
 
 
 // Define controls
-void free_d(void *val);
-void *clone_d(void *val);
-void *parse_d(const char *str, const char **endptr);
+static int equal_d(void *val1, void *val2);
+static void *clone_d(void *dest, void *src);
+static void *parse_d(void *dest, const char *str, const char **endptr);
 
-expr_valctl_t expr_valctl = { free_d, clone_d, parse_d };
+expr_valctl_t expr_valctl = { sizeof(double), equal_d, NULL, clone_d, parse_d };
 
-void free_d(void *val){ free(val); }
-void *clone_d(void *val){ return newdbl(*(double*)val); }
+static int equal_d(void *val1, void *val2){ return *(double*)val1 == *(double*)val2; }
+static void *clone_d(void *dest, void *src){ memcpy(dest, src, expr_valctl.size); }
 
-void *parse_d(const char *str, const char **endptr){
+static void *parse_d(void *dest, const char *str, const char **endptr){
+	if(!dest) return NULL;
+	
 	// Give something to endptr to point to if NULL
 	const char *tmp_endptr;
 	if(!endptr) endptr = &tmp_endptr;
@@ -97,9 +94,8 @@ void *parse_d(const char *str, const char **endptr){
 	double val = strtod(str, (char**)endptr);
 	if(*endptr == str) return NULL;
 	
-	// Allocate space if parsable
-	double *valp = malloc(sizeof(double));
-	*valp = val;
-	return valp;
+	// Put value into destination
+	*(double*)dest = val;
+	return dest;
 }
 

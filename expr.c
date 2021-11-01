@@ -23,7 +23,7 @@ typedef uint16_t instr_t;
 #define INSTR_NEW_CONST(idx) ((idx) & 0x3fff)
 
 // Get constant or variable from expression
-#define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ? (exp)->vars[INSTR_LOAD_INDEX(inst)]->cached : (exp)->consts[INSTR_LOAD_INDEX(inst)])
+#define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ? (exp)->vars[INSTR_LOAD_INDEX(inst)]->cached : get_const((exp), INSTR_LOAD_INDEX(inst)))
 
 struct expr_s {
 	// Outside variables loaded at runtime
@@ -32,13 +32,23 @@ struct expr_s {
 	
 	// Constants & Literals
 	size_t constlen, constcap;  // Number of members and maximum number possible
-	void **consts;
+	// Block of memory containing values
+	// Each value is `expr_valctl.size` bytes in size
+	void *consts;
 	
 	// Instructions to Run
 	size_t instrlen, instrcap;
 	instr_t *instrs;
 };
 
+// Access constant value at index i
+#define get_const(exp, i) ((exp)->consts + (i) * expr_valctl.size)
+#define set_const(exp, i, val) memmove(get_const(exp, i), val, expr_valctl.size)
+
+// Check equality of values
+#define vals_equal(v1, v2) (expr_valctl.equal ? expr_valctl.equal(v1, v2) : memcmp(v1, v2, expr_valctl.size))
+// Deallocate value
+#define vals_free(vl) if(expr_valctl.free) expr_valctl.free(vl)
 
 
 
@@ -89,7 +99,11 @@ expr_t nmsp_var_expr(var_t vr){
 // Get value of variable
 void *nmsp_var_value(var_t vr, expr_err_t *err){
 	// Calculate the value if not cached
-	if(!vr->cached) vr->cached = expr_eval(vr->expr, &(vr->err));
+	if(!vr->cached){
+		// Allocate space for value
+		vr->cached = malloc(expr_valctl.size);
+		expr_eval(vr->cached, vr->expr, &(vr->err));
+	}
 	
 	if(err) *err = vr->err;
 	return vr->cached;
@@ -128,7 +142,10 @@ void nmsp_free(namespace_t nmsp){
 		next = curr->next;
 		// Deallocate variable members
 		if(curr->expr) expr_free(curr->expr);
-		if(curr->cached) expr_valctl.free(curr->cached);
+		if(curr->cached){
+			vals_free(curr->cached);
+			free(curr->cached);
+		}
 		free(curr);
 		curr = next;
 	}
@@ -241,6 +258,8 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 				return NULL;
 			}
 			
+			// If variable's expression has no variables go to next
+			if(!vr->expr || vr->expr->varlen == 0) continue;
 			
 			// Resize queue to accomodate variables used by `vr`
 			size_t qend = qstart + qlen;  // Find end of queue
@@ -294,7 +313,7 @@ expr_t expr_new(size_t varcap, size_t constcap, size_t instrcap){
 	exp->varlen = 0;  exp->varcap = varcap;
 	exp->vars = malloc(varcap * sizeof(var_t));
 	exp->constlen = 0;  exp->constcap = constcap;
-	exp->consts = malloc(constcap * sizeof(void*));
+	exp->consts = malloc(constcap * expr_valctl.size);
 	exp->instrlen = 0;  exp->instrcap = instrcap;
 	exp->instrs = malloc(instrcap * sizeof(instr_t));
 	return exp;
@@ -305,7 +324,7 @@ void expr_free(expr_t exp){
 	free(exp->instrs);
 	
 	// Deallocate any stored constants
-	for(size_t i = 0; i < exp->constlen; i++) free(exp->consts[i]);
+	for(size_t i = 0; i < exp->constlen; i++) vals_free(get_const(exp, i));
 	free(exp->consts);
 	
 	free(exp->vars);
@@ -313,57 +332,41 @@ void expr_free(expr_t exp){
 }
 
 expr_t expr_new_var(var_t vr){
-	expr_t exp = malloc(sizeof(struct expr_s));
-	exp->varlen = 1;  exp->varcap = 2;
-	exp->vars = malloc(exp->varcap * sizeof(var_t));
-	exp->vars[0] = vr;
-	
-	exp->constlen = 0;  exp->constcap = 0;
-	exp->consts = NULL;
-	
-	exp->instrlen = 1;  exp->instrcap = 2;
-	exp->instrs = malloc(exp->instrcap * sizeof(instr_t));
-	exp->instrs[0] = INSTR_NEW_VAR(0);
+	expr_t exp = expr_new(2, 0, 2);
+	exp->varlen = 1;  exp->vars[0] = vr;
+	exp->instrlen = 1;  exp->instrs[0] = INSTR_NEW_VAR(0);
 	return exp;
 }
 
 expr_t expr_new_const(void *val){
-	expr_t exp = malloc(sizeof(struct expr_s));
-	exp->varlen = 0;  exp->varcap = 0;
-	exp->vars = NULL;
-	
-	exp->constlen = 1;  exp->constcap = 2;
-	exp->consts = malloc(exp->constcap * sizeof(void*));
-	exp->consts[0] = val;
-	
-	exp->instrlen = 1;  exp->instrcap = 2;
-	exp->instrs = malloc(exp->instrcap * sizeof(instr_t));
-	exp->instrs[0] = INSTR_NEW_CONST(0);
+	expr_t exp = expr_new(0, 2, 2);
+	exp->constlen = 1;  set_const(exp, 0, val);
+	exp->instrlen = 1;  exp->instrs[0] = INSTR_NEW_CONST(0);
 	return exp;
 }
 
 // Evaluate `exp` using the provided stack
-static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend);
+static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend);
 
-void *expr_eval(expr_t exp, expr_err_t *err){
-	void *stack[EXPR_EVAL_STACK_SIZE];  // Allocate Stack for evaluation
+void *expr_eval(void *dest, expr_t exp, expr_err_t *err){
+	size_t stksize = EXPR_EVAL_STACK_SIZE * expr_valctl.size;
+	uint8_t stack[stksize];  // Allocate Stack for evaluation
 	// On evaluation error return
 	expr_err_t tmperr;
-	if(tmperr = expr_eval_stk(exp, stack, stack + EXPR_EVAL_STACK_SIZE)){
+	if(tmperr = expr_eval_stk(exp, stack, stack + stksize)){
 		if(err) *err = tmperr;
 		return NULL;
 	}
 	
-	// Return bottom of stack
-	return *stack;
+	// Place bottom of stack into dest
+	memcpy(dest, stack, expr_valctl.size);
+	return dest;
 }
 
 // Evaluate `exp` using the provided stack
-static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend){
+static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	// If no expression is provided
 	if(!exp) return EVAL_ERR_NO_EXPR;
-	
-	expr_err_t err = EVAL_ERR_OK;  // Track any error that happen
 	
 	// Evaluate any variable dependencies
 	for(size_t i = 0; i < exp->varlen; i++){
@@ -371,13 +374,21 @@ static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend){
 		
 		// Evaluate expression if no cached variable
 		if(!vr->cached){
-			if(err = expr_eval_stk(vr->expr, stack, stkend)) return err;
-			vr->cached = *stack;  // Store evaluated value in variable
+			// Allocate space for variable
+			vr->cached = malloc(expr_valctl.size);
+			vr->err = expr_eval_stk(vr->expr, stack, stkend);
+			memcpy(vr->cached, stack, expr_valctl.size);
 		}
+		
+		if(vr->err) return vr->err;
 	}
 	
 	// Store location on stack
-	void** stktop = stack;
+	void* stktop = stack;
+	// Macro to shift the stack up or down
+	#define shfstk(pt, shf) ((void*)((uint8_t*)(pt) + (shf) * expr_valctl.size))
+	
+	expr_err_t err = EVAL_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
 	int no_free = 1;  // If the top element doesn't need to be freed on binary operation
@@ -386,24 +397,24 @@ static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend){
 		
 		if(INSTR_IS_OPER(inst)){  // Operator
 			// Check that there are enough arguments
-			if(stktop - !INSTR_IS_UNARY(inst) <= stack){
+			if(shfstk(stktop, -!INSTR_IS_UNARY(inst)) <= stack){
 				err = EVAL_ERR_STACK_UNDERFLOW;
 				break;
 			}
 			
 			// Get top argument and get operator id
-			void **arg = stktop - 1;
+			void *arg = shfstk(stktop, -1);
 			oper_t op = INSTR_OPERID(inst);
 			
 			if(INSTR_IS_UNARY(inst)){  // Unary Operator
 				// Perform Unary Operation
-				if(err = expr_opers[op].func.unary(*arg)) break;
+				if(err = expr_opers[op].func.unary(arg)) break;
 			}else{  // Binary Operator
 				// Perform Binary Operation
-				if(err = expr_opers[op].func.binary(*(arg - 1), *arg)) break;
+				if(err = expr_opers[op].func.binary(shfstk(arg, -1), arg)) break;
 				
 				if(no_free) no_free = 1;  // Clear no_free flag
-				else expr_valctl.free(*arg);  // Deallocate top element
+				else vals_free(arg);  // Deallocate top element
 				
 				stktop = arg;  // Pull stack down to reflect consumption of top element
 			}
@@ -423,25 +434,26 @@ static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend){
 				// If the next instruction is a binary operation
 				// Don't perform a needless allocation
 				no_free = 1;
+				memcpy(stktop, val, expr_valctl.size);
 			}else{
 				// Otherwise a clone is necessary
-				val = expr_valctl.clone(val);
+				expr_valctl.clone(stktop, val);
 			}
 			
-			// Place value on top of stack
-			*(stktop++) = val;
+			// Move `stktop` up because of additional value
+			stktop = shfstk(stktop, 1);
 		}
 	}
 	
 	// Should only be one remaining value after evaluation
-	if(!err && stktop - 1 > stack){
+	if(!err && shfstk(stktop, -1) > stack){
 		err = EVAL_ERR_STACK_SURPLUS;
 	}
 	
 	if(err){
 		// Cleanup values on stack
-		if(no_free) stktop--;  // Ignore top value if no_free true
-		for(; stktop >= stack; stktop--) expr_valctl.free(*stktop);
+		if(no_free) stktop = shfstk(stktop, -1);  // Ignore top value if no_free true
+		for(; stktop >= stack; stktop = shfstk(stktop, -1)) vals_free(stktop);
 		return err;
 	}else{
 		// There will be one value left at the bottom of the stack
@@ -453,10 +465,10 @@ static expr_err_t expr_eval_stk(expr_t exp, void **stack, void **stkend){
 
 // Macro to increase array size enough for one element
 // Does not modify the length only the capacity
-#define inc_size(arr, type, cap, len) if((len) >= (cap)){ \
+#define inc_size(arr, size, cap, len) if((len) >= (cap)){ \
 	/* Make sure capacity is at least one */ (cap) += (cap) == 0; \
 	do{ (cap) <<= 1; }while((len) >= (cap)); \
-	(arr) = realloc((arr), (cap) * sizeof(type)); \
+	(arr) = realloc((arr), (cap) * (size)); \
 }
 
 // Place variable in expr variable section if not alreayd present
@@ -467,7 +479,7 @@ static size_t expr_put_var(expr_t exp, var_t vr){
 	
 	// Add variable to variable list
 	// Resize variable section if necessary
-	inc_size(exp->vars, var_t, exp->varcap, exp->varlen);
+	inc_size(exp->vars, sizeof(var_t), exp->varcap, exp->varlen);
 	exp->vars[exp->varlen++] = vr;
 	return exp->varlen - 1;
 }
@@ -476,12 +488,14 @@ static size_t expr_put_var(expr_t exp, var_t vr){
 // Return the constant index
 static size_t expr_put_const(expr_t exp, void *val){
 	// Check if constant value is already present
-	for(size_t i = 0; i < exp->constlen; i++) if(exp->consts[i] == val) return i;
+	for(size_t i = 0; i < exp->constlen; i++)
+		if(vals_equal(get_const(exp, i), val)) return i;
 	
 	// Add value to constants list
 	// Resize constant section if necessary
-	inc_size(exp->consts, void*, exp->constcap, exp->constlen);
-	exp->consts[exp->constlen++] = val;
+	inc_size(exp->consts, expr_valctl.size, exp->constcap, exp->constlen);
+	set_const(exp, exp->constlen, val);
+	exp->constlen++;
 	return exp->constlen - 1;
 }
 
@@ -492,7 +506,7 @@ expr_t expr_binary_var(expr_t exp, var_t vr, oper_t op){
 	
 	// Resize if necessary to hold two new instructions
 	exp->instrlen++;
-	inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	
 	// Add load instruction to instruction list
 	exp->instrs[exp->instrlen - 1] = INSTR_NEW_VAR(varid);
@@ -508,7 +522,7 @@ expr_t expr_binary_const(expr_t exp, void *val, oper_t op){
 	
 	// Add load instruction to instruction list
 	exp->instrlen++;
-	inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	
 	// Add load instruction to instruction list
 	exp->instrs[exp->instrlen - 1] = INSTR_NEW_CONST(constid);
@@ -527,7 +541,7 @@ expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 	// Create mapping from old src constant to new constant locations
 	size_t constmap[src->constlen];
 	// Put src constant into dest and record locations
-	for(size_t i = 0; i < src->constlen; i++) constmap[i] = expr_put_const(dest, src->consts[i]);
+	for(size_t i = 0; i < src->constlen; i++) constmap[i] = expr_put_const(dest, get_const(src, i));
 	
 	
 	// Iterate over src instructions to substitute variable and constant references
@@ -540,12 +554,12 @@ expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 		else if(INSTR_IS_CONST(inst))
 			inst = INSTR_NEW_CONST(constmap[INSTR_LOAD_INDEX(inst)]);
 		
-		inc_size(dest->instrs, instr_t, dest->instrcap, dest->instrlen);  // Resize array if necessary
+		inc_size(dest->instrs, sizeof(instr_t), dest->instrcap, dest->instrlen);  // Resize array if necessary
 		dest->instrs[dest->instrlen++] = inst;  // Put instruction into dest instrs
 	}
 	
 	// Place operator at end of instructions
-	inc_size(dest->instrs, instr_t, dest->instrcap, dest->instrlen);  // Resize array if necessary
+	inc_size(dest->instrs, sizeof(instr_t), dest->instrcap, dest->instrlen);  // Resize array if necessary
 	dest->instrs[dest->instrlen++] = INSTR_NEW_OPER(op, 0);
 	
 	return dest;
@@ -554,7 +568,7 @@ expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 // Modify `exp` by applying unary operator `op`
 expr_t expr_unary(expr_t exp, oper_t op){
 	// Resize instruction array if necessary
-	inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	
 	// Place unary operator at the end
 	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op, 1);
@@ -737,7 +751,7 @@ static oper_t parse_oper(const char *str, const char **endptr, int is_unary){
 // Apply single operator to value stack by appending
 static void apply_oper(expr_t exp, oper_t opid){
 	// Resize if necessary
-	inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(opid, expr_opers[opid].is_unary);
 }
 
@@ -816,7 +830,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		if(c == '('){
 			str++;  // Consume '('
 			// Place open parenthesis on operator stack			
-			inc_size(opstk.bottom, struct stk_oper_s, opstk.cap, opstk.len);
+			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
 			opstk.bottom[opstk.len++].is_block = 1;  // Indicate that it is a block
 			was_last_val = 0;  // New expression so there is no last value
 			continue;
@@ -857,7 +871,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			}
 			
 			// Place operator at top of stack
-			inc_size(opstk.bottom, struct stk_oper_s, opstk.cap, opstk.len);
+			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
 			elem.is_block = 0;
 			elem.prec_assoc = (info.prec << 1) | info.assoc | info.is_unary;
 			elem.operid = opid;
@@ -870,8 +884,8 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		
 		
 		// Try to parse value
-		void *val;
-		if(val = expr_valctl.parse(str, &after_tok)){
+		uint8_t val[expr_valctl.size];
+		if(expr_valctl.parse(val, str, &after_tok)){
 			// Cannot have two values in a row
 			if(was_last_val){
 				*err = PARSE_ERR_MISSING_OPERS;
@@ -881,7 +895,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			// Put constant into expression
 			size_t constid = expr_put_const(exp, val);
 			// Place value onto instruction list as constant
-			inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 			exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(constid);
 			str = after_tok;
 			was_last_val = 1;
@@ -901,7 +915,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			// Place variable into variable section
 			size_t varid = expr_put_var(exp, vr);
 			// Place value load instruction into instruction list
-			inc_size(exp->instrs, instr_t, exp->instrcap, exp->instrlen);
+			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 			exp->instrs[exp->instrlen++] = INSTR_NEW_VAR(varid);
 			str = after_tok;
 			was_last_val = 1;

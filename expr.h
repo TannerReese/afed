@@ -117,13 +117,23 @@ expr_t expr_unary(expr_t exp, oper_t op);
 
 // Functions used to manipulate values
 typedef struct {
+	// Size of value in bytes
+	size_t size;
+	
+	// Check if two values are equal
+	// NOTE: If null then memory comparison is done
+	int (*equal)(void *val1, void *val2);
+	
 	// Deallocate an instance of a value
-	void (*free)(void*);
-	// Create a deep copy of a value
-	void *(*clone)(void*);
+	// NOTE: If null no deallocation is necessary
+	void (*free)(void *val);
+	// Create a deep copy of a value and place it in dest
+	// Should return destination pointer
+	void *(*clone)(void *dest, void *src);
 	
 	// Parse value from string
-	void *(*parse)(const char*, const char**);
+	// Should return destination pointer
+	void *(*parse)(void *dest, const char *str, const char **endptr);
 } expr_valctl_t;
 
 // Control functions used by expression evaluator
@@ -134,7 +144,7 @@ extern expr_valctl_t expr_valctl;
 // Maximum allowed variables on stack during evaluation
 #define EXPR_EVAL_STACK_SIZE 256
 // Evaluate expression
-void *expr_eval(expr_t exp, expr_err_t *err);
+void *expr_eval(void *dest, expr_t exp, expr_err_t *err);
 
 // Parse as much as possible of the string as expression
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);
