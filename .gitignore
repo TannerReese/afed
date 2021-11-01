@@ -1,0 +1,10 @@
+# Test binaries
+test/dbl_test
+
+# Vim Swap files
+*.sw*
+
+# Object files
+*.o
+*.obj
+
