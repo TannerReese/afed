@@ -33,42 +33,42 @@ struct oper_info_s expr_opers[] = {
 
 static expr_err_t neg_d(void *arg){
 	*(double*)arg = -*(double*)arg;
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t add_d(void *arg1, void *arg2){
 	*(double*)arg1 += *(double*)arg2;
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t sub_d(void *arg1, void *arg2){
 	*(double*)arg1 -= *(double*)arg2;
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t mul_d(void *arg1, void *arg2){
 	*(double*)arg1 *= *(double*)arg2;
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t div_d(void *arg1, void *arg2){
 	*(double*)arg1 /= *(double*)arg2;
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t flrdiv_d(void *arg1, void *arg2){
 	*(double*)arg1 = floor(*(double*)arg1 / *(double*)arg2);
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t mod_d(void *arg1, void *arg2){
 	*(double*)arg1 = fmod(*(double*)arg1, *(double*)arg2);
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 static expr_err_t pow_d(void *arg1, void *arg2){
 	*(double*)arg1 = pow(*(double*)arg1, *(double*)arg2);
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 

@@ -45,6 +45,8 @@ struct expr_s {
 #define get_const(exp, i) ((exp)->consts + (i) * expr_valctl.size)
 #define set_const(exp, i, val) memmove(get_const(exp, i), val, expr_valctl.size)
 
+// Macro to easily define stack space for values
+#define vals_def(vl) uint8_t vl[expr_valctl.size]
 // Check equality of values
 #define vals_equal(v1, v2) (expr_valctl.equal ? expr_valctl.equal(v1, v2) : memcmp(v1, v2, expr_valctl.size))
 // Deallocate value
@@ -388,7 +390,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	// Macro to shift the stack up or down
 	#define shfstk(pt, shf) ((void*)((uint8_t*)(pt) + (shf) * expr_valctl.size))
 	
-	expr_err_t err = EVAL_ERR_OK;  // Track any errors that happen
+	expr_err_t err = EXPR_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
 	int no_free = 1;  // If the top element doesn't need to be freed on binary operation
@@ -457,7 +459,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 		return err;
 	}else{
 		// There will be one value left at the bottom of the stack
-		return EVAL_ERR_OK;
+		return EXPR_ERR_OK;
 	}
 }
 
@@ -488,8 +490,15 @@ static size_t expr_put_var(expr_t exp, var_t vr){
 // Return the constant index
 static size_t expr_put_const(expr_t exp, void *val){
 	// Check if constant value is already present
-	for(size_t i = 0; i < exp->constlen; i++)
-		if(vals_equal(get_const(exp, i), val)) return i;
+	for(size_t i = 0; i < exp->constlen; i++){
+		if(vals_equal(get_const(exp, i), val)){
+			// If `val` is not placed into the constant list
+			// Then it must be deallocated
+			vals_free(val);
+			
+			return i;
+		}
+	}
 	
 	// Add value to constants list
 	// Resize constant section if necessary
@@ -498,6 +507,45 @@ static size_t expr_put_const(expr_t exp, void *val){
 	exp->constlen++;
 	return exp->constlen - 1;
 }
+
+/* Remove the last instruction if it is a const load
+ * Additionally remove the corresponding const if no other loads use it
+ *
+ * Returns 1 if constant was removed and 0 otherwise
+ * If the constant was removed the value is placed in `dest`
+ * Otherwise the value of the constant is cloned into `dest`
+ */
+
+static int expr_pop_const_load(expr_t exp, void *dest){
+	instr_t instr = exp->instrs[exp->instrlen - 1];  // Get top instruction
+	
+	// Make sure top instruction is a constant load
+	if(!INSTR_IS_CONST(instr)) return 0;
+	// Remove top instruction
+	exp->instrlen--;
+	
+	// Get associated constant
+	size_t idx = INSTR_LOAD_INDEX(instr);
+	void *val = get_const(exp, idx);
+	
+	// Check if any other instructions use this constant
+	for(size_t i = 0; i < exp->instrlen; i++){
+		instr = exp->instrs[i];
+		// If any other instruction uses this constant
+		// We must clone the value into `dest`
+		if(INSTR_IS_CONST(instr) && INSTR_LOAD_INDEX(instr) == idx){
+			expr_valctl.clone(dest, val);
+			return 0;
+		}
+	}
+	
+	// If no other instructions use this constant remove it
+	exp->constlen--;
+	// Place the value into `dest`
+	memcpy(dest, val, expr_valctl.size);
+	return 1;
+}
+
 
 // Combine `vr` onto expression `exp` using binary operator `op`
 expr_t expr_binary_var(expr_t exp, var_t vr, oper_t op){
@@ -602,7 +650,7 @@ static expr_err_t check_valid(expr_t exp){
 	// More than one return value
 	if(height > 1) return EVAL_ERR_STACK_SURPLUS;
 	
-	return EVAL_ERR_OK;
+	return EXPR_ERR_OK;
 }
 
 
@@ -748,16 +796,79 @@ static oper_t parse_oper(const char *str, const char **endptr, int is_unary){
 	return opid;
 }
 
+// Try to evaluate constants while parsing expressions
+int expr_eval_on_parse = 1;
+
 // Apply single operator to value stack by appending
-static void apply_oper(expr_t exp, oper_t opid){
-	// Resize if necessary
+static expr_err_t apply_oper(expr_t exp, oper_t opid){
+	// If `expr_eval_on_parse` is set then try to
+	// Evaluate constants using operator on the stack
+	if(expr_eval_on_parse){
+		int is_unary = expr_opers[opid].is_unary;
+		
+		// Check for sufficient arguments
+		if(exp->instrlen < 1 + !is_unary) return EVAL_ERR_STACK_UNDERFLOW;
+		instr_t *inst = exp->instrs + exp->instrlen - 1;
+		
+		// Unary Operators
+		expr_err_t err;
+		if(is_unary){
+			if(INSTR_IS_CONST(*inst)){
+				// Pop constant off of instruction array
+				vals_def(dest);
+				expr_pop_const_load(exp, dest);
+				
+				// Try to apply unary operator
+				if(err = expr_opers[opid].func.unary(dest)){
+					vals_free(dest);
+					return err;
+				}
+				
+				// If successful push `dest` onto consts array
+				int idx = expr_put_const(exp, dest);
+				// Place load instruction back on instrs section
+				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
+				
+				return EXPR_ERR_OK;
+			}
+			
+		// Binary Operators
+		}else{
+			if(INSTR_IS_CONST(*inst) && INSTR_IS_CONST(*(inst - 1))){
+				// Define arguments to binary operator
+				vals_def(dest);
+				vals_def(src);
+				expr_pop_const_load(exp, src);
+				expr_pop_const_load(exp, dest);
+				
+				// Try to apply binary operator
+				if(err = expr_opers[opid].func.binary(dest, src)){
+					vals_free(dest);
+					vals_free(src);
+					return err;
+				}
+				
+				// If successful push `dest` onto consts array
+				int idx = expr_put_const(exp, dest);
+				// We can then deallocate `src`
+				vals_free(src);
+				// Place load instruction back on instrs section
+				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
+				
+				return EXPR_ERR_OK;
+			}
+		}
+	}
+	
+	// Put operator onto instrs section
 	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(opid, expr_opers[opid].is_unary);
+	return EXPR_ERR_OK;
 }
 
 
 // Place `op` onto `opstk` displacing operators as necessary and applying them to `exp`
-static void displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
+static expr_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
 	// If prec is negative displace all
 	if(prec < 0) prec = 0;
 	/* The bitwise-or with OPER_LEFT_ASSOC pushes up the prec_assoc of new
@@ -775,8 +886,11 @@ static void displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
 		opstk->len--
 	){	
 		// Try to apply operator onto expression
-		apply_oper(exp, elem.operid);
+		expr_err_t err;
+		if(err = apply_oper(exp, elem.operid)) return err;
 	}
+	
+	return EXPR_ERR_OK;
 }
 
 // Try to parse sequence of alphanumerics into variable
@@ -810,12 +924,12 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 	opstk.bottom = malloc(opstk.cap * sizeof(struct stk_oper_s));
 	
 	// Initialize expression
-	expr_t exp = expr_new(2, 2, 4);
+	expr_t exp = expr_new(4, 4, 8);
 	
 	// Give err reference to prevent null dereferences
 	expr_err_t tmperr;
 	if(!err) err = &tmperr;
-	*err = EVAL_ERR_OK;
+	*err = EXPR_ERR_OK;
 	
 	// Track if the last token parsed was a constant or variable
 	int was_last_val = 0;
@@ -837,7 +951,8 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		}else if(c == ')'){
 			str++;  // Consume ')'
 			// Remove all operators until block
-			displace_opers(exp, &opstk, -1);
+			if(*err = displace_opers(exp, &opstk, -1)) break;
+			
 			// Check for block (i.e. open parenthesis)
 			if(opstk.len > 0 && stktop(opstk).is_block){
 				// Remove block and continue parsing
@@ -859,8 +974,9 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			
 			// Only displace operators if binary operator
 			struct oper_info_s info = expr_opers[opid];
-			if(was_last_val) displace_opers(exp, &opstk, (int8_t)(info.prec));
-			else if(!stktop(opstk).is_block){  // When unary and previous element isn't block
+			if(was_last_val){  // If operator follows val it is binary
+				if(*err = displace_opers(exp, &opstk, (int8_t)(info.prec))) break;
+			}else if(!stktop(opstk).is_block){  // When unary and previous element isn't block
 				// Check that previous operator is unary, left-associative, or lower precedence
 				struct oper_info_s info2 = expr_opers[stktop(opstk).operid];
 				if(!(info2.is_unary || info2.assoc == OPER_RIGHT_ASSOC || info2.prec < info.prec)){
@@ -944,17 +1060,20 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		// Make sure no open parenths are left
 		if(op.is_block){
 			*err = PARSE_ERR_PARENTH_MISMATCH;
-			// Cleanup stack and expression on error
-			expr_free(exp);
-			free(opstk.bottom);
-			return NULL;
+			break;
 		}
 		
 		// Apply operator to expression
-		apply_oper(exp, op.operid);
+		if(*err = apply_oper(exp, op.operid)) break;
 	}
 	// Deallocate stack
 	free(opstk.bottom);
+	
+	if(*err){
+		// Deallocate expression on error
+		expr_free(exp);
+		return NULL;
+	}
 	
 	// Check that expression will evaluate appropriately
 	if(*err = check_valid(exp)){

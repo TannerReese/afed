@@ -13,7 +13,7 @@ typedef struct expr_s *expr_t;
 // Error type returned on failure to parse or evaluate expression
 typedef int expr_err_t;
 // Below are reserved values of expr_err_t
-#define EVAL_ERR_OK (0)
+#define EXPR_ERR_OK (0)
 #define EVAL_ERR_STACK_OVERFLOW (-1)
 #define EVAL_ERR_STACK_UNDERFLOW (-2)
 #define EVAL_ERR_STACK_SURPLUS (-3)
@@ -148,6 +148,9 @@ void *expr_eval(void *dest, expr_t exp, expr_err_t *err);
 
 // Parse as much as possible of the string as expression
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);
+// Flag used to indicate if constant expressions should be simplified while parsing
+// Defaults to true
+extern int expr_eval_on_parse;
 
 #endif
 
