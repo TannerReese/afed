@@ -147,7 +147,7 @@ static bool test(const char *expstr, double tgt, expr_err_t perr, expr_err_t eve
 	if(!err && mainexp){
 		printf("\nEvaluating Expression\n");
 		double res;
-		expr_eval(&res, mainexp, &err);
+		err = expr_eval(&res, mainexp);
 		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
 		printf("Result Pointer: %p\n", res);
 		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);

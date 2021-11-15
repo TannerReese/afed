@@ -38,7 +38,7 @@ typedef struct var_s *var_t;
 
 const char *nmsp_var_name(var_t vr, size_t *len);
 expr_t nmsp_var_expr(var_t vr);
-void *nmsp_var_value(var_t vr, expr_err_t *err);
+expr_err_t nmsp_var_value(void *dest, var_t vr);
 
 
 struct namespace_s;
@@ -139,12 +139,24 @@ typedef struct {
 // Control functions used by expression evaluator
 extern expr_valctl_t expr_valctl;
 
+// Macros for working with values
+// Define stack space for value
+#define valdef(vl) uint8_t vl[expr_valctl.size];
+// Move value from location `src` to `dest`
+#define valmove(dest, src) memmove(dest, src, expr_valctl.size)
+// Do deep copy of value from `src` into `dest`
+#define valclone(dest, src) (expr_valctl.clone ? expr_valctl.clone(dest, src) : valmove(dest, src))
+// Check if two values are equal
+#define valequal(v1, v2) (expr_valctl.equal ? expr_valctl.equal(v1, v2) : memcmp(v1, v2, expr_valctl.size))
+// Deallocate value
+#define valfree(vl) if(expr_valctl.free) expr_valctl.free(vl)
+
 
 
 // Maximum allowed variables on stack during evaluation
 #define EXPR_EVAL_STACK_SIZE 256
 // Evaluate expression
-void *expr_eval(void *dest, expr_t exp, expr_err_t *err);
+expr_err_t expr_eval(void *dest, expr_t exp);
 
 // Parse as much as possible of the string as expression
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);

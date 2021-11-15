@@ -43,15 +43,7 @@ struct expr_s {
 
 // Access constant value at index i
 #define get_const(exp, i) ((exp)->consts + (i) * expr_valctl.size)
-#define set_const(exp, i, val) memmove(get_const(exp, i), val, expr_valctl.size)
-
-// Macro to easily define stack space for values
-#define vals_def(vl) uint8_t vl[expr_valctl.size]
-// Check equality of values
-#define vals_equal(v1, v2) (expr_valctl.equal ? expr_valctl.equal(v1, v2) : memcmp(v1, v2, expr_valctl.size))
-// Deallocate value
-#define vals_free(vl) if(expr_valctl.free) expr_valctl.free(vl)
-
+#define set_const(exp, i, val) valmove(get_const(exp, i), val)
 
 
 typedef uint32_t hash_t;
@@ -98,17 +90,17 @@ expr_t nmsp_var_expr(var_t vr){
 	return vr->expr;
 }
 
-// Get value of variable
-void *nmsp_var_value(var_t vr, expr_err_t *err){
+// Get value of variable and place into `dest`
+expr_err_t nmsp_var_value(void *dest, var_t vr){
 	// Calculate the value if not cached
 	if(!vr->cached){
 		// Allocate space for value
 		vr->cached = malloc(expr_valctl.size);
-		expr_eval(vr->cached, vr->expr, &(vr->err));
+		vr->err = expr_eval(vr->cached, vr->expr);
 	}
 	
-	if(err) *err = vr->err;
-	return vr->cached;
+	valmove(dest, vr->cached);
+	return vr->err;
 }
 
 
@@ -145,7 +137,7 @@ void nmsp_free(namespace_t nmsp){
 		// Deallocate variable members
 		if(curr->expr) expr_free(curr->expr);
 		if(curr->cached){
-			vals_free(curr->cached);
+			valfree(curr->cached);
 			free(curr->cached);
 		}
 		free(curr);
@@ -326,7 +318,7 @@ void expr_free(expr_t exp){
 	free(exp->instrs);
 	
 	// Deallocate any stored constants
-	for(size_t i = 0; i < exp->constlen; i++) vals_free(get_const(exp, i));
+	for(size_t i = 0; i < exp->constlen; i++) valfree(get_const(exp, i));
 	free(exp->consts);
 	
 	free(exp->vars);
@@ -350,19 +342,17 @@ expr_t expr_new_const(void *val){
 // Evaluate `exp` using the provided stack
 static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend);
 
-void *expr_eval(void *dest, expr_t exp, expr_err_t *err){
+expr_err_t expr_eval(void *dest, expr_t exp){
 	size_t stksize = EXPR_EVAL_STACK_SIZE * expr_valctl.size;
 	uint8_t stack[stksize];  // Allocate Stack for evaluation
 	// On evaluation error return
-	expr_err_t tmperr;
-	if(tmperr = expr_eval_stk(exp, stack, stack + stksize)){
-		if(err) *err = tmperr;
-		return NULL;
+	expr_err_t err;
+	if(!(err = expr_eval_stk(exp, stack, stack + stksize))){
+		// On succes, place bottom of stack into dest
+		valmove(dest, stack);
 	}
 	
-	// Place bottom of stack into dest
-	memcpy(dest, stack, expr_valctl.size);
-	return dest;
+	return err;
 }
 
 // Evaluate `exp` using the provided stack
@@ -379,7 +369,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 			// Allocate space for variable
 			vr->cached = malloc(expr_valctl.size);
 			vr->err = expr_eval_stk(vr->expr, stack, stkend);
-			memcpy(vr->cached, stack, expr_valctl.size);
+			valmove(vr->cached, stack);
 		}
 		
 		if(vr->err) return vr->err;
@@ -416,7 +406,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 				if(err = expr_opers[op].func.binary(shfstk(arg, -1), arg)) break;
 				
 				if(no_free) no_free = 1;  // Clear no_free flag
-				else vals_free(arg);  // Deallocate top element
+				else valfree(arg);  // Deallocate top element
 				
 				stktop = arg;  // Pull stack down to reflect consumption of top element
 			}
@@ -436,10 +426,10 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 				// If the next instruction is a binary operation
 				// Don't perform a needless allocation
 				no_free = 1;
-				memcpy(stktop, val, expr_valctl.size);
+				valmove(stktop, val);
 			}else{
 				// Otherwise a clone is necessary
-				expr_valctl.clone(stktop, val);
+				valclone(stktop, val);
 			}
 			
 			// Move `stktop` up because of additional value
@@ -455,7 +445,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	if(err){
 		// Cleanup values on stack
 		if(no_free) stktop = shfstk(stktop, -1);  // Ignore top value if no_free true
-		for(; stktop >= stack; stktop = shfstk(stktop, -1)) vals_free(stktop);
+		for(; stktop >= stack; stktop = shfstk(stktop, -1)) valfree(stktop);
 		return err;
 	}else{
 		// There will be one value left at the bottom of the stack
@@ -491,10 +481,10 @@ static size_t expr_put_var(expr_t exp, var_t vr){
 static size_t expr_put_const(expr_t exp, void *val){
 	// Check if constant value is already present
 	for(size_t i = 0; i < exp->constlen; i++){
-		if(vals_equal(get_const(exp, i), val)){
+		if(valequal(get_const(exp, i), val)){
 			// If `val` is not placed into the constant list
 			// Then it must be deallocated
-			vals_free(val);
+			valfree(val);
 			
 			return i;
 		}
@@ -534,7 +524,7 @@ static int expr_pop_const_load(expr_t exp, void *dest){
 		// If any other instruction uses this constant
 		// We must clone the value into `dest`
 		if(INSTR_IS_CONST(instr) && INSTR_LOAD_INDEX(instr) == idx){
-			expr_valctl.clone(dest, val);
+			valclone(dest, val);
 			return 0;
 		}
 	}
@@ -542,7 +532,7 @@ static int expr_pop_const_load(expr_t exp, void *dest){
 	// If no other instructions use this constant remove it
 	exp->constlen--;
 	// Place the value into `dest`
-	memcpy(dest, val, expr_valctl.size);
+	valmove(dest, val);
 	return 1;
 }
 
@@ -815,12 +805,12 @@ static expr_err_t apply_oper(expr_t exp, oper_t opid){
 		if(is_unary){
 			if(INSTR_IS_CONST(*inst)){
 				// Pop constant off of instruction array
-				vals_def(dest);
+				valdef(dest);
 				expr_pop_const_load(exp, dest);
 				
 				// Try to apply unary operator
 				if(err = expr_opers[opid].func.unary(dest)){
-					vals_free(dest);
+					valfree(dest);
 					return err;
 				}
 				
@@ -836,22 +826,22 @@ static expr_err_t apply_oper(expr_t exp, oper_t opid){
 		}else{
 			if(INSTR_IS_CONST(*inst) && INSTR_IS_CONST(*(inst - 1))){
 				// Define arguments to binary operator
-				vals_def(dest);
-				vals_def(src);
+				valdef(dest);
+				valdef(src);
 				expr_pop_const_load(exp, src);
 				expr_pop_const_load(exp, dest);
 				
 				// Try to apply binary operator
 				if(err = expr_opers[opid].func.binary(dest, src)){
-					vals_free(dest);
-					vals_free(src);
+					valfree(dest);
+					valfree(src);
 					return err;
 				}
 				
 				// If successful push `dest` onto consts array
 				int idx = expr_put_const(exp, dest);
 				// We can then deallocate `src`
-				vals_free(src);
+				valfree(src);
 				// Place load instruction back on instrs section
 				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
 				
