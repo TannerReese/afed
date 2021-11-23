@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 
 
@@ -12,6 +13,10 @@ typedef struct expr_s *expr_t;
 
 // Error type returned on failure to parse or evaluate expression
 typedef int expr_err_t;
+/* Positive error codes may be used to indicate arithmetic errors
+ * These may be returned by expr_opers[id].func.binary and expr_opers[id].func.unary
+ */
+
 // Below are reserved values of expr_err_t
 #define EXPR_ERR_OK (0)
 #define EVAL_ERR_STACK_OVERFLOW (-1)
@@ -162,7 +167,7 @@ expr_err_t expr_eval(void *dest, expr_t exp);
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);
 // Flag used to indicate if constant expressions should be simplified while parsing
 // Defaults to true
-extern int expr_eval_on_parse;
+extern bool expr_eval_on_parse;
 
 #endif
 

@@ -53,7 +53,7 @@ struct var_s {
 	expr_t expr;
 	
 	// Cached value of calculation
-	// NULL if no value is cached
+	bool is_cached : 1;  // Indicate if a value is stored in cached
 	void *cached;
 	// Error that occurred when calculating cached
 	expr_err_t err;
@@ -62,9 +62,6 @@ struct var_s {
 	size_t namelen;
 	const char *name;
 	hash_t hash;  // 32-bit hash of name
-	
-	// Allow variables to be structured in linked list
-	struct var_s *next;
 	
 	/* When checking dependencies for variable x
 	 * This stores the variable through which x relies on this one
@@ -92,12 +89,10 @@ expr_t nmsp_var_expr(var_t vr){
 
 // Get value of variable and place into `dest`
 expr_err_t nmsp_var_value(void *dest, var_t vr){
+	// Allocate space for variable if not present
+	if(!vr->cached) vr->cached = malloc(expr_valctl.size);
 	// Calculate the value if not cached
-	if(!vr->cached){
-		// Allocate space for value
-		vr->cached = malloc(expr_valctl.size);
-		vr->err = expr_eval(vr->cached, vr->expr);
-	}
+	if(!vr->is_cached) vr->err = expr_eval(vr->cached, vr->expr);
 	
 	valmove(dest, vr->cached);
 	return vr->err;
@@ -106,58 +101,63 @@ expr_err_t nmsp_var_value(void *dest, var_t vr){
 
 
 struct namespace_s {
-	// Number of variables currently stored in the linked list
-	size_t length;
+	// Vector of variables
+	size_t length, capacity;  // Current number of elements & Maximum capacity
+	struct var_s *vars;
 	
 	/* Used by dependency checker
 	 *  `circ_root` is a variable which depends
 	 *  on itself through a series of variables
 	 */
 	var_t circ_root;
-	
-	// Head of linked list
-	struct var_s *head;
 };
 
 // Create new empty namespace
-namespace_t nmsp_new(){
+namespace_t nmsp_new(size_t cap){
 	namespace_t nmsp = malloc(sizeof(struct namespace_s));
 	nmsp->length = 0;
+	nmsp->capacity = cap;
+	nmsp->vars = malloc(sizeof(struct var_s) * cap);
 	nmsp->circ_root = NULL;
-	nmsp->head = NULL;
 	return nmsp;
 }
 
 // Deallocate namespace, its variables, and their expressions
 void nmsp_free(namespace_t nmsp){
-	// Deallocate variables of namespace
-	var_t next, curr = nmsp->head;
-	while(curr){
-		next = curr->next;
-		// Deallocate variable members
-		if(curr->expr) expr_free(curr->expr);
-		if(curr->cached){
-			valfree(curr->cached);
-			free(curr->cached);
+	// Free variables of namespace
+	for(size_t i = 0; i < nmsp->length; i++){
+		struct var_s vr = nmsp->vars[i];
+		
+		// Free any expression the variable might have
+		if(vr.expr) expr_free(vr.expr);
+		
+		// Free cached value if present
+		if(vr.cached){
+			// Free any outside memory this value holds
+			if(vr.is_cached) valfree(vr.cached);
+			// Free the actual storage space this value is in
+			free(vr.cached);
 		}
-		free(curr);
-		curr = next;
 	}
 	
+	// Deallocate vector's memory
+	free(nmsp->vars);
 	// Deallocate namespace itself
 	free(nmsp);
 }
 
 // Get instance of variable using name
 var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen){
+	// Empty key is not searchable
+	if(!key || keylen == 0) return NULL;
+	
 	hash_t keyhash = hash(key, keylen);
-	for(var_t vr = nmsp->head; vr; vr = vr->next){
+	var_t vend = nmsp->vars + nmsp->length;
+	for(var_t vr = nmsp->vars; vr < vend; vr++){
 		if(vr->hash == keyhash  // Check for matching hash (should filter out most time)
 		&& vr->namelen == keylen  // Check for same length
 		&& strncmp(vr->name, key, keylen) == 0)  // Finally perform string comparison
 			return vr;
-		// If we have passed the point where the hash would be then leave
-		else if(vr->hash > keyhash) return NULL;
 	}
 	return NULL;
 }
@@ -167,36 +167,31 @@ var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen){
 // Place new variable in namespace
 // WARNING: Does not perform any checks for existence or dependency
 static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
-	// Allocate memory for new variable
-	var_t newvr = malloc(sizeof(struct var_s));
-	newvr->expr = exp;
-	newvr->cached = NULL;
+	struct var_s vr;
+	// Set Expression with no cached value yet
+	vr.expr = exp;
+	vr.is_cached = false;
+	vr.cached = NULL;
+	vr.err = EXPR_ERR_OK;
 	
-	// Allocate space for name
-	newvr->namelen = keylen;
-	char *nm = malloc(keylen * sizeof(char));
-	strncpy(nm, key, keylen);
-	newvr->name = nm;
-	hash_t keyhash = hash(key, keylen);
-	newvr->hash = keyhash;
+	// Store name of variable
+	vr.name = key;
+	vr.namelen = keylen;
+	vr.hash = hash(key, keylen);
 	
-	// Set used_by pointer to NULL as default
-	newvr->used_by = NULL;
+	// Will be used during nmsp_insert
+	vr.used_by = NULL;
 	
-	// Find location to put into namespace
-	if(!nmsp->head || nmsp->head->hash >= keyhash){  // Check if it belongs at beginning
-		newvr->next = nmsp->head;
-		nmsp->head = newvr;
-		
-	}else{
-		var_t vr;
-		// Loop until you find the first hash greater than the current one
-		for(vr = nmsp->head; vr->next && vr->next->hash < keyhash; vr = vr->next);
-		newvr->next = vr->next;
-		vr->next = newvr;
+	// Place variable at end of vector
+	if(nmsp->length >= nmsp->capacity){
+		nmsp->capacity <<= 1;
+		nmsp->vars = realloc(nmsp->vars, sizeof(struct var_s) * nmsp->capacity);
 	}
+	var_t vrp = nmsp->vars + (nmsp->length++);
+	*vrp = vr;
 	
-	return newvr;
+	// Return pointer to variable
+	return vrp;
 }
 
 // Create variable with given name but with no expression
@@ -207,9 +202,76 @@ var_t nmsp_put(namespace_t nmsp, const char *key, size_t keylen){
 }
 
 
-// Try to insert an expression with the given name
-// If the expression already exists or has a circular dependency returns NULL
-// If there is a circular dependency the dependency list will be set
+// Queue methods used by nmsp_insert
+// ----------------------------------
+struct queue_s {
+	// Pointer to memory allocated for queue
+	var_t *ptr;
+	
+	// Offset of beginning of queue from `ptr`
+	size_t start;
+	// Number of elements in queue & Maximum number possible
+	size_t len, cap;
+};
+
+// Create queue with given capacity and initial content
+static struct queue_s queue_new(size_t cap){
+	struct queue_s q;
+	q.ptr = malloc(cap * sizeof(var_t));
+	q.start = 0;  q.len = 0;
+	q.cap = cap;
+	return q;
+}
+
+// Returns the new capacity
+static size_t queue_enlarge(struct queue_s *q, size_t newlen){
+	if(newlen > q->cap){
+		size_t oldcap = q->cap;
+		
+		while(newlen > q->cap) q->cap <<= 1;
+		// Allocate new capacity
+		q->ptr = realloc(q->ptr, sizeof(var_t) * q->cap);
+		
+		if(q->start + q->len > oldcap){
+			// Move any discontiguous piece together
+			memcpy(q->ptr + oldcap, q->ptr, (q->start + q->len - oldcap) * sizeof(var_t));
+		}
+
+	}
+	return q->cap;
+}
+
+// Add element to the end of the queue
+static void queue_push(struct queue_s *q, var_t *vars, size_t varlen){
+	// Make sure queue is long enough
+	queue_enlarge(q, q->len + varlen);
+	
+	// Find end of queue
+	size_t end = q->start + q->len;
+	end -= (end >= q->cap) * q->cap;
+	
+	// Increase number of elements
+	q->len += varlen;
+	// Copy elements
+	memcpy(q->ptr + end, vars, sizeof(var_t) * varlen);
+}
+
+// Remove element from the beginning of the queue
+static var_t queue_pop(struct queue_s *q){
+	// Return NULL if no values in the queue
+	if(q->len == 0) return NULL;
+	
+	var_t vr = q->ptr[q->start];
+	q->start++;
+	q->start -= (q->start >= q->cap) * q->cap;
+	q->len--;
+	return vr;
+}
+
+/* Try to insert an expression with the given name
+ * If the expression already exists or has a circular dependency returns NULL
+ * If there is a circular dependency the dependency list will be set
+ */
 var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 	// Check for a forward declaration for this expression
 	var_t newvr;
@@ -222,71 +284,52 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 		}
 		
 		
-		// Check for circular dependency
-		// Only necessary if there was a forward declaration
-		
-		// Create queue of variables
-		size_t qstart = 0, qlen = exp->varlen, qcap = exp->varlen << 1;
-		// Initially provide enough space to store all of exp's variables
-		var_t *queue = malloc(qcap * sizeof(var_t));
+		/* Check for circular dependency
+		 * Only necessary if there was a forward declaration
+		 */
 		
 		// Clear out any previous dependency tree
 		nmsp->circ_root = NULL;
-		for(var_t v = nmsp->head; v; v = v->next) v->used_by = NULL;
+		var_t vend = nmsp->vars + nmsp->length;
+		for(var_t v = nmsp->vars; v < vend; v++) v->used_by = NULL;
 		
 		// Initialize with exp's immediate dependencies
-		memcpy(queue, exp->vars, qlen * sizeof(var_t));
+		struct queue_s q = queue_new(exp->varlen << 1);
+		queue_push(&q, exp->vars, exp->varlen);
 		// Set their reference to `newvr`
-		for(size_t i = 0; i < qlen; i++) queue[i]->used_by = newvr;
+		for(size_t i = 0; i < exp->varlen; i++) exp->vars[i]->used_by = newvr;
 		
 		// Iterate over variables checking their dependencies
-		while(qlen > 0){  // While there are remaining variables to check
+		while(q.len > 0){  // While there are remaining variables to check
 			// Get variable
-			var_t vr = queue[qstart++];  qlen--;
-			qstart -= qcap & -(size_t)(qstart >= qcap);  // Shift qstart down if it passes the max
+			var_t vr = queue_pop(&q);
 			
 			// Check if it matches the root variable
 			if(newvr == vr){
 				nmsp->circ_root = vr;
-				free(queue);  // Cleanup queue
+				free(q.ptr);  // Cleanup queue
 				return NULL;
 			}
 			
 			// If variable's expression has no variables go to next
 			if(!vr->expr || vr->expr->varlen == 0) continue;
 			
-			// Resize queue to accomodate variables used by `vr`
-			size_t qend = qstart + qlen;  // Find end of queue
-			qend -= qcap & -(size_t)(qend >= qcap);
-			if(qlen + vr->expr->varlen > qcap){  // Resize queue if necessary
-				size_t oldcap = qcap;
-				while(qlen + vr->expr->varlen >= qcap) qcap <<= 1;
-				queue = realloc(queue, qcap);
-				
-				if(qend <= qstart){
-					// Move any discontiguous piece together
-					memcpy(queue + oldcap, queue, qend * sizeof(var_t));
-					qend = qstart + qlen;
-				}
-			}
-			
-			// Add all the variables used by `vr` to the queue
-			qlen += vr->expr->varlen;
-			for(size_t i = 0; i < vr->expr->varlen; i++){
-				var_t dep = vr->expr->vars[i];
-				dep->used_by = vr;
-				
-				queue[qend++] = dep;  // Add to queue
-				qend -= qcap & -(size_t)(qend >= qcap);  // shift qend down if it passes the max
-			}
+			var_t *deps = vr->expr->vars;
+			size_t deplen = vr->expr->varlen;
+			// Add all variables used by `vr` to the queue
+			queue_push(&q, deps, deplen);
+			// Set the `used_by` pointer to point to the parent node in the dependency tree
+			for(size_t i = 0; i < deplen; i++) deps[i]->used_by = vr;
 		}
+		
+		// Free queue
+		free(q.ptr);
 		
 		// If no circular dependency
 		newvr->expr = exp;  // Set expression
 		return newvr;
 		
 	}else{  // If no forward declared variable then create new variable
-		hash_t keyhash = hash(key, keylen);
 		return place_var_unsafe(nmsp, key, keylen, exp);
 	}
 }
@@ -364,10 +407,10 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	for(size_t i = 0; i < exp->varlen; i++){
 		var_t vr = exp->vars[i];
 		
+		// Allocate space for variable if needed
+		if(!vr->cached) vr->cached = malloc(expr_valctl.size);
 		// Evaluate expression if no cached variable
-		if(!vr->cached){
-			// Allocate space for variable
-			vr->cached = malloc(expr_valctl.size);
+		if(!vr->is_cached){
 			vr->err = expr_eval_stk(vr->expr, stack, stkend);
 			valmove(vr->cached, stack);
 		}
@@ -383,7 +426,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	expr_err_t err = EXPR_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
-	int no_free = 1;  // If the top element doesn't need to be freed on binary operation
+	bool no_free = true;  // If the top element doesn't need to be freed on binary operation
 	for(size_t i = 0; i < exp->instrlen; i++){
 		instr_t inst = exp->instrs[i];
 		
@@ -405,7 +448,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 				// Perform Binary Operation
 				if(err = expr_opers[op].func.binary(shfstk(arg, -1), arg)) break;
 				
-				if(no_free) no_free = 1;  // Clear no_free flag
+				if(no_free) no_free = false;  // Clear no_free flag
 				else valfree(arg);  // Deallocate top element
 				
 				stktop = arg;  // Pull stack down to reflect consumption of top element
@@ -425,7 +468,7 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 			if(i < exp->instrlen - 1 && INSTR_IS_BINARY(inst = exp->instrs[i + 1])){
 				// If the next instruction is a binary operation
 				// Don't perform a needless allocation
-				no_free = 1;
+				no_free = true;
 				valmove(stktop, val);
 			}else{
 				// Otherwise a clone is necessary
@@ -506,7 +549,7 @@ static size_t expr_put_const(expr_t exp, void *val){
  * Otherwise the value of the constant is cloned into `dest`
  */
 
-static int expr_pop_const_load(expr_t exp, void *dest){
+static bool expr_pop_const_load(expr_t exp, void *dest){
 	instr_t instr = exp->instrs[exp->instrlen - 1];  // Get top instruction
 	
 	// Make sure top instruction is a constant load
@@ -525,7 +568,7 @@ static int expr_pop_const_load(expr_t exp, void *dest){
 		// We must clone the value into `dest`
 		if(INSTR_IS_CONST(instr) && INSTR_LOAD_INDEX(instr) == idx){
 			valclone(dest, val);
-			return 0;
+			return false;
 		}
 	}
 	
@@ -533,7 +576,7 @@ static int expr_pop_const_load(expr_t exp, void *dest){
 	exp->constlen--;
 	// Place the value into `dest`
 	valmove(dest, val);
-	return 1;
+	return true;
 }
 
 
@@ -712,7 +755,7 @@ struct oper_tree_s {
  * On Success, a valid operator id is returned
  * Otherwise OPER_NULL is returned
  */
-static oper_t parse_oper(const char *str, const char **endptr, int is_unary){
+static oper_t parse_oper(const char *str, const char **endptr, bool is_unary){
 	// Root of operator trees
 	static struct oper_tree_s *binary_tree = NULL, *unary_tree = NULL;
 	
@@ -787,14 +830,14 @@ static oper_t parse_oper(const char *str, const char **endptr, int is_unary){
 }
 
 // Try to evaluate constants while parsing expressions
-int expr_eval_on_parse = 1;
+bool expr_eval_on_parse = true;
 
 // Apply single operator to value stack by appending
 static expr_err_t apply_oper(expr_t exp, oper_t opid){
 	// If `expr_eval_on_parse` is set then try to
 	// Evaluate constants using operator on the stack
 	if(expr_eval_on_parse){
-		int is_unary = expr_opers[opid].is_unary;
+		bool is_unary = expr_opers[opid].is_unary;
 		
 		// Check for sufficient arguments
 		if(exp->instrlen < 1 + !is_unary) return EVAL_ERR_STACK_UNDERFLOW;
@@ -922,7 +965,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 	*err = EXPR_ERR_OK;
 	
 	// Track if the last token parsed was a constant or variable
-	int was_last_val = 0;
+	bool was_last_val = false;
 	while(*str){	
 		// Skip whitespace
 		while(isspace(*str)) str++;
@@ -936,7 +979,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			// Place open parenthesis on operator stack			
 			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
 			opstk.bottom[opstk.len++].is_block = 1;  // Indicate that it is a block
-			was_last_val = 0;  // New expression so there is no last value
+			was_last_val = false;  // New expression so there is no last value
 			continue;
 		}else if(c == ')'){
 			str++;  // Consume ')'
@@ -948,7 +991,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 				// Remove block and continue parsing
 				opstk.len--;
 				// Treat closed parenthetical expression as value
-				was_last_val = 1;
+				was_last_val = true;
 				continue;
 			}else{
 				// No opening parenthesis so parenth mismatch
@@ -983,7 +1026,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			elem.operid = opid;
 			opstk.bottom[opstk.len++] = elem;
 			
-			was_last_val = 0;  // Operator is not a value
+			was_last_val = false;  // Operator is not a value
 			str = after_tok;  // Move string forward
 			continue;
 		}
@@ -1004,7 +1047,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 			exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(constid);
 			str = after_tok;
-			was_last_val = 1;
+			was_last_val = true;
 			continue;
 		}
 		
@@ -1024,7 +1067,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 			exp->instrs[exp->instrlen++] = INSTR_NEW_VAR(varid);
 			str = after_tok;
-			was_last_val = 1;
+			was_last_val = true;
 			continue;
 		}
 		

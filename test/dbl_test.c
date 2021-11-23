@@ -102,7 +102,7 @@ int main(int argc, char *argv[]){
 
 static bool test(const char *expstr, double tgt, expr_err_t perr, expr_err_t everr, size_t deccnt, decl_t decls[]){
 	// Create namespace
-	namespace_t nmsp = nmsp_new();
+	namespace_t nmsp = nmsp_new(4);
 	
 	// Declare all variables and parse their expressions
 	const char *endptr;
