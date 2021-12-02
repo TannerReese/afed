@@ -63,6 +63,9 @@ struct var_s {
 	const char *name;
 	hash_t hash;  // 32-bit hash of name
 	
+	// Next sibling in the linked list
+	struct var_s *next;
+	
 	/* When checking dependencies for variable x
 	 * This stores the variable through which x relies on this one
 	 * Thus following the used_by field forms a linked list back to x
@@ -101,10 +104,13 @@ expr_err_t nmsp_var_value(void *dest, var_t vr){
 
 
 struct namespace_s {
-	// Vector of variables
-	size_t length, capacity;  // Current number of elements & Maximum capacity
-	struct var_s *vars;
+	// Head of Linked List of variables
+	struct var_s *head;
 	
+	/* On Insertion Error due to Redefinition
+	 *  Store the variable that was attempted to be redefined
+	 */
+	var_t redef;
 	/* Used by dependency checker
 	 *  `circ_root` is a variable which depends
 	 *  on itself through a series of variables
@@ -115,9 +121,8 @@ struct namespace_s {
 // Create new empty namespace
 namespace_t nmsp_new(size_t cap){
 	namespace_t nmsp = malloc(sizeof(struct namespace_s));
-	nmsp->length = 0;
-	nmsp->capacity = cap;
-	nmsp->vars = malloc(sizeof(struct var_s) * cap);
+	nmsp->head = NULL;
+	nmsp->redef = NULL;
 	nmsp->circ_root = NULL;
 	return nmsp;
 }
@@ -125,23 +130,26 @@ namespace_t nmsp_new(size_t cap){
 // Deallocate namespace, its variables, and their expressions
 void nmsp_free(namespace_t nmsp){
 	// Free variables of namespace
-	for(size_t i = 0; i < nmsp->length; i++){
-		struct var_s vr = nmsp->vars[i];
+	var_t vr, next = nmsp->head;
+	while(next){
+		vr = next;
 		
 		// Free any expression the variable might have
-		if(vr.expr) expr_free(vr.expr);
+		if(vr->expr) expr_free(vr->expr);
 		
 		// Free cached value if present
-		if(vr.cached){
+		if(vr->cached){
 			// Free any outside memory this value holds
-			if(vr.is_cached) valfree(vr.cached);
+			if(vr->is_cached) valfree(vr->cached);
 			// Free the actual storage space this value is in
-			free(vr.cached);
+			free(vr->cached);
 		}
+		
+		// Get pointer to next variable
+		next = vr->next;
+		free(vr);
 	}
 	
-	// Deallocate vector's memory
-	free(nmsp->vars);
 	// Deallocate namespace itself
 	free(nmsp);
 }
@@ -152,8 +160,7 @@ var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen){
 	if(!key || keylen == 0) return NULL;
 	
 	hash_t keyhash = hash(key, keylen);
-	var_t vend = nmsp->vars + nmsp->length;
-	for(var_t vr = nmsp->vars; vr < vend; vr++){
+	for(var_t vr = nmsp->head; vr; vr = vr->next){
 		if(vr->hash == keyhash  // Check for matching hash (should filter out most time)
 		&& vr->namelen == keylen  // Check for same length
 		&& strncmp(vr->name, key, keylen) == 0)  // Finally perform string comparison
@@ -167,31 +174,27 @@ var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen){
 // Place new variable in namespace
 // WARNING: Does not perform any checks for existence or dependency
 static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
-	struct var_s vr;
+	var_t vr = malloc(sizeof(struct var_s));
 	// Set Expression with no cached value yet
-	vr.expr = exp;
-	vr.is_cached = false;
-	vr.cached = NULL;
-	vr.err = EXPR_ERR_OK;
+	vr->expr = exp;
+	vr->is_cached = false;
+	vr->cached = NULL;
+	vr->err = EXPR_ERR_OK;
 	
 	// Store name of variable
-	vr.name = key;
-	vr.namelen = keylen;
-	vr.hash = hash(key, keylen);
+	vr->name = key;
+	vr->namelen = keylen;
+	vr->hash = hash(key, keylen);
 	
 	// Will be used during nmsp_insert
-	vr.used_by = NULL;
+	vr->used_by = NULL;
 	
-	// Place variable at end of vector
-	if(nmsp->length >= nmsp->capacity){
-		nmsp->capacity <<= 1;
-		nmsp->vars = realloc(nmsp->vars, sizeof(struct var_s) * nmsp->capacity);
-	}
-	var_t vrp = nmsp->vars + (nmsp->length++);
-	*vrp = vr;
+	// Place variable at head of linked list
+	vr->next = nmsp->head;
+	nmsp->head = vr;
 	
 	// Return pointer to variable
-	return vrp;
+	return vr;
 }
 
 // Create variable with given name but with no expression
@@ -253,7 +256,13 @@ static void queue_push(struct queue_s *q, var_t *vars, size_t varlen){
 	// Increase number of elements
 	q->len += varlen;
 	// Copy elements
-	memcpy(q->ptr + end, vars, sizeof(var_t) * varlen);
+	int extra = (int)(end + varlen) - q->cap;
+	if(extra > 0){
+		memcpy(q->ptr + end, vars, sizeof(var_t) * (varlen - extra));
+		memcpy(q->ptr, vars + extra, sizeof(var_t) * extra);
+	}else{
+		memcpy(q->ptr + end, vars, sizeof(var_t) * varlen);
+	}
 }
 
 // Remove element from the beginning of the queue
@@ -290,8 +299,7 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 		
 		// Clear out any previous dependency tree
 		nmsp->circ_root = NULL;
-		var_t vend = nmsp->vars + nmsp->length;
-		for(var_t v = nmsp->vars; v < vend; v++) v->used_by = NULL;
+		for(var_t v = nmsp->head; v; v = v->next) v->used_by = NULL;
 		
 		// Initialize with exp's immediate dependencies
 		struct queue_s q = queue_new(exp->varlen << 1);
@@ -318,8 +326,9 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 			size_t deplen = vr->expr->varlen;
 			// Add all variables used by `vr` to the queue
 			queue_push(&q, deps, deplen);
+			// If `used_by` is not already set
 			// Set the `used_by` pointer to point to the parent node in the dependency tree
-			for(size_t i = 0; i < deplen; i++) deps[i]->used_by = vr;
+			for(size_t i = 0; i < deplen; i++) if(!deps[i]->used_by) deps[i]->used_by = vr;
 		}
 		
 		// Free queue
@@ -334,12 +343,49 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 	}
 }
 
-// Get next variable in dependency chain starting from base of circular dependency
-var_t nmsp_next_dep(namespace_t nmsp){
-	var_t vr = nmsp->circ_root;
-	if(nmsp->circ_root) nmsp->circ_root = nmsp->circ_root->used_by;
-	return vr;
+var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_err_t *err){
+	// Parse Label
+	// ------------
+	// Collect label characters
+	while(isblank(*str)) str++;  // Skip whitespace before
+	const char *lbl = str;
+	while(isalnum(*str) || *str == '_') str++;
+	size_t lbl_len = str - lbl;
+	while(isblank(*str)) str++;  // Skip whitespace after
+	
+	// Check for colon after label
+	if(*str != ':' || lbl_len == 0){
+		// No colon --> No label
+		str = lbl;  // Move string pointer back to beginning
+		lbl = NULL;  lbl_len = 0;
+	}else str++;
+	
+	// Parse Expression
+	// -----------------
+	expr_t exp = expr_parse(str, endptr, nmsp, err);
+	if(!exp || (err && *err)){  // On Parse Error
+		return NULL;
+	}
+	
+	// Insert Expression
+	var_t vr = nmsp_insert(nmsp, lbl, lbl_len, exp);
+	if(vr) return vr;
+	else{
+		if(err) *err = nmsp->circ_root ? INSERT_ERR_CIRC : INSERT_ERR_REDEF;
+		return NULL;
+	}
 }
+
+
+
+
+// Variable that was attempted to be redefined
+var_t nmsp_redef(namespace_t nmsp){ return nmsp->redef; }
+// The Base of the circular dependency found during the last `nmsp_insert` call
+var_t nmsp_circ_root(namespace_t nmsp){ return nmsp->circ_root; }
+
+// Get next variable in dependency chain starting from base of circular dependency
+var_t nmsp_next_dep(var_t vr){ return vr->used_by; }
 
 
 
@@ -950,6 +996,7 @@ static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
 	}else return NULL;
 }
 
+// Parses String as Expression
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err){
 	// Initialize operator stack
 	oper_stack_t opstk;

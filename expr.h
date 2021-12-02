@@ -34,6 +34,9 @@ typedef int expr_err_t;
 #define PARSE_ERR_TOO_MANY_VALUES (-25)
 #define PARSE_ERR_MISSING_VALUES (-26)
 #define PARSE_ERR_MISSING_OPERS (-27)
+// Errors returned on failed insertions
+#define INSERT_ERR_REDEF (-64)
+#define INSERT_ERR_CIRC (-65)
 
 
 
@@ -55,19 +58,27 @@ void nmsp_free(namespace_t nmsp);
 
 // Try to get a variable with the given name
 var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen);
+#define nmsp_getz(nmsp, key) nmsp_get((nmsp), (key), strlen(key))
 // Create variable with given name but with no expression
 var_t nmsp_put(namespace_t nmsp, const char *key, size_t keylen);
+#define nmsp_putz(nmsp, key) nmsp_put((nmsp), (key), strlen(key))
+
 // Try to insert the given expression under the given key
 var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp);
-
-// Used after erroneous 
-// Get next variable in dependency chain starting from base of circular dependency
-var_t nmsp_next_dep(namespace_t nmsp);
-
-// Namespace functions for null-terminated strings
-#define nmsp_getz(nmsp, key) nmsp_get((nmsp), (key), strlen(key))
-#define nmsp_putz(nmsp, key) nmsp_put((nmsp), (key), strlen(key))
 #define nmsp_insertz(nmsp, key, exp) nmsp_insert((nmsp), (key), strlen(key), (exp))
+// Parse expression with label and try to insert it into the namespace
+var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_err_t *err);
+
+// Used after erroneous `nmsp_insert` call
+// Returns variable that was tried to be redefined
+var_t nmsp_redef(namespace_t nmsp);
+/* Returns the variable at the root of a circular dependency
+ * If there is no circular dependency NULL is returned
+ */
+var_t nmsp_circ_root(namespace_t nmsp);
+// Get next variable in dependency chain starting from base of circular dependency
+var_t nmsp_next_dep(var_t vr);
+
 
 
 
@@ -164,6 +175,7 @@ extern expr_valctl_t expr_valctl;
 expr_err_t expr_eval(void *dest, expr_t exp);
 
 // Parse as much as possible of the string as expression
+// If err is not NULL then any errors are stored in it
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);
 // Flag used to indicate if constant expressions should be simplified while parsing
 // Defaults to true

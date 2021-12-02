@@ -19,88 +19,172 @@ typedef struct {
 	const char *expr;
 } decl_t;
 
-// Test expression for validity
-static bool test(const char *expstr, double res, expr_err_t perr, expr_err_t everr, size_t deccnt, decl_t decls[]);
+// Create namespace and declare variables printing any errors
+namespace_t safe_decl(int deccnt, decl_t decls[]);
+// Parse and Evaluate the given definition
+// Returns 1 if there is an unexpected parse or eval error
+bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, expr_err_t everr);
+// Check that the stored dependency chain matches the given `names`
+bool circ_loop(namespace_t nmsp, const char *names[]);
+
+// Check valid parsing
+int check_parsing();
+// Check errneous parsing
+int check_parse_errs();
+// Check insertion errors
+int check_insert_errs();
 
 int main(int argc, char *argv[]){
 	// Count number of failed tests
 	int fails = 0;
 	
-	decl_t decls1[] = {
-		{"x", "  \t-3.67"},
-		{"y", "1\n/ (x- z)"},
-		{"z", "1 /5.678- 2"}
-	};
-	fails += test(
-		"(-  x) ^-(y+z)*   x %\ny \t/ (z// 0.03)",
-		0.0069547480181, EXPR_ERR_OK, EXPR_ERR_OK,
-		3, decls1
-	);
+	fails += check_parsing();
+	fails += check_parse_errs();
+	fails += check_insert_errs();
 	
-	puts("\n===============\n");
-	
-	// Make sure parser ignores extra content
-	decl_t decls2[] = {
-		{"x", "5.32 * y"},
-		{"foo_bar", "y^3 - y^2-23"},
-		{"y", "2.897 * 10^2"}
-	};
-	fails += test(
-		"x *(foo_bar*x//y)\v//  -0.654=&*",
-		-303764747679.0, EXPR_ERR_OK, EXPR_ERR_OK,
-		3, decls2
-	);
-	
-	puts("\n===============\n");
-	
-	decl_t decls3[] = {
-		{"___", "__-5*-5/-5%-3+4^1.3"},
-		{"__", "__OP*__OP         /4.5*__OP+3 -9.8-3"},
-		{"__OP", "4 + 6 + 8 - 9.4 - 4.56 + 3 / 5"}
-	};
-	fails += test(
-		"___*__-__OP/__^__",
-		204.122506542, EXPR_ERR_OK, EXPR_ERR_OK,
-		3, decls3
-	);
-	
-	puts("\n===============\n");
-	
-	// Check for correct parsing errors
-	printf("Checking Parsing Errors\n");
-	fails += test(
-		"x + y - + * z\t",
-		0.0, PARSE_ERR_MISSING_VALUES, EXPR_ERR_OK,
-		0, NULL
-	);
-	
-	fails += test(
-		"x * y - (x y)",
-		0.0, PARSE_ERR_MISSING_OPERS, EXPR_ERR_OK,
-		0, NULL
-	);
-	
-	fails += test(
-		"((x * y - z) + x * z",
-		0.0, PARSE_ERR_PARENTH_MISMATCH, EXPR_ERR_OK,
-		0, NULL
-	);
-	
-	fails += test(
-		"(x * y - z % 6)) / 7.0 ",
-		0.0, PARSE_ERR_PARENTH_MISMATCH, EXPR_ERR_OK,
-		0, NULL
-	);
-	
-	puts("\n===============\n");
-	
-	printf("Failures: %i\n", fails);
+	printf("\nFailures: %i\n", fails);
 	return 0;
 }
 
 
+int check_parsing(){
+	namespace_t nmsp;
+	int fails = 0;
+	puts("\n### Checking Parsing");
+	
+	decl_t decls1[3] = {
+		{"x", "  \t-3.67"},
+		{"y", "1\n/ (x- z)"},
+		{"z", "1 /5.678- 2"}
+	};
+	if(!(nmsp = safe_decl(3, decls1))
+	|| eval(nmsp,
+		"(-  x) ^-(y+z)*   x %\ny \t/ (z// 0.03)",
+		0.0069547480181, EXPR_ERR_OK, EXPR_ERR_OK
+	)) fails++;
+	
+	// Make sure parser ignores extra content
+	decl_t decls2[3] = {
+		{"x", "5.32 * y"},
+		{"foo_bar", "y^3 - y^2-23"},
+		{"y", "2.897 * 10^2"}
+	};
+	if(!(nmsp = safe_decl(3, decls2))
+	|| eval(nmsp,
+		"x *(foo_bar*x//y)\v//  -0.654=&*",
+		-303764747679.0, EXPR_ERR_OK, EXPR_ERR_OK
+	)) fails++;
+	
+	decl_t decls3[3] = {
+		{"___", "__-5*-5/-5%-3+4^1.3"},
+		{"__", "__OP*__OP         /4.5*__OP+3 -9.8-3"},
+		{"__OP", "4 + 6 + 8 - 9.4 - 4.56 + 3 / 5"}
+	};
+	if(!(nmsp = safe_decl(3, decls3))
+	|| eval(nmsp,
+		"___*__-__OP/__^__",
+		204.122506542, EXPR_ERR_OK, EXPR_ERR_OK
+	)) fails++;
+	
+	return fails;
+}
 
-static bool test(const char *expstr, double tgt, expr_err_t perr, expr_err_t everr, size_t deccnt, decl_t decls[]){
+int check_parse_errs(){	
+	int fails = 0;
+	puts("\n### Checking Parse Errors");
+	namespace_t nmsp = nmsp_new(4);
+	
+	// Check for correct parsing errors
+	printf("Checking Parsing Errors\n");
+	if(eval(nmsp,
+		"x + y - + * z\t",
+		0.0, PARSE_ERR_MISSING_VALUES, EXPR_ERR_OK
+	)) fails++;
+	
+	if(eval(nmsp,
+		"x * y - (x y)",
+		0.0, PARSE_ERR_MISSING_OPERS, EXPR_ERR_OK
+	)) fails++;
+	
+	if(eval(nmsp,
+		"((x * y - z) + x * z",
+		0.0, PARSE_ERR_PARENTH_MISMATCH, EXPR_ERR_OK
+	)) fails++;
+	
+	if(eval(nmsp,
+		"(x * y - z % 6)) / 7.0 ",
+		0.0, PARSE_ERR_PARENTH_MISMATCH, EXPR_ERR_OK
+	)) fails++;
+	
+	nmsp_free(nmsp);
+	return fails;
+}
+
+int check_insert_errs(){
+	puts("\n### Checking Insertion Errors");
+	
+	// Declarations use forward declared "ler", "two", and "_5_"
+	decl_t decls[6] = {
+		{"xruje", "yjug*yjug^-_5_*yjug+2"},
+		{"__er34", "3*xruje + ler*6"},
+		{"gt56y", "__er34 * yjug*4"},
+		{"yjug", "23*9+two+7/6//3.65^7*8"},
+		{"__23", " 1 \n+\n HEllo / 34.56"},
+		{"HEllo", "__er34 + gt56y"}
+	};
+	namespace_t nmsp = safe_decl(6, decls);
+	if(!nmsp) return 6;
+	
+	int fails = 0;
+	expr_err_t err;
+	const char *endptr;
+	
+	// Check redefinition errors
+	if(eval(nmsp,
+		"__23 : \t(1 + xruje * 8) / 9",
+		0.0, INSERT_ERR_REDEF, EXPR_ERR_OK
+	)) fails++;
+	
+	if(eval(nmsp,
+		"gt56y : yjug //2\n^2",
+		0.0, INSERT_ERR_REDEF, EXPR_ERR_OK
+	)) fails++;
+	
+	if(eval(nmsp,
+		"HEllo : xruje * yjug ^ 3",
+		0.0, INSERT_ERR_REDEF, EXPR_ERR_OK
+	)) fails++;
+	
+	
+	// Check circular dependency errors
+	const char *circs1[] = {"_5_", "xruje", "__er34", "HEllo", "__23", NULL};
+	if(eval(nmsp,
+		"_5_:23//__23",
+		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
+	)) fails++;
+	else if(circ_loop(nmsp, circs1)) fails++;
+	
+	const char *circs2[] = {"ler", "__er34", NULL};
+	if(eval(nmsp,
+		"ler:__er34-73",
+		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
+	)) fails++;
+	else if(circ_loop(nmsp, circs2)) fails++;
+	
+	const char *circs3[] = {"two", "yjug", "gt56y", "HEllo", NULL};
+	if(eval(nmsp,
+		"two:(1+(2*(HEllo%4)+3)/4)//5",
+		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
+	)) fails++;
+	else if(circ_loop(nmsp, circs3)) fails++;
+	
+	return fails;
+}
+
+
+
+
+namespace_t safe_decl(int deccnt, decl_t decls[]){
 	// Create namespace
 	namespace_t nmsp = nmsp_new(4);
 	
@@ -117,50 +201,78 @@ static bool test(const char *expstr, double tgt, expr_err_t perr, expr_err_t eve
 		printf("Parsing Errno: %i\n", err);
 		printf("Expression Pointer: %p\n", exp);
 		if(err || !exp){
+			nmsp_free(nmsp);  // Cleanup namespace
 			printf("Failed to Parse Expression\n");
-			return 1;
+			return NULL;
 		}
 		
 		// Add parsed expression to namespace
 		printf("Inserting Expression\n");
 		var_t vr = nmsp_insertz(nmsp, decls[i].name, exp);
 		if(!vr){
+			nmsp_free(nmsp);  // Cleanup namespace
 			printf("Failed to declare Variable\n");
-			return 1;
+			return NULL;
 		}
 		
 		putchar('\n');
 	}
-	
-	// Parse main expression
-	printf("Parsing Main Expression \"%s\"\n", expstr);
-	expr_t mainexp = expr_parse(expstr, &endptr, nmsp, &err);
-	printf("Consumed %u character(s) ; End-Pointer: \"%s\"\n", (size_t)(endptr - expstr), endptr);
-	printf("Desired Errno: %i     Parsing Errno: %i\n", perr, err);
-	printf("Expression Pointer: %p\n", mainexp);
-	if(perr != err){
-		printf("Failed to Parse Main Expression\n");
-		return 1;
-	}
-	
-	// Evaluate main expression
-	if(!err && mainexp){
-		printf("\nEvaluating Expression\n");
-		double res;
-		err = expr_eval(&res, mainexp);
-		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
-		printf("Result Pointer: %p\n", res);
-		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
-		if(everr != err){
-			printf("Failed to Evaluate Expression\n");
-			return 1;
-		}else if(fabs(tgt - res) > 0.00001){
-			printf("Failed to Evaluate Expression Correctly\n");
+	return nmsp;
+}
+
+bool circ_loop(namespace_t nmsp, const char *names[]){
+	// Iterate through dependency chain
+	var_t circ = nmsp_circ_root(nmsp);
+	const char *nm;
+	size_t nmln;
+	for(const char **tgt = names; *tgt; tgt++, circ = nmsp_next_dep(circ)){
+		nm = nmsp_var_name(circ, &nmln);
+		if(strncmp(*tgt, nm, nmln) != 0){
+			printf("Failed to match dependency chain; Should be \"%s\" found \"%.*s\"\n", *tgt, nmln, nm);
 			return 1;
 		}
 	}
 	
-	printf("Succeeded\n");
+	nm = nmsp_var_name(circ, &nmln);
+	if(strncmp(*names, nm, nmln)){
+		printf("Failed to circle back in circular dependency\n");
+		return 1;
+	}
+	return 0;
+}
+
+bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, expr_err_t everr){
+	// Parse expression
+	const char *endptr;
+	expr_err_t err;
+	printf("Defining Expression \"%s\"\n", expstr);
+	var_t vr = nmsp_define(nmsp, expstr, &endptr, &err);
+	printf("Consumed %u character(s) ; End-Pointer: \"%s\"\n", (size_t)(endptr - expstr), endptr);
+	printf("Desired Errno: %i     Parsing Errno: %i\n", perr, err);
+	printf("Variable Pointer: %p\n", vr);
+	if(perr != err){
+		printf("Failed to Parse Expression\n\n===============\n");
+		return 1;
+	}
+	
+	// Evaluate expression
+	if(!err && vr){
+		printf("\nEvaluating Expression\n");
+		double res;
+		err = nmsp_var_value(&res, vr);
+		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
+		printf("Result Pointer: %p\n", res);
+		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
+		if(everr != err){
+			printf("Failed to Evaluate Expression\n\n===============\n");
+			return 1;
+		}else if(fabs(tgt - res) > 0.00001){
+			printf("Failed to Evaluate Expression Correctly\n\n===============\n");
+			return 1;
+		}
+	}
+	
+	printf("Succeeded\n\n===============\n");
 	return 0;
 }
 
