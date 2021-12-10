@@ -4,6 +4,9 @@ test/dbl_test
 # Vim Swap files
 *.sw*
 
+# Vim Session files
+*.vim
+
 # Object files
 *.o
 *.obj

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <string.h>
+#include <stdio.h>
 
 
 // Forward declaration of expression type
@@ -15,7 +15,10 @@ typedef struct expr_s *expr_t;
 typedef int expr_err_t;
 /* Positive error codes may be used to indicate arithmetic errors
  * These may be returned by expr_opers[id].func.binary and expr_opers[id].func.unary
+ * EVAL_ERR_ARITH may be used for a general (unspecified) arithmetic error
+ * Otherwise the string description for the error is provided by expr_arith_strerror
  */
+#define EVAL_ERR_ARITH 1
 
 // Below are reserved values of expr_err_t
 #define EXPR_ERR_OK (0)
@@ -34,9 +37,14 @@ typedef int expr_err_t;
 #define PARSE_ERR_TOO_MANY_VALUES (-25)
 #define PARSE_ERR_MISSING_VALUES (-26)
 #define PARSE_ERR_MISSING_OPERS (-27)
+#define PARSE_ERR_EXTRA_CONT (-32)
 // Errors returned on failed insertions
 #define INSERT_ERR_REDEF (-64)
 #define INSERT_ERR_CIRC (-65)
+
+// Returns a string containing a description of the error
+const char *expr_strerror(expr_err_t err);
+
 
 
 
@@ -47,6 +55,7 @@ typedef struct var_s *var_t;
 const char *nmsp_var_name(var_t vr, size_t *len);
 expr_t nmsp_var_expr(var_t vr);
 expr_err_t nmsp_var_value(void *dest, var_t vr);
+int nmsp_var_fprint(FILE *stream, var_t vr);
 
 
 struct namespace_s;
@@ -70,14 +79,13 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp);
 var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_err_t *err);
 
 // Used after erroneous `nmsp_insert` call
-// Returns variable that was tried to be redefined
-var_t nmsp_redef(namespace_t nmsp);
-/* Returns the variable at the root of a circular dependency
- * If there is no circular dependency NULL is returned
- */
-var_t nmsp_circ_root(namespace_t nmsp);
-// Get next variable in dependency chain starting from base of circular dependency
-var_t nmsp_next_dep(var_t vr);
+
+// Returns string describing the circular dependency
+// NOTICE: Returned string must be freed
+int nmsp_strcirc(namespace_t nmsp, char *buf, size_t sz);
+// Returns a null-terminated name of the attempted to be redefined variable
+// NOTICE: Returned string must be freed
+int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz);
 
 
 
@@ -108,6 +116,8 @@ struct oper_info_s {
 
 // List of valid operations 
 extern struct oper_info_s expr_opers[];
+// Resolve arithmetic errors into strings
+extern const char *(*expr_arith_strerror)(expr_err_t err);
 
 
 // Create expression with the given capacities for each section
@@ -150,6 +160,9 @@ typedef struct {
 	// Parse value from string
 	// Should return destination pointer
 	void *(*parse)(void *dest, const char *str, const char **endptr);
+	
+	// Print value to stream pointer
+	int (*print)(FILE *stream, void *val);
 } expr_valctl_t;
 
 // Control functions used by expression evaluator

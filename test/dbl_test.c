@@ -25,7 +25,10 @@ namespace_t safe_decl(int deccnt, decl_t decls[]);
 // Returns 1 if there is an unexpected parse or eval error
 bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, expr_err_t everr);
 // Check that the stored dependency chain matches the given `names`
-bool circ_loop(namespace_t nmsp, const char *names[]);
+bool circ_loop(namespace_t nmsp, const char *chain);
+
+#define sep()     puts("\n+-----------------+\n")
+#define big_sep() puts("\n#=================#\n")
 
 // Check valid parsing
 int check_parsing();
@@ -39,8 +42,11 @@ int main(int argc, char *argv[]){
 	int fails = 0;
 	
 	fails += check_parsing();
+	big_sep();
 	fails += check_parse_errs();
+	big_sep();
 	fails += check_insert_errs();
+	big_sep();
 	
 	printf("\nFailures: %i\n", fails);
 	return 0;
@@ -54,14 +60,15 @@ int check_parsing(){
 	
 	decl_t decls1[3] = {
 		{"x", "  \t-3.67"},
-		{"y", "1\n/ (x- z)"},
+		{"y", "1/ (x\n- z)"},
 		{"z", "1 /5.678- 2"}
 	};
 	if(!(nmsp = safe_decl(3, decls1))
 	|| eval(nmsp,
-		"(-  x) ^-(y+z)*   x %\ny \t/ (z// 0.03)",
+		"(- \n x) ^-(y\n+z)*   x %\ty \t/ (z// 0.03)",
 		0.0069547480181, EXPR_ERR_OK, EXPR_ERR_OK
 	)) fails++;
+	sep();
 	
 	// Make sure parser ignores extra content
 	decl_t decls2[3] = {
@@ -71,9 +78,10 @@ int check_parsing(){
 	};
 	if(!(nmsp = safe_decl(3, decls2))
 	|| eval(nmsp,
-		"x *(foo_bar*x//y)\v//  -0.654=&*",
+		"x *(foo_bar*x//y\v)//  -0.654=&*",
 		-303764747679.0, EXPR_ERR_OK, EXPR_ERR_OK
 	)) fails++;
+	sep();
 	
 	decl_t decls3[3] = {
 		{"___", "__-5*-5/-5%-3+4^1.3"},
@@ -129,7 +137,7 @@ int check_insert_errs(){
 		{"__er34", "3*xruje + ler*6"},
 		{"gt56y", "__er34 * yjug*4"},
 		{"yjug", "23*9+two+7/6//3.65^7*8"},
-		{"__23", " 1 \n+\n HEllo / 34.56"},
+		{"__23", " ( 1 \n+\n HEllo) / 34.56"},
 		{"HEllo", "__er34 + gt56y"}
 	};
 	namespace_t nmsp = safe_decl(6, decls);
@@ -146,7 +154,7 @@ int check_insert_errs(){
 	)) fails++;
 	
 	if(eval(nmsp,
-		"gt56y : yjug //2\n^2",
+		"gt56y : yjug //2\t^2",
 		0.0, INSERT_ERR_REDEF, EXPR_ERR_OK
 	)) fails++;
 	
@@ -154,29 +162,30 @@ int check_insert_errs(){
 		"HEllo : xruje * yjug ^ 3",
 		0.0, INSERT_ERR_REDEF, EXPR_ERR_OK
 	)) fails++;
+	sep();
 	
 	
 	// Check circular dependency errors
-	const char *circs1[] = {"_5_", "xruje", "__er34", "HEllo", "__23", NULL};
+	const char chn1[] = "_5_ -> xruje -> __er34 -> HEllo -> __23";
 	if(eval(nmsp,
 		"_5_:23//__23",
 		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
 	)) fails++;
-	else if(circ_loop(nmsp, circs1)) fails++;
+	else if(circ_loop(nmsp, chn1)) fails++;
 	
-	const char *circs2[] = {"ler", "__er34", NULL};
+	const char chn2[] = "ler -> __er34";
 	if(eval(nmsp,
 		"ler:__er34-73",
 		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
 	)) fails++;
-	else if(circ_loop(nmsp, circs2)) fails++;
+	else if(circ_loop(nmsp, chn2)) fails++;
 	
-	const char *circs3[] = {"two", "yjug", "gt56y", "HEllo", NULL};
+	const char chn3[] = "two -> yjug -> gt56y -> HEllo";
 	if(eval(nmsp,
 		"two:(1+(2*(HEllo%4)+3)/4)//5",
 		0.0, INSERT_ERR_CIRC, EXPR_ERR_OK
 	)) fails++;
-	else if(circ_loop(nmsp, circs3)) fails++;
+	else if(circ_loop(nmsp, chn3)) fails++;
 	
 	return fails;
 }
@@ -220,24 +229,16 @@ namespace_t safe_decl(int deccnt, decl_t decls[]){
 	return nmsp;
 }
 
-bool circ_loop(namespace_t nmsp, const char *names[]){
+bool circ_loop(namespace_t nmsp, const char *chain){
 	// Iterate through dependency chain
-	var_t circ = nmsp_circ_root(nmsp);
-	const char *nm;
-	size_t nmln;
-	for(const char **tgt = names; *tgt; tgt++, circ = nmsp_next_dep(circ)){
-		nm = nmsp_var_name(circ, &nmln);
-		if(strncmp(*tgt, nm, nmln) != 0){
-			printf("Failed to match dependency chain; Should be \"%s\" found \"%.*s\"\n", *tgt, nmln, nm);
-			return 1;
-		}
-	}
-	
-	nm = nmsp_var_name(circ, &nmln);
-	if(strncmp(*names, nm, nmln)){
-		printf("Failed to circle back in circular dependency\n");
+	char buf[strlen(chain) + 1];
+	nmsp_strcirc(nmsp, buf, strlen(chain) + 1);
+	if(strcmp(buf, chain) != 0){
+		printf("Dependency Chain doesn't match; Should be \"%s\" found \"%s\"\n", chain, buf);
 		return 1;
 	}
+	
+	printf("Dependency Chain matches \"%s\"\n", chain);
 	return 0;
 }
 
@@ -251,7 +252,7 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, exp
 	printf("Desired Errno: %i     Parsing Errno: %i\n", perr, err);
 	printf("Variable Pointer: %p\n", vr);
 	if(perr != err){
-		printf("Failed to Parse Expression\n\n===============\n");
+		puts("Failed to Parse Expression");
 		return 1;
 	}
 	
@@ -264,15 +265,15 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, exp
 		printf("Result Pointer: %p\n", res);
 		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
 		if(everr != err){
-			printf("Failed to Evaluate Expression\n\n===============\n");
+			puts("Failed to Evaluate Expression");
 			return 1;
 		}else if(fabs(tgt - res) > 0.00001){
-			printf("Failed to Evaluate Expression Correctly\n\n===============\n");
+			puts("Failed to Evaluate Expression Correctly");
 			return 1;
 		}
 	}
 	
-	printf("Succeeded\n\n===============\n");
+	puts("Succeeded");
 	return 0;
 }
 

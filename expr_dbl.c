@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <math.h>
 
@@ -29,6 +30,10 @@ struct oper_info_s expr_opers[] = {
 	{"^", 1, 112, OPER_RIGHT_ASSOC, 0, { .binary = pow_d}},  // EXPR_POW
 	{0}
 };
+
+// No Arithmetic errors produced
+const char *(*expr_arith_strerror)(expr_err_t err) = NULL;
+
 
 
 static expr_err_t neg_d(void *arg){
@@ -77,8 +82,9 @@ static expr_err_t pow_d(void *arg1, void *arg2){
 static int equal_d(void *val1, void *val2);
 static void *clone_d(void *dest, void *src);
 static void *parse_d(void *dest, const char *str, const char **endptr);
+static int print_d(FILE *stream, void *val);
 
-expr_valctl_t expr_valctl = { sizeof(double), equal_d, NULL, clone_d, parse_d };
+expr_valctl_t expr_valctl = { sizeof(double), equal_d, NULL, clone_d, parse_d, print_d };
 
 static int equal_d(void *val1, void *val2){ return *(double*)val1 == *(double*)val2; }
 static void *clone_d(void *dest, void *src){ memcpy(dest, src, expr_valctl.size); }
@@ -97,5 +103,9 @@ static void *parse_d(void *dest, const char *str, const char **endptr){
 	// Put value into destination
 	*(double*)dest = val;
 	return dest;
+}
+
+static int print_d(FILE *stream, void *val){
+	fprintf(stream, "%lf", *(double*)val);
 }
 

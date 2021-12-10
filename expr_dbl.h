@@ -5,6 +5,7 @@
 
 // Instantiated in expr_dbl.c
 extern struct oper_info_s expr_opers[];
+extern const char *(*expr_arith_strerror)(expr_err_t err);
 extern expr_valctl_t expr_valctl;
 
 

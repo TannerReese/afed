@@ -1,8 +1,50 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
 #include "expr.h"
+
+
+// Returns a string containing a description of errors
+const char *expr_strerror(expr_err_t err){
+	switch(err){	
+		case EXPR_ERR_OK: return "EXPR_ERR_OK: Successful";
+		
+		// Evaluation Errors
+		case EVAL_ERR_STACK_OVERFLOW: return "EVAL_ERR_STACK_OVERFLOW: Values pushed when Stack full";
+		case EVAL_ERR_STACK_UNDERFLOW: return "EVAL_ERR_STACK_UNDERFLOW: Values popped when Stack empty";
+		case EVAL_ERR_STACK_SURPLUS: return "EVAL_ERR_STACK_SURPLUS: Too Many values on stack at end of program";
+		case EVAL_ERR_NO_EXPR: return "EVAL_ERR_NO_EXPR: Referenced Variable didn't have expression";
+		
+		// Parsing Errors
+		case PARSE_ERR_PARENTH_MISMATCH: return "PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis";
+		case PARSE_ERR_LOWPREC_UNARY: return "PARSE_ERR_LOWPREC_UNARY: Unary operator follows Binary of Higher Precedence";
+		case PARSE_ERR_TOO_MANY_VALUES: return "PARSE_ERR_TOO_MANY_VALUES: Expression tree is too deep";
+		case PARSE_ERR_MISSING_VALUES: return "PARSE_ERR_MISSING_VALUES: Operator is missing argument";
+		case PARSE_ERR_MISSING_OPERS: return "PARSE_ERR_MISSING_OPERS: Multiple values without operator between";
+		case PARSE_ERR_EXTRA_CONT: return "PARSE_ERR_EXTRA_CONT: Values present after expression";
+		
+		// Insertion Errors
+		case INSERT_ERR_REDEF: return "INSERT_ERR_REDEF: Variable already exists";
+		case INSERT_ERR_CIRC: return "INSERT_ERR_CIRC: Variable depends on itself";
+	}
+	
+	if(err > 0){
+		if(expr_arith_strerror){
+			const char *str = expr_arith_strerror(err);
+			if(str) return str;
+		}
+		
+		// Default message for arithmetic errors
+		return "EVAL_ERR_ARITH: Arithmetic Error";
+	}
+	
+	// Unknown error
+	return NULL;
+}
+
+
 
 
 typedef uint16_t instr_t;
@@ -99,6 +141,16 @@ expr_err_t nmsp_var_value(void *dest, var_t vr){
 	
 	valmove(dest, vr->cached);
 	return vr->err;
+}
+
+// Print variable value to a file
+int nmsp_var_fprint(FILE *stream, var_t vr){
+	// Get value
+	if(!vr->cached) vr->cached = malloc(expr_valctl.size);
+	if(!vr->is_cached) vr->err = expr_eval(vr->cached, vr->expr);
+	
+	if(vr->err) return fprintf(stream, "ERR %i", vr->err);
+	else return expr_valctl.print(stream, vr->cached);
 }
 
 
@@ -288,9 +340,11 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 		if(newvr->expr){
 			// Check if variable already has an expression
 			// Error: key is already defined
+			nmsp->redef = newvr;
 			nmsp->circ_root = NULL;
 			return NULL;
 		}
+		nmsp->redef = NULL;  // No redefinition
 		
 		
 		/* Check for circular dependency
@@ -378,14 +432,38 @@ var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_e
 
 
 
+// Returns the number of characters placed into buf not including the null-byte
+int nmsp_strcirc(namespace_t nmsp, char *buf, size_t sz){
+	if(sz == 0) return -1;
+	int count = 0;
+	
+	// Iterate dependency chain to produce string
+	var_t crc = nmsp->circ_root;
+	int isfirst = 1;
+	do{
+		size_t len = crc->namelen;
+		count += snprintf(buf + count, sz - count, isfirst ? "%.*s" : " -> %.*s", crc->namelen, crc->name);
+		isfirst = 0;
+		
+		crc = crc->used_by;
+	}while(crc != nmsp->circ_root && count < sz);
+	
+	return count;
+}
 
-// Variable that was attempted to be redefined
-var_t nmsp_redef(namespace_t nmsp){ return nmsp->redef; }
-// The Base of the circular dependency found during the last `nmsp_insert` call
-var_t nmsp_circ_root(namespace_t nmsp){ return nmsp->circ_root; }
+// Returns the number of characters placed into buf not including the null-byte
+int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz){
+	// Get pointer to redefined variable
+	var_t rdf = nmsp->redef;
+	if(rdf->namelen + 1 < sz) sz = rdf->namelen + 1;
+	
+	sz--;  // Retain space for null-byte
+	strncpy(buf, rdf->name, sz);
+	buf[sz] = '\0';
+	return sz;
+}
 
-// Get next variable in dependency chain starting from base of circular dependency
-var_t nmsp_next_dep(var_t vr){ return vr->used_by; }
+
 
 
 
@@ -1013,9 +1091,11 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 	
 	// Track if the last token parsed was a constant or variable
 	bool was_last_val = false;
+	// Track parenthesis depth to see if newlines should be consumed
+	int parenth_depth = 0;
 	while(*str){	
 		// Skip whitespace
-		while(isspace(*str)) str++;
+		while(parenth_depth > 0 ? isspace(*str) : isblank(*str)) str++;
 		
 		int c = *str;
 		const char *after_tok = str;  // Pointer to after parsed token
@@ -1023,6 +1103,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		// Check for parentheses
 		if(c == '('){
 			str++;  // Consume '('
+			parenth_depth++;
 			// Place open parenthesis on operator stack			
 			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
 			opstk.bottom[opstk.len++].is_block = 1;  // Indicate that it is a block
@@ -1030,6 +1111,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			continue;
 		}else if(c == ')'){
 			str++;  // Consume ')'
+			parenth_depth--;
 			// Remove all operators until block
 			if(*err = displace_opers(exp, &opstk, -1)) break;
 			
