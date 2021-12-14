@@ -1,0 +1,25 @@
+# Test errors
+Argo ^2 + Argo-1+yet = # Works fine to begin with
+
+# Should produce missing operators error on line 3
+A sentence whose words will be interpreted as variables
+
+# Should produce missing parenthesis error on line 8
+xtreme : (yet + (3 - 4 * dodo)
+# Should be missing operator on line 12 due to missing parenthesis
+x : (yet - (( 3 * 4 ) ^ dodo   )
+
+4 * yet = 
+yet  : 3.2
+dodo : 0.5
+
+3 *Argo + 4.567*dodo= # The rest of the document should be fine
+
+Argo : 2 + 3 - 1+8 - 9 // 2
+
+# Should be missing values between operators on line 21
+yet * + -dodo
+Argo * woNder ^ 0.3 =
+
+woNder : Argo * Argo
+

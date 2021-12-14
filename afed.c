@@ -112,7 +112,7 @@ int main(int argc, char *argv[]){
 	// Parse Command Line Arguments
 	// -----------------------------
 	int c;
-	while((c = getopt_long(argc, argv, "i:o:e:n", longopts, NULL)) != -1) parse_opt(c);
+	while((c = getopt_long(argc, argv, "i:o:e:nE", longopts, NULL)) != -1) parse_opt(c);
 	for(int i = optind; i < argc; i++){
 		optarg = argv[i];
 		parse_opt(-1);
@@ -136,14 +136,14 @@ int main(int argc, char *argv[]){
 	// Parse and evaluate
 	namespace_t nmsp = nmsp_new();
 	docmt_t doc = docmt_new(prog, nmsp);
-	docmt_parse(doc, errfile);  // Parse file
+	docmt_parse(doc, show_errors ? errfile : NULL);  // Parse file
 	docmt_fprint(doc, outfile);  // Print new file
 	
 	// Cleanup heap allocations
 	free(prog);
 	docmt_free(doc);
 	nmsp_free(nmsp);
-	return 0;
+	leave(0);
 }
 
 

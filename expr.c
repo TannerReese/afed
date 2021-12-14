@@ -1096,6 +1096,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 	while(*str){	
 		// Skip whitespace
 		while(parenth_depth > 0 ? isspace(*str) : isblank(*str)) str++;
+		if(parenth_depth == 0 && *str == '\n') break;  // Leave at newline outside parenthesis
 		
 		int c = *str;
 		const char *after_tok = str;  // Pointer to after parsed token

@@ -137,9 +137,9 @@ static expr_err_t parse_line(docmt_t doc){
 	expr_err_t err = EXPR_ERR_OK;
 	const char *endptr;
 	var_t vr = nmsp_define(doc->nmsp, doc->str, &endptr, &err);
-	doc->line_no += count_lines(doc->str, endptr);
-	doc->str = endptr;
 	if(err) return err;  // On Parse Error
+	doc->line_no += count_lines(doc->str, endptr);
+	doc->str = endptr;  // Move pointer past expression on success
 	
 	
 	// Parse Equals
