@@ -1,6 +1,7 @@
 CC=gcc
 CFLAGS=
 tests=dbl_test
+binaries=afed $(addprefix test/,$(tests))
 libs=m
 
 # Perform all the tests
@@ -14,6 +15,11 @@ test/dbl_test.o: test/dbl_test.c expr.h expr_dbl.h
 expr.o: expr.c expr.h
 expr_dbl.o: expr_dbl.c expr_dbl.h expr.h
 
+# Recipe for primary binary
+docmt.o: docmt.c expr.h
+afed.o: afed.c docmt.h expr.h expr_dbl.h
+afed: afed.o docmt.o expr.o expr_dbl.o
+
 
 
 # Recipe for performing a test
@@ -25,15 +31,15 @@ $(tests): %: test/%
 	$(CC) -c $(CFLAGS) -o $@ $(filter %.c,$^)
 
 # Recipe for test binaries
-$(addprefix test/,$(tests)): %:
+$(binaries): %:
 	$(CC) $(CFLAGS) -o $@ $(filter %.o,$^) $(addprefix -l,$(libs))
 
 # Remove binary and object files
 clean:
 	@echo Removing object files
 	@rm -f *.o test/*.o
-	@echo Removing test binaries: $(tests)
-	@cd test && rm -f $(tests) && cd ..
+	@echo Removing binaries: $(binaries)
+	@rm -f $(binaries)
 
 .PHONY: clean test_all $(tests)
 
