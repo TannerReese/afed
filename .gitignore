@@ -1,7 +1,7 @@
 # Binaries
 afed
-# Test binaries
-test/dbl_test
+# Test executables
+test/expr_test
 
 # Vim Swap files
 *.sw*

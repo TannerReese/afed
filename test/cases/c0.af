@@ -1,7 +1,7 @@
 # This is the first test
 # It is a valid file and should contain no errors
 
-d + 0.5 ^ (-z / 2) = # Result without label
+d + 0.5 ^ (-z / 2) = previous stuff # Result without label
 
 wood / d =
 
@@ -18,7 +18,7 @@ z : -9.87 + 5.3412 =
 
  d : -3.1245#Comment with no leading whitespace
 
-(wood + z * y) =
+(wood * 2 + z * y + 2 + 2) =
 wood * z =
 wood : z + y - 3 = # Variable
 

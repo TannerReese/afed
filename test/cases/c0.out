@@ -18,7 +18,7 @@ z : -9.87 + 5.3412 = -4.528800
 
  d : -3.1245#Comment with no leading whitespace
 
-(wood + z * y) = -1718.356974 
+(wood * 2 + z * y + 2 + 2) = -1237.067089 
 wood * z = -2161.550429 
 wood : z + y - 3 = 477.289884 # Variable
 

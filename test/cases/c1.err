@@ -1,4 +1,6 @@
 (Line 5) PARSE_ERR_MISSING_OPERS: Multiple values without operator between
 (Line 8) PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis
 (Line 10) PARSE_ERR_MISSING_OPERS: Multiple values without operator between
-(Line 21) EVAL_ERR_STACK_UNDERFLOW: Values popped when Stack empty
+(Line 13) PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis
+(Line 19) PARSE_ERR_MISSING_OPERS: Multiple values without operator between
+(Line 26) EVAL_ERR_STACK_UNDERFLOW: Values popped when Stack empty

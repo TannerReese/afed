@@ -1,0 +1,18 @@
+# Test Builtin Constants and Functions
+
+v : 5 * pi * log(5,2)
+sqrt(cos(v - 2*e) + 2) = 1.711364 
+
+# Try to apply log
+sc:abs(sin(word)
+	+ cos(pi/v))
+
+log(sc, 2) - log(
+sin(1 / 2)  ,
+word
+)= 2.273173 
+
+word : ln(e + pi)
+
+notdefined = ERR -4 # Should produce no expr error
+

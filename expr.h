@@ -33,6 +33,10 @@ typedef int expr_err_t;
  *  And the binary operator is left associative
  */
 #define PARSE_ERR_LOWPREC_UNARY (-17)
+#define PARSE_ERR_ARITY_MISMATCH (-18)
+#define PARSE_ERR_BAD_COMMA (-19)
+#define PARSE_ERR_FUNC_NOCALL (-20)
+
 // Errors returned after parsing produces an invalid expression
 #define PARSE_ERR_TOO_MANY_VALUES (-25)
 #define PARSE_ERR_MISSING_VALUES (-26)
@@ -96,7 +100,20 @@ int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz);
 typedef uint8_t oper_t;
 #define OPER_NULL 0xff  // Represents undefined or null operator
 
-// Information used to define identify operators
+/* Information used to define infix (unary or binary) operators
+ * As well as builtin functions
+ * 
+ * Infix operators consist of `isoper` characters
+ * and are called as
+ *     <oper> <arg>
+ * for Unary and
+ *     <arg1> <oper> <arg2>
+ * for Binary
+ * 
+ * Builtin functions consist of alphanumeric characters and '_'
+ * They are called as
+ *     <builtin_func>(<arg1>, <arg2>, ...)
+ */
 struct oper_info_s {
 	// String used to represent the operator
 	const char *name;
@@ -105,16 +122,28 @@ struct oper_info_s {
 	// Precedence and Associatitivity info
 	uint8_t prec : 7;
 	uint8_t assoc : 1;
-	uint8_t is_unary : 1;  // Whether the operator is unary
+	// True when operator is a builtin function or constant
+	uint8_t is_func : 1;
+	
+	// Number of arguments used by function
+	// arity = 0 for builtin constant
+	// arity = 1 for unary and arity = 2 for binary infix operators
+	uint8_t arity : 4;
 	
 	// Function used to apply operation
+	// In all cases, the result will be stored into the first argument
 	union {
 		expr_err_t (*unary)(void *arg);
 		expr_err_t (*binary)(void *arg1, void *arg2);
+		
+		// Used when is_infix = false
+		// args is a pointer to an array of arguments
+		expr_err_t (*nary)(void *args);
+		void *value;  // Stores value of constant
 	} func;
 };
 
-// List of valid operations 
+// Null-terminated array of valid operations 
 extern struct oper_info_s expr_opers[];
 // Resolve arithmetic errors into strings
 extern const char *(*expr_arith_strerror)(expr_err_t err);
@@ -171,6 +200,7 @@ extern expr_valctl_t expr_valctl;
 // Macros for working with values
 // Define stack space for value
 #define valdef(vl) uint8_t vl[expr_valctl.size];
+#define valarr_def(vl, num) uint8_t vl[(num) * expr_valctl.size];
 // Move value from location `src` to `dest`
 #define valmove(dest, src) memmove(dest, src, expr_valctl.size)
 // Do deep copy of value from `src` into `dest`

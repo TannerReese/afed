@@ -93,6 +93,19 @@ int check_parsing(){
 		"___*__-__OP/__^__",
 		204.122506542, EXPR_ERR_OK, EXPR_ERR_OK
 	)) fails++;
+	sep();
+	
+	// Make sure builtin functions and constants are parsed
+	decl_t decls4[3] = {
+		{"xray", "sin(ln(3.45 * pi) - stuff / beta)"},
+		{"beta", "2 - abs(2 + stuff )^-2"},
+		{"stuff", "-4.356 * pi * log(e + 1, e - 1) = Ignored stuff"}
+	};
+	if(!(nmsp = safe_decl(3, decls4))
+	|| eval(nmsp,
+		"xray*beta + beta*stuff -stuff*xray",
+		-61.39002848156, EXPR_ERR_OK, EXPR_ERR_OK
+	)) fails++;
 	
 	return fails;
 }
@@ -211,7 +224,7 @@ namespace_t safe_decl(int deccnt, decl_t decls[]){
 		printf("Expression Pointer: %p\n", exp);
 		if(err || !exp){
 			nmsp_free(nmsp);  // Cleanup namespace
-			printf("Failed to Parse Expression\n");
+			printf("**** Failed to Parse Expression\n");
 			return NULL;
 		}
 		
@@ -220,7 +233,7 @@ namespace_t safe_decl(int deccnt, decl_t decls[]){
 		var_t vr = nmsp_insertz(nmsp, decls[i].name, exp);
 		if(!vr){
 			nmsp_free(nmsp);  // Cleanup namespace
-			printf("Failed to declare Variable\n");
+			printf("**** Failed to declare Variable\n");
 			return NULL;
 		}
 		
@@ -252,7 +265,7 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, exp
 	printf("Desired Errno: %i     Parsing Errno: %i\n", perr, err);
 	printf("Variable Pointer: %p\n", vr);
 	if(perr != err){
-		puts("Failed to Parse Expression");
+		puts("**** Failed to Parse Expression");
 		return 1;
 	}
 	
@@ -265,10 +278,10 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, expr_err_t perr, exp
 		printf("Result Pointer: %p\n", res);
 		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
 		if(everr != err){
-			puts("Failed to Evaluate Expression");
+			puts("**** Failed to Evaluate Expression");
 			return 1;
 		}else if(fabs(tgt - res) > 0.00001){
-			puts("Failed to Evaluate Expression Correctly");
+			puts("**** Failed to Evaluate Expression Correctly");
 			return 1;
 		}
 	}

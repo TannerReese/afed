@@ -20,6 +20,11 @@ const char *expr_strerror(expr_err_t err){
 		// Parsing Errors
 		case PARSE_ERR_PARENTH_MISMATCH: return "PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis";
 		case PARSE_ERR_LOWPREC_UNARY: return "PARSE_ERR_LOWPREC_UNARY: Unary operator follows Binary of Higher Precedence";
+		case PARSE_ERR_ARITY_MISMATCH: return "PARSE_ERR_ARITY_MISMATCH: Wrong number of arguments given to function";
+		case PARSE_ERR_BAD_COMMA: return "PARSE_ERR_BAD_COMMA: Comma in wrong location";
+		case PARSE_ERR_FUNC_NOCALL: return "PARSE_ERR_FUNC_NOCALL: Function present but not called";
+		
+		// Produce after parsing produces invalid expression
 		case PARSE_ERR_TOO_MANY_VALUES: return "PARSE_ERR_TOO_MANY_VALUES: Expression tree is too deep";
 		case PARSE_ERR_MISSING_VALUES: return "PARSE_ERR_MISSING_VALUES: Operator is missing argument";
 		case PARSE_ERR_MISSING_OPERS: return "PARSE_ERR_MISSING_OPERS: Multiple values without operator between";
@@ -49,23 +54,25 @@ const char *expr_strerror(expr_err_t err){
 
 typedef uint16_t instr_t;
 
-#define INSTR_IS_OPER(inst) ((inst) & 0x8000)
-#define INSTR_IS_BINARY(inst) (((inst) & 0xc000) == 0x8000)
-#define INSTR_IS_UNARY(inst) (((inst) & 0xc000) == 0xc000)
-#define INSTR_OPERID(inst) ((inst) & 0x3fff)
 // Create operator instruction using oper_t
-#define INSTR_NEW_OPER(op, unary) (0x8000 | (!!(unary) << 14) | ((op) & 0x3fff))
+#define INSTR_NEW_OPER(op) (0x8000 | ((op) & 0x7fff))
+#define INSTR_IS_OPER(inst) ((inst) & 0x8000)
+#define INSTR_OPERID(inst) ((inst) & 0x7fff)
+
+// Create instructions to load a variable or constant
+#define INSTR_NEW_VAR(idx) (0x4000 | ((idx) & 0x3fff))
+#define INSTR_NEW_CONST(idx) ((idx) & 0x3fff)
 
 #define INSTR_IS_VAR(inst) (((inst) & 0xc000) == 0x4000)
 #define INSTR_IS_CONST(inst) (!((inst) & 0xc000))
-#define INSTR_LOAD_INDEX(inst) ((inst) & 0x3fff)
-// Create variable load instruction using index
-#define INSTR_NEW_VAR(idx) (0x4000 | ((idx) & 0x3fff))
-// Create constant load instruction using index
-#define INSTR_NEW_CONST(idx) ((idx) & 0x3fff)
 
-// Get constant or variable from expression
-#define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ? (exp)->vars[INSTR_LOAD_INDEX(inst)]->cached : get_const((exp), INSTR_LOAD_INDEX(inst)))
+// Get index that this instruction loads from
+#define INSTR_LOAD_INDEX(inst) ((inst) & 0x3fff)
+// Get constant, variable, or argument from expression
+#define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ?\
+	(exp)->vars[INSTR_LOAD_INDEX(inst)]->cached :\
+	get_const((exp), INSTR_LOAD_INDEX(inst))\
+)
 
 struct expr_s {
 	// Outside variables loaded at runtime
@@ -86,6 +93,8 @@ struct expr_s {
 // Access constant value at index i
 #define get_const(exp, i) ((exp)->consts + (i) * expr_valctl.size)
 #define set_const(exp, i, val) valmove(get_const(exp, i), val)
+// Perform pointer arithmetic with value pointer
+#define valshf(ptr, shf) ((ptr) + (shf) * expr_valctl.size)
 
 
 typedef uint32_t hash_t;
@@ -510,11 +519,11 @@ expr_t expr_new_const(void *val){
 static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend);
 
 expr_err_t expr_eval(void *dest, expr_t exp){
-	size_t stksize = EXPR_EVAL_STACK_SIZE * expr_valctl.size;
-	uint8_t stack[stksize];  // Allocate Stack for evaluation
+	valarr_def(stack, EXPR_EVAL_STACK_SIZE);  // Allocate Stack for evaluation
+	
 	// On evaluation error return
 	expr_err_t err;
-	if(!(err = expr_eval_stk(exp, stack, stack + stksize))){
+	if(!(err = expr_eval_stk(exp, stack, valshf(stack, EXPR_EVAL_STACK_SIZE)))){
 		// On succes, place bottom of stack into dest
 		valmove(dest, stack);
 	}
@@ -544,80 +553,56 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	
 	// Store location on stack
 	void* stktop = stack;
-	// Macro to shift the stack up or down
-	#define shfstk(pt, shf) ((void*)((uint8_t*)(pt) + (shf) * expr_valctl.size))
 	
 	expr_err_t err = EXPR_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
-	bool no_free = true;  // If the top element doesn't need to be freed on binary operation
 	for(size_t i = 0; i < exp->instrlen; i++){
 		instr_t inst = exp->instrs[i];
 		
 		if(INSTR_IS_OPER(inst)){  // Operator
-			// Check that there are enough arguments
-			if(shfstk(stktop, -!INSTR_IS_UNARY(inst)) <= stack){
+			struct oper_info_s info = expr_opers[INSTR_OPERID(inst)];
+			void *args = valshf(stktop, -info.arity);  // Pointer to list of arguments
+			if(args < stack){  // Check that there are enough arguments
 				err = EVAL_ERR_STACK_UNDERFLOW;
 				break;
 			}
 			
-			// Get top argument and get operator id
-			void *arg = shfstk(stktop, -1);
-			oper_t op = INSTR_OPERID(inst);
-			
-			if(INSTR_IS_UNARY(inst)){  // Unary Operator
-				// Perform Unary Operation
-				if(err = expr_opers[op].func.unary(arg)) break;
-			}else{  // Binary Operator
-				// Perform Binary Operation
-				if(err = expr_opers[op].func.binary(shfstk(arg, -1), arg)) break;
+			// Apply operator
+			if(info.is_func) err = info.func.nary(args);  // Builtin Function
+			else if(info.arity == 1) err = info.func.unary(args);  // Unary Operator
+			else err = info.func.binary(args, valshf(args, 1));  // Binary Operator
+			// Break on error
+			if(err) break;
 				
-				if(no_free) no_free = false;  // Clear no_free flag
-				else valfree(arg);  // Deallocate top element
-				
-				stktop = arg;  // Pull stack down to reflect consumption of top element
-			}
+			// Deallocate used values
+			for(int i = 1; i < info.arity; i++) valfree(valshf(args, i));
+			stktop = valshf(args, 1);  // Move stack down to reflect consumption of elements
 			
-		}else{  // Constant or Variable load
-			// Check for space on stack
-			if(stktop >= stkend){
+		}else{  // Constant or Variable load	
+			if(stktop >= stkend){  // Check for space on stack
 				err = EVAL_ERR_STACK_OVERFLOW;
 				break;
 			}
 			
 			// Pointer to loaded value
 			void *val = INSTR_LOAD(exp, inst);
-			
-			// Check if the next instruction is a binary operation
-			if(i < exp->instrlen - 1 && INSTR_IS_BINARY(inst = exp->instrs[i + 1])){
-				// If the next instruction is a binary operation
-				// Don't perform a needless allocation
-				no_free = true;
-				valmove(stktop, val);
-			}else{
-				// Otherwise a clone is necessary
-				valclone(stktop, val);
-			}
-			
-			// Move `stktop` up because of additional value
-			stktop = shfstk(stktop, 1);
+			valclone(stktop, val);  // Clone value onto top of stack
+			stktop = valshf(stktop, 1);  // Move `stktop` up because of additional value
 		}
 	}
 	
 	// Should only be one remaining value after evaluation
-	if(!err && shfstk(stktop, -1) > stack){
-		err = EVAL_ERR_STACK_SURPLUS;
-	}
+	if(!err && valshf(stktop, -1) > stack) err = EVAL_ERR_STACK_SURPLUS;
 	
 	if(err){
 		// Cleanup values on stack
-		if(no_free) stktop = shfstk(stktop, -1);  // Ignore top value if no_free true
-		for(; stktop >= stack; stktop = shfstk(stktop, -1)) valfree(stktop);
+		for(; stktop >= stack; stktop = valshf(stktop, -1)) valfree(stktop);
 		return err;
-	}else{
-		// There will be one value left at the bottom of the stack
-		return EXPR_ERR_OK;
 	}
+	
+	// There will be one value left at the bottom of the stack
+	return EXPR_ERR_OK;
 }
 
 
@@ -716,7 +701,7 @@ expr_t expr_binary_var(expr_t exp, var_t vr, oper_t op){
 	// Add load instruction to instruction list
 	exp->instrs[exp->instrlen - 1] = INSTR_NEW_VAR(varid);
 	// Add operator instruction
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op, 0);
+	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
 	return exp;
 }
 
@@ -732,7 +717,7 @@ expr_t expr_binary_const(expr_t exp, void *val, oper_t op){
 	// Add load instruction to instruction list
 	exp->instrs[exp->instrlen - 1] = INSTR_NEW_CONST(constid);
 	// Add operator instruction
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op, 0);
+	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
 	return exp;
 }
 
@@ -765,7 +750,7 @@ expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 	
 	// Place operator at end of instructions
 	inc_size(dest->instrs, sizeof(instr_t), dest->instrcap, dest->instrlen);  // Resize array if necessary
-	dest->instrs[dest->instrlen++] = INSTR_NEW_OPER(op, 0);
+	dest->instrs[dest->instrlen++] = INSTR_NEW_OPER(op);
 	
 	return dest;
 }
@@ -776,7 +761,7 @@ expr_t expr_unary(expr_t exp, oper_t op){
 	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
 	
 	// Place unary operator at the end
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op, 1);
+	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
 	return exp;
 }
 
@@ -787,12 +772,12 @@ static expr_err_t check_valid(expr_t exp){
 	for(size_t i = 0; i < exp->instrlen; i++){
 		instr_t inst = exp->instrs[i];
 		if(INSTR_IS_OPER(inst)){
+			struct oper_info_s info = expr_opers[INSTR_OPERID(inst)];
 			// Check that there are sufficient operators
-			if(height < 1 + !INSTR_IS_UNARY(inst)) return EVAL_ERR_STACK_UNDERFLOW;
+			if(height < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
 			
-			// Binary operator remove one element
-			// Unary operator removes none
-			height -= !INSTR_IS_UNARY(inst);
+			// Remove consumed arguments with result in first argument
+			height -= info.arity - 1;
 		}else{
 			// Load Instructions add one element
 			height++;
@@ -835,9 +820,11 @@ static expr_err_t check_valid(expr_t exp){
 /* Struct to represent operator while on the operator stack
  */
 struct stk_oper_s {
-	// If true then this operator stack element represents an open parenthesis
+	// If true then this operator stack element represents an open parenthesis or comma
 	// It cannot be displaced by normal operators
 	uint8_t is_block : 1;
+	// If this element is a comma then it will be displaced only by close parenthesis
+	uint8_t is_comma : 1;
 	
 	// Stores Precedence in higher 7 bits and
 	// Associativity in the least significant bit
@@ -874,27 +861,29 @@ struct oper_tree_s {
 	struct oper_tree_s *child;
 };
 
-/* Tries to parse an operator from the first part of `str`
+/* Tries to parse an infix operator from the first part of `str`
  * Finds longest prefix which matches to a valid operator
  * On Success, a valid operator id is returned
  * Otherwise OPER_NULL is returned
  */
-static oper_t parse_oper(const char *str, const char **endptr, bool is_unary){
+static oper_t parse_infix_oper(const char *str, const char **endptr, bool is_unary){
 	// Root of operator trees
 	static struct oper_tree_s *binary_tree = NULL, *unary_tree = NULL;
 	
 	// Select tree to use
 	struct oper_tree_s **root = is_unary ? &unary_tree : &binary_tree;
+	size_t arity = 1 + !is_unary;
 	// Construct operator tree if it doesn't exist for given type
 	if(!*root){
 		// Add each operator to tree
-		for(oper_t opid = 0; expr_opers[opid].name; opid++){
-			// Only add operators of specified type
-			if(expr_opers[opid].is_unary != is_unary) continue;
+		struct oper_info_s info;
+		for(oper_t opid = 0; (info = expr_opers[opid]).name; opid++){
+			// Only add infix operators (not builtin functions) of the specified type
+			if(info.is_func || info.arity != arity) continue;
 			
 			// Iterate through name adding nodes into tree
-			const char *name = expr_opers[opid].name;
-			const char *end = name + expr_opers[opid].namelen;
+			const char *name = info.name;
+			const char *end = name + info.namelen;
 			
 			struct oper_tree_s **node = root;  // Pointer to next node location
 			for(; name < end; name++){
@@ -949,7 +938,6 @@ static oper_t parse_oper(const char *str, const char **endptr, bool is_unary){
 		// If no match found or child list is empty then leave
 		if(!node) break;
 	}
-	
 	return opid;
 }
 
@@ -961,68 +949,67 @@ static expr_err_t apply_oper(expr_t exp, oper_t opid){
 	// If `expr_eval_on_parse` is set then try to
 	// Evaluate constants using operator on the stack
 	if(expr_eval_on_parse){
-		bool is_unary = expr_opers[opid].is_unary;
+		struct oper_info_s info = expr_opers[opid];
 		
 		// Check for sufficient arguments
-		if(exp->instrlen < 1 + !is_unary) return EVAL_ERR_STACK_UNDERFLOW;
-		instr_t *inst = exp->instrs + exp->instrlen - 1;
+		if(exp->instrlen < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
+		instr_t *inst = exp->instrs + exp->instrlen - info.arity;
 		
-		// Unary Operators
+		// Check that all arguments are constant
+		for(int i = 0; i < info.arity; i++) if(!INSTR_IS_CONST(inst[i])) goto put_op;
+		
+		// Pop constants off of instruction array and onto args
+		valarr_def(args, info.arity);
+		for(int i = info.arity - 1; i >= 0; i--) expr_pop_const_load(exp, valshf(args, i));
+		
+		// Apply operator
 		expr_err_t err;
-		if(is_unary){
-			if(INSTR_IS_CONST(*inst)){
-				// Pop constant off of instruction array
-				valdef(dest);
-				expr_pop_const_load(exp, dest);
-				
-				// Try to apply unary operator
-				if(err = expr_opers[opid].func.unary(dest)){
-					valfree(dest);
-					return err;
-				}
-				
-				// If successful push `dest` onto consts array
-				int idx = expr_put_const(exp, dest);
-				// Place load instruction back on instrs section
-				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
-				
-				return EXPR_ERR_OK;
-			}
-			
-		// Binary Operators
-		}else{
-			if(INSTR_IS_CONST(*inst) && INSTR_IS_CONST(*(inst - 1))){
-				// Define arguments to binary operator
-				valdef(dest);
-				valdef(src);
-				expr_pop_const_load(exp, src);
-				expr_pop_const_load(exp, dest);
-				
-				// Try to apply binary operator
-				if(err = expr_opers[opid].func.binary(dest, src)){
-					valfree(dest);
-					valfree(src);
-					return err;
-				}
-				
-				// If successful push `dest` onto consts array
-				int idx = expr_put_const(exp, dest);
-				// We can then deallocate `src`
-				valfree(src);
-				// Place load instruction back on instrs section
-				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
-				
-				return EXPR_ERR_OK;
-			}
+		if(info.is_func) err = info.func.nary(args);  // Builtin Functions
+		else if(info.arity == 1) err = info.func.unary(args);  // Unary Operator
+		else err = info.func.binary(args, valshf(args, 1));  // Binary Operator
+		
+		// Cleanup extra args
+		for(int i = 1; i < info.arity; i++) valfree(valshf(args, i));
+		
+		if(err){
+			valfree(args);  // On error, Deallocate first argument as well
+			return err;
 		}
+		
+		// On Success push result onto consts array
+		int idx = expr_put_const(exp, args);
+		// Place load instruction back on instruction array
+		exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
+		return EXPR_ERR_OK;
 	}
 	
+put_op:
 	// Put operator onto instrs section
 	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(opid, expr_opers[opid].is_unary);
+	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(opid);
 	return EXPR_ERR_OK;
 }
 
+
+/* Place operator on stack from `opid`
+ * If opid == -1 then place an open parenthesis
+ * If opid == -2 then place a comma
+ */
+static void push_oper(oper_stack_t *opstk, int16_t opid){
+	struct stk_oper_s elem;
+	inc_size(opstk->bottom, sizeof(struct stk_oper_s), opstk->cap, opstk->len);
+	if(opid >= 0){
+		struct oper_info_s info = expr_opers[opid];
+		elem.is_block = 0;
+		elem.prec_assoc = (info.prec << 1) | info.assoc | (info.arity == 1);
+		elem.operid = (oper_t)opid;
+	}else{
+		elem.is_block = 1;
+		elem.is_comma = opid == -2;
+	}
+	
+	opstk->bottom[opstk->len++] = elem;
+}
 
 // Place `op` onto `opstk` displacing operators as necessary and applying them to `exp`
 static expr_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
@@ -1050,14 +1037,68 @@ static expr_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
 	return EXPR_ERR_OK;
 }
 
+// Clears out parenthetical block from operator stack
+// And calls function if necessary
+static expr_err_t close_parenth(expr_t exp, oper_stack_t *opstk){
+	// Remove all operators until close parenthesis
+	expr_err_t err;
+	if(err = displace_opers(exp, opstk, -1)) return err;
+	
+	// Consume commas to find number of values in parenthetical block
+	size_t arity = 1;
+	struct stk_oper_s elem;
+	while(opstk->len > 0 && (elem = stktop(*opstk)).is_block && elem.is_comma){
+		opstk->len--;  arity++;
+	}
+	
+	// Check for open parenthesis
+	if(opstk->len == 0 || !(elem = stktop(*opstk)).is_block){
+		return PARSE_ERR_PARENTH_MISMATCH;  // No opening parenthesis so parenth mismatch
+	}
+	opstk->len--;  // Remove open parenthesis
+	
+	// Check for function below open parenthesis
+	elem = stktop(*opstk);
+	struct oper_info_s info = expr_opers[elem.operid];
+	if(!elem.is_block && info.is_func){  // Treat parenthetical block as arguments to function
+		opstk->len--;  // Remove builtin function from `opstk`
+		if(arity != info.arity) return PARSE_ERR_ARITY_MISMATCH;  // Check that arity matches
+		apply_oper(exp, elem.operid);  // Apply operator onto values on stack
+		
+	}else{  // Treat parenthetical block as value
+		if(arity > 1) return PARSE_ERR_BAD_COMMA;  // Arity must be 1
+	}
+	
+	return EXPR_ERR_OK;
+}
+
+// Try to parse sequence of alphanumerics into builtin function
+static oper_t parse_builtin_func(const char *str, const char **endptr){
+	// Collect function name
+	const char *name = str;
+	while(isalnum(*str) || *str == '_') str++;
+	size_t namelen = str - name;
+	
+	// Search Builtin Functions for match
+	struct oper_info_s info;
+	for(oper_t opid = 0; (info = expr_opers[opid]).name; opid++) if(info.is_func){
+		size_t len = namelen < info.namelen ? namelen : info.namelen;
+		if(strncmp(info.name, name, len) == 0){
+			if(endptr) *endptr = str;
+			return opid;
+		}
+	}
+	return OPER_NULL;
+}
+
 // Try to parse sequence of alphanumerics into variable
 static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
-	// Set endptr to beginning
-	if(endptr) *endptr = str;
+	if(endptr) *endptr = str;  // Set endptr to beginning
 	
 	// Collect variable name characters
 	const char *name = str;
 	while(isalnum(*str) || *str == '_') str++;
+	size_t namelen = str - name;
 	
 	// Leave if nothing collected
 	if(str == name) return NULL;
@@ -1065,9 +1106,9 @@ static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
 	var_t vr;
 	if(nmsp && (
 		// Query namespace for variable
-		(vr = nmsp_get(nmsp, name, str - name)) ||
+		(vr = nmsp_get(nmsp, name, namelen)) ||
 		// Otherwise create new variable with name
-		(vr = nmsp_put(nmsp, name, str - name))
+		(vr = nmsp_put(nmsp, name, namelen))
 	)){
 		if(endptr) *endptr = str;
 		return vr;
@@ -1105,71 +1146,68 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		if(c == '('){
 			str++;  // Consume '('
 			parenth_depth++;
-			// Place open parenthesis on operator stack			
-			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
-			opstk.bottom[opstk.len++].is_block = 1;  // Indicate that it is a block
+			push_oper(&opstk, -1);  // Place open parenthesis on operator stack
+			was_last_val = false;  // New expression so there is no last value
+			continue;
+		}else if(c == ','){
+			if(parenth_depth == 0){  // Comma must be inside parentheses
+				*err = PARSE_ERR_BAD_COMMA;
+				break;
+			}
+			str++;  // Consume ','
+			if(*err = displace_opers(exp, &opstk, -1)) break;  // Displace all operators until block
+			
+			push_oper(&opstk, -2);  // Place comma on operator stack
 			was_last_val = false;  // New expression so there is no last value
 			continue;
 		}else if(c == ')'){
 			str++;  // Consume ')'
 			parenth_depth--;
-			// Remove all operators until block
-			if(*err = displace_opers(exp, &opstk, -1)) break;
-			
-			// Check for block (i.e. open parenthesis)
-			if(opstk.len > 0 && stktop(opstk).is_block){
-				// Remove block and continue parsing
-				opstk.len--;
-				// Treat closed parenthetical expression as value
-				was_last_val = true;
-				continue;
-			}else{
-				// No opening parenthesis so parenth mismatch
-				*err = PARSE_ERR_PARENTH_MISMATCH;
-				break;
-			}
+			if(*err = close_parenth(exp, &opstk)) break;	
+			was_last_val = true;
+			continue;
 		}
 		
-		// Try to parse operator
-		oper_t opid = parse_oper(str, &after_tok, !was_last_val);
+		// Try to parse infix operator
+		oper_t opid = parse_infix_oper(str, &after_tok, !was_last_val);
 		if(opid != OPER_NULL && after_tok > str){
-			struct stk_oper_s elem;
-			
-			// Only displace operators if binary operator
+			// Get info for current operator
 			struct oper_info_s info = expr_opers[opid];
-			if(was_last_val){  // If operator follows val it is binary
-				if(*err = displace_opers(exp, &opstk, (int8_t)(info.prec))) break;
-			}else if(!stktop(opstk).is_block){  // When unary and previous element isn't block
-				// Check that previous operator is unary, left-associative, or lower precedence
-				struct oper_info_s info2 = expr_opers[stktop(opstk).operid];
-				if(!(info2.is_unary || info2.assoc == OPER_RIGHT_ASSOC || info2.prec < info.prec)){
-					// Otherwise we have a unary operator coming after a binary operator of higher precedence
-					*err = PARSE_ERR_LOWPREC_UNARY;
-					break;
-				}
+			
+			if(opstk.len > 0){
+				// Get info for last operator
+				struct oper_info_s lst_info = expr_opers[stktop(opstk).operid];
+				
+				// Check that last operator isn't function
+				if(lst_info.is_func){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
+				
+				// When operator is unary
+				// Check that previous operator is a block, unary, right-associative, or lower precedence
+				if(info.arity == 1 && !(stktop(opstk).is_block
+				|| lst_info.arity == 1
+				|| lst_info.assoc == OPER_RIGHT_ASSOC
+				|| lst_info.prec < info.prec
+				)){ *err = PARSE_ERR_LOWPREC_UNARY;  break; }
+				// Otherwise we have a unary operator coming after a binary operator of higher precedence
 			}
 			
-			// Place operator at top of stack
-			inc_size(opstk.bottom, sizeof(struct stk_oper_s), opstk.cap, opstk.len);
-			elem.is_block = 0;
-			elem.prec_assoc = (info.prec << 1) | info.assoc | info.is_unary;
-			elem.operid = opid;
-			opstk.bottom[opstk.len++] = elem;
 			
+			// Only displace operators if binary operator
+			if(info.arity == 2){  // If operator follows val it is binary
+				if(*err = displace_opers(exp, &opstk, (int8_t)(info.prec))) break;
+			}
+			push_oper(&opstk, opid);  // Place operator at top of stack
 			was_last_val = false;  // Operator is not a value
 			str = after_tok;  // Move string forward
 			continue;
 		}
 		
 		
-		// Try to parse value
-		uint8_t val[expr_valctl.size];
+		// Try to parse constant
+		valdef(val);
 		if(expr_valctl.parse(val, str, &after_tok)){
 			// Cannot have two values in a row
-			if(was_last_val){
-				*err = PARSE_ERR_MISSING_OPERS;
-				break;
-			}
+			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
 			// Put constant into expression
 			size_t constid = expr_put_const(exp, val);
@@ -1181,15 +1219,31 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			continue;
 		}
 		
+		// Try to parse builtin function or constant name
+		opid = parse_builtin_func(str, &after_tok);
+		if(opid != OPER_NULL && after_tok > str){
+			// Cannot have two values in a row
+			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
+			
+			if(expr_opers[opid].arity == 0){  // Place constant on value stack (i.e. expression)
+				valclone(val, expr_opers[opid].func.value);
+				size_t constid = expr_put_const(exp, val);
+				inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
+				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(constid);
+			}else{  // Place function on operator stack
+				push_oper(&opstk, opid);
+			}
+			was_last_val = true;
+			str = after_tok;
+			continue;
+		}
+		
 		// Try to parse variable name
 		// Collect alphanumerics and _
 		var_t vr;
 		if(vr = parse_var(str, &after_tok, nmsp)){
 			// Cannot have two values in a row
-			if(was_last_val){
-				*err = PARSE_ERR_MISSING_OPERS;
-				break;
-			}
+			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
 			// Place variable into variable section
 			size_t varid = expr_put_var(exp, vr);
@@ -1201,8 +1255,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			continue;
 		}
 		
-		// Failed to parse token
-		break;
+		break;  // Failed to parse token
 	}
 	
 	// Move endpointer to after parsed section
@@ -1221,10 +1274,9 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		struct stk_oper_s op = stktop(opstk);
 		
 		// Make sure no open parenths are left
-		if(op.is_block){
-			*err = PARSE_ERR_PARENTH_MISMATCH;
-			break;
-		}
+		if(op.is_block){ *err = PARSE_ERR_PARENTH_MISMATCH;  break; }
+		// Or function calls
+		if(expr_opers[op.operid].is_func){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
 		
 		// Apply operator to expression
 		if(*err = apply_oper(exp, op.operid)) break;

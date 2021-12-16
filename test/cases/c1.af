@@ -1,17 +1,22 @@
 # Test errors
 Argo ^2 + Argo-1+yet = # Works fine to begin with
 
-# Should produce missing operators error on line 3
+# Should produce missing operators error on line 5
 A sentence whose words will be interpreted as variables
 
 # Should produce missing parenthesis error on line 8
-xtreme : (yet + (3 - 4 * dodo)
-# Should be missing operator on line 12 due to missing parenthesis
+xtreme : yet + (3 - 4 * dodo))
+# Should be missing operator on line 10 due to missing parenthesis
 x : (yet - (( 3 * 4 ) ^ dodo   )
+4 * yet = 12.800000 
+# Should produce missing parenthesis error on line 13
+jk : ((yet * dodo - woNder) / Argo = stuff # Comment to stop parsing
 
-4 * yet = 
 yet  : 3.2
 dodo : 0.5
+
+# Missing operators between variables
+yet + dodo yet * dodo=
 
 3 *Argo + 4.567*dodo= # The rest of the document should be fine
 
