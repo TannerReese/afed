@@ -20,18 +20,21 @@ do
 	# Check that output file matches
 	if ! diff -s $cases/c$i.out $cases/tmp$i.out ; then
 		((fails++))
+		echo Case $i Failed due to Output file
 		echo Errors:
 		cat $cases/tmp$i.err
 		
 	# Check that error file matches if present
 	elif [ -f "$cases/c$i.err" ] && ! diff -s $cases/c$i.err $cases/tmp$i.err ; then
 		((fails++))
+		echo Case $i Failed due to Error file
+	else
+		echo Case $i Successful
 	fi
 	
 	# Cleanup temporary files
 	rm $cases/tmp$i.*
 	
-	echo Case $i Successful
 	echo
 	((i++))
 done

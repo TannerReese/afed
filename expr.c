@@ -3,6 +3,9 @@
 #include <string.h>
 #include <ctype.h>
 
+// Utility for vector operations
+#include "vec.h"
+
 #include "expr.h"
 
 
@@ -70,28 +73,24 @@ typedef uint16_t instr_t;
 #define INSTR_LOAD_INDEX(inst) ((inst) & 0x3fff)
 // Get constant, variable, or argument from expression
 #define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ?\
-	(exp)->vars[INSTR_LOAD_INDEX(inst)]->cached :\
+	(exp)->vars.ptr[INSTR_LOAD_INDEX(inst)]->cached :\
 	get_const((exp), INSTR_LOAD_INDEX(inst))\
 )
 
 struct expr_s {
 	// Outside variables loaded at runtime
-	size_t varlen, varcap;
-	var_t *vars;
+	vec_t(var_t) vars;
 	
 	// Constants & Literals
-	size_t constlen, constcap;  // Number of members and maximum number possible
-	// Block of memory containing values
-	// Each value is `expr_valctl.size` bytes in size
-	void *consts;
+	// Vector's memory contains elements each of size `expr_valctl.size`
+	vec_t(void) consts;
 	
 	// Instructions to Run
-	size_t instrlen, instrcap;
-	instr_t *instrs;
+	vec_t(instr_t) instrs;
 };
 
 // Access constant value at index i
-#define get_const(exp, i) ((exp)->consts + (i) * expr_valctl.size)
+#define get_const(exp, i) ((exp)->consts.ptr + (i) * expr_valctl.size)
 #define set_const(exp, i, val) valmove(get_const(exp, i), val)
 // Perform pointer arithmetic with value pointer
 #define valshf(ptr, shf) ((ptr) + (shf) * expr_valctl.size)
@@ -365,10 +364,10 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 		for(var_t v = nmsp->head; v; v = v->next) v->used_by = NULL;
 		
 		// Initialize with exp's immediate dependencies
-		struct queue_s q = queue_new(exp->varlen << 1);
-		queue_push(&q, exp->vars, exp->varlen);
+		struct queue_s q = queue_new(exp->vars.len << 1);
+		queue_push(&q, exp->vars.ptr, exp->vars.len);
 		// Set their reference to `newvr`
-		for(size_t i = 0; i < exp->varlen; i++) exp->vars[i]->used_by = newvr;
+		for(size_t i = 0; i < exp->vars.len; i++) exp->vars.ptr[i]->used_by = newvr;
 		
 		// Iterate over variables checking their dependencies
 		while(q.len > 0){  // While there are remaining variables to check
@@ -383,10 +382,10 @@ var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp){
 			}
 			
 			// If variable's expression has no variables go to next
-			if(!vr->expr || vr->expr->varlen == 0) continue;
+			if(!vr->expr || vr->expr->vars.len == 0) continue;
 			
-			var_t *deps = vr->expr->vars;
-			size_t deplen = vr->expr->varlen;
+			var_t *deps = vr->expr->vars.ptr;
+			size_t deplen = vr->expr->vars.len;
 			// Add all variables used by `vr` to the queue
 			queue_push(&q, deps, deplen);
 			// If `used_by` is not already set
@@ -426,9 +425,7 @@ var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_e
 	// Parse Expression
 	// -----------------
 	expr_t exp = expr_parse(str, endptr, nmsp, err);
-	if(!exp || (err && *err)){  // On Parse Error
-		return NULL;
-	}
+	if(!exp || (err && *err)) return NULL;  // On Parse Error
 	
 	// Insert Expression
 	var_t vr = nmsp_insert(nmsp, lbl, lbl_len, exp);
@@ -480,38 +477,35 @@ int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz){
 // Allocate empty expression
 expr_t expr_new(size_t varcap, size_t constcap, size_t instrcap){
 	expr_t exp = malloc(sizeof(struct expr_s));
-	exp->varlen = 0;  exp->varcap = varcap;
-	exp->vars = malloc(varcap * sizeof(var_t));
-	exp->constlen = 0;  exp->constcap = constcap;
-	exp->consts = malloc(constcap * expr_valctl.size);
-	exp->instrlen = 0;  exp->instrcap = instrcap;
-	exp->instrs = malloc(instrcap * sizeof(instr_t));
+	vecinit(exp->vars, varcap);
+	vecinit_sz(exp->consts, constcap, expr_valctl.size);
+	vecinit(exp->instrs, instrcap);
 	return exp;
 }
 
 // Deallocate expression
 void expr_free(expr_t exp){
-	free(exp->instrs);
+	vecfree(exp->instrs);
 	
 	// Deallocate any stored constants
-	for(size_t i = 0; i < exp->constlen; i++) valfree(get_const(exp, i));
-	free(exp->consts);
+	for(size_t i = 0; i < exp->consts.len; i++) valfree(get_const(exp, i));
+	vecfree(exp->consts);
 	
-	free(exp->vars);
+	vecfree(exp->vars);
 	free(exp);
 }
 
 expr_t expr_new_var(var_t vr){
 	expr_t exp = expr_new(2, 0, 2);
-	exp->varlen = 1;  exp->vars[0] = vr;
-	exp->instrlen = 1;  exp->instrs[0] = INSTR_NEW_VAR(0);
+	vecpush(exp->vars, vr);
+	vecpush(exp->instrs, INSTR_NEW_VAR(0));
 	return exp;
 }
 
 expr_t expr_new_const(void *val){
 	expr_t exp = expr_new(0, 2, 2);
-	exp->constlen = 1;  set_const(exp, 0, val);
-	exp->instrlen = 1;  exp->instrs[0] = INSTR_NEW_CONST(0);
+	vecpush_sz(exp->consts, val, expr_valctl.size);
+	vecpush(exp->instrs, INSTR_NEW_CONST(0));
 	return exp;
 }
 
@@ -537,8 +531,8 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	if(!exp) return EVAL_ERR_NO_EXPR;
 	
 	// Evaluate any variable dependencies
-	for(size_t i = 0; i < exp->varlen; i++){
-		var_t vr = exp->vars[i];
+	for(size_t i = 0; i < exp->vars.len; i++){
+		var_t vr = exp->vars.ptr[i];
 		
 		// Allocate space for variable if needed
 		if(!vr->cached) vr->cached = malloc(expr_valctl.size);
@@ -557,8 +551,8 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 	expr_err_t err = EXPR_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
-	for(size_t i = 0; i < exp->instrlen; i++){
-		instr_t inst = exp->instrs[i];
+	for(size_t i = 0; i < exp->instrs.len; i++){
+		instr_t inst = exp->instrs.ptr[i];
 		
 		if(INSTR_IS_OPER(inst)){  // Operator
 			struct oper_info_s info = expr_opers[INSTR_OPERID(inst)];
@@ -619,20 +613,20 @@ static expr_err_t expr_eval_stk(expr_t exp, void *stack, void *stkend){
 // Return the variable index
 static size_t expr_put_var(expr_t exp, var_t vr){
 	// Check if variable already present
-	for(size_t i = 0; i < exp->varlen; i++) if(exp->vars[i] == vr) return i;
+	for(size_t i = 0; i < exp->vars.len; i++) if(exp->vars.ptr[i] == vr) return i;
 	
-	// Add variable to variable list
-	// Resize variable section if necessary
-	inc_size(exp->vars, sizeof(var_t), exp->varcap, exp->varlen);
-	exp->vars[exp->varlen++] = vr;
-	return exp->varlen - 1;
+	vecpush(exp->vars, vr);
+	return exp->vars.len - 1;
 }
+
+// Place variable in expr then add a variable-load instruction
+#define expr_load_var(exp, vr) vecpush((exp)->instrs, INSTR_NEW_VAR(expr_put_var(exp, vr)))
 
 // Place constant value in expr constants section if not already present
 // Return the constant index
 static size_t expr_put_const(expr_t exp, void *val){
 	// Check if constant value is already present
-	for(size_t i = 0; i < exp->constlen; i++){
+	for(size_t i = 0; i < exp->consts.len; i++){
 		if(valequal(get_const(exp, i), val)){
 			// If `val` is not placed into the constant list
 			// Then it must be deallocated
@@ -642,13 +636,12 @@ static size_t expr_put_const(expr_t exp, void *val){
 		}
 	}
 	
-	// Add value to constants list
-	// Resize constant section if necessary
-	inc_size(exp->consts, expr_valctl.size, exp->constcap, exp->constlen);
-	set_const(exp, exp->constlen, val);
-	exp->constlen++;
-	return exp->constlen - 1;
+	vecpush_sz(exp->consts, val, expr_valctl.size);
+	return exp->consts.len - 1;
 }
+
+// Place constant value in expr then add a constant-load instruction
+#define expr_load_const(exp, val) vecpush((exp)->instrs, INSTR_NEW_CONST(expr_put_const(exp, val)))
 
 /* Remove the last instruction if it is a const load
  * Additionally remove the corresponding const if no other loads use it
@@ -659,20 +652,21 @@ static size_t expr_put_const(expr_t exp, void *val){
  */
 
 static bool expr_pop_const_load(expr_t exp, void *dest){
-	instr_t instr = exp->instrs[exp->instrlen - 1];  // Get top instruction
+	// Get top instruction
+	if(vecempty(exp->instrs)) return 0;
+	instr_t instr = *veclast(exp->instrs);
 	
 	// Make sure top instruction is a constant load
 	if(!INSTR_IS_CONST(instr)) return 0;
-	// Remove top instruction
-	exp->instrlen--;
+	vecpop(exp->instrs);  // Remove top instruction
 	
 	// Get associated constant
 	size_t idx = INSTR_LOAD_INDEX(instr);
 	void *val = get_const(exp, idx);
 	
 	// Check if any other instructions use this constant
-	for(size_t i = 0; i < exp->instrlen; i++){
-		instr = exp->instrs[i];
+	for(size_t i = 0; i < exp->instrs.len; i++){
+		instr = exp->instrs.ptr[i];
 		// If any other instruction uses this constant
 		// We must clone the value into `dest`
 		if(INSTR_IS_CONST(instr) && INSTR_LOAD_INDEX(instr) == idx){
@@ -681,62 +675,42 @@ static bool expr_pop_const_load(expr_t exp, void *dest){
 		}
 	}
 	
-	// If no other instructions use this constant remove it
-	exp->constlen--;
-	// Place the value into `dest`
-	valmove(dest, val);
+	vecpop_sz(exp->consts, expr_valctl.size);  // If no other instructions use this constant then remove it
+	valmove(dest, val);  // Place the value into `dest`
 	return true;
 }
 
 
 // Combine `vr` onto expression `exp` using binary operator `op`
 expr_t expr_binary_var(expr_t exp, var_t vr, oper_t op){
-	// Put variable into expression
-	size_t varid = expr_put_var(exp, vr);
-	
-	// Resize if necessary to hold two new instructions
-	exp->instrlen++;
-	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-	
-	// Add load instruction to instruction list
-	exp->instrs[exp->instrlen - 1] = INSTR_NEW_VAR(varid);
-	// Add operator instruction
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
+	expr_load_var(exp, vr);  // Load variable into expression
+	vecpush(exp->instrs, INSTR_NEW_OPER(op));  // Add operator instruction
 	return exp;
 }
 
 // Combine `val` onto expression `exp` using binary operator `op`
 expr_t expr_binary_const(expr_t exp, void *val, oper_t op){
-	// Put constant into expression
-	size_t constid = expr_put_const(exp, val);
-	
-	// Add load instruction to instruction list
-	exp->instrlen++;
-	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-	
-	// Add load instruction to instruction list
-	exp->instrs[exp->instrlen - 1] = INSTR_NEW_CONST(constid);
-	// Add operator instruction
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
+	expr_load_const(exp, val);  // Load constant into expression
+	vecpush(exp->instrs, INSTR_NEW_OPER(op));  // Add operator instruction
 	return exp;
 }
 
 // Combine `src` expression onto `dest` using binary operator `op`
 expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 	// Create mapping from old src variables to new values
-	size_t varmap[src->varlen];
+	size_t varmap[src->vars.len];
 	// Put src variable into dest and record locations
-	for(size_t i = 0; i < src->varlen; i++) varmap[i] = expr_put_var(dest, src->vars[i]);
+	for(size_t i = 0; i < src->vars.len; i++) varmap[i] = expr_put_var(dest, src->vars.ptr[i]);
 	
 	// Create mapping from old src constant to new constant locations
-	size_t constmap[src->constlen];
+	size_t constmap[src->consts.len];
 	// Put src constant into dest and record locations
-	for(size_t i = 0; i < src->constlen; i++) constmap[i] = expr_put_const(dest, get_const(src, i));
+	for(size_t i = 0; i < src->consts.len; i++) constmap[i] = expr_put_const(dest, get_const(src, i));
 	
 	
 	// Iterate over src instructions to substitute variable and constant references
-	for(size_t i = 0; i < src->instrlen; i++){
-		instr_t inst = src->instrs[i];
+	for(size_t i = 0; i < src->instrs.len; i++){
+		instr_t inst = src->instrs.ptr[i];
 		
 		// Replace load index of var or const load instruction
 		if(INSTR_IS_VAR(inst))
@@ -744,24 +718,16 @@ expr_t expr_binary(expr_t dest, expr_t src, oper_t op){
 		else if(INSTR_IS_CONST(inst))
 			inst = INSTR_NEW_CONST(constmap[INSTR_LOAD_INDEX(inst)]);
 		
-		inc_size(dest->instrs, sizeof(instr_t), dest->instrcap, dest->instrlen);  // Resize array if necessary
-		dest->instrs[dest->instrlen++] = inst;  // Put instruction into dest instrs
+		vecpush(dest->instrs, inst);  // Put instruction into dest instructions
 	}
 	
-	// Place operator at end of instructions
-	inc_size(dest->instrs, sizeof(instr_t), dest->instrcap, dest->instrlen);  // Resize array if necessary
-	dest->instrs[dest->instrlen++] = INSTR_NEW_OPER(op);
-	
+	vecpush(dest->instrs, INSTR_NEW_OPER(op));  // Place operator at end of instructions
 	return dest;
 }
 
 // Modify `exp` by applying unary operator `op`
 expr_t expr_unary(expr_t exp, oper_t op){
-	// Resize instruction array if necessary
-	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-	
-	// Place unary operator at the end
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(op);
+	vecpush(exp->instrs, INSTR_NEW_OPER(op));  // Place unary operator at the end
 	return exp;
 }
 
@@ -769,8 +735,8 @@ expr_t expr_unary(expr_t exp, oper_t op){
 // Returns the error that would occur
 static expr_err_t check_valid(expr_t exp){
 	size_t height = 0;  // Track height of stack
-	for(size_t i = 0; i < exp->instrlen; i++){
-		instr_t inst = exp->instrs[i];
+	for(size_t i = 0; i < exp->instrs.len; i++){
+		instr_t inst = exp->instrs.ptr[i];
 		if(INSTR_IS_OPER(inst)){
 			struct oper_info_s info = expr_opers[INSTR_OPERID(inst)];
 			// Check that there are sufficient operators
@@ -835,17 +801,7 @@ struct stk_oper_s {
 };
 
 // Operator stack
-typedef struct {
-	// Pointer to bottom of the stack
-	struct stk_oper_s *bottom;
-	
-	// cap: Maximum number of elements allocated for on the stack
-	// len: Number of elements on the stack
-	size_t cap, len;
-} oper_stack_t;
-
-// Takes operator stack and returns top element of stack
-#define stktop(opstk) ((opstk).bottom[(opstk).len - 1])
+typedef vec_t(struct stk_oper_s) oper_stack_t;
 
 
 // Structure used to identify parse operators
@@ -952,11 +908,14 @@ static expr_err_t apply_oper(expr_t exp, oper_t opid){
 		struct oper_info_s info = expr_opers[opid];
 		
 		// Check for sufficient arguments
-		if(exp->instrlen < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
-		instr_t *inst = exp->instrs + exp->instrlen - info.arity;
+		if(exp->instrs.len < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
+		instr_t *inst = exp->instrs.ptr + exp->instrs.len - info.arity;
 		
 		// Check that all arguments are constant
-		for(int i = 0; i < info.arity; i++) if(!INSTR_IS_CONST(inst[i])) goto put_op;
+		for(int i = 0; i < info.arity; i++) if(!INSTR_IS_CONST(inst[i])){
+			vecpush(exp->instrs, INSTR_NEW_OPER(opid));  // Put operator onto instrs section
+			return EXPR_ERR_OK;
+		}
 		
 		// Pop constants off of instruction array and onto args
 		valarr_def(args, info.arity);
@@ -976,17 +935,12 @@ static expr_err_t apply_oper(expr_t exp, oper_t opid){
 			return err;
 		}
 		
-		// On Success push result onto consts array
-		int idx = expr_put_const(exp, args);
-		// Place load instruction back on instruction array
-		exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(idx);
+		// On Success push result onto consts array and load it
+		expr_load_const(exp, args);
 		return EXPR_ERR_OK;
 	}
 	
-put_op:
-	// Put operator onto instrs section
-	inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-	exp->instrs[exp->instrlen++] = INSTR_NEW_OPER(opid);
+	vecpush(exp->instrs, INSTR_NEW_OPER(opid));  // Put operator onto instrs section
 	return EXPR_ERR_OK;
 }
 
@@ -997,7 +951,6 @@ put_op:
  */
 static void push_oper(oper_stack_t *opstk, int16_t opid){
 	struct stk_oper_s elem;
-	inc_size(opstk->bottom, sizeof(struct stk_oper_s), opstk->cap, opstk->len);
 	if(opid >= 0){
 		struct oper_info_s info = expr_opers[opid];
 		elem.is_block = 0;
@@ -1007,8 +960,7 @@ static void push_oper(oper_stack_t *opstk, int16_t opid){
 		elem.is_block = 1;
 		elem.is_comma = opid == -2;
 	}
-	
-	opstk->bottom[opstk->len++] = elem;
+	vecpush(*opstk, elem);
 }
 
 // Place `op` onto `opstk` displacing operators as necessary and applying them to `exp`
@@ -1024,14 +976,14 @@ static expr_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
 	else prec = (prec << 1) | OPER_LEFT_ASSOC;
 	
 	// Iterate down through operators on the stack
-	struct stk_oper_s elem;
+	struct stk_oper_s *elem;
 	for(;
-		opstk->len > 0 && !(elem = stktop(*opstk)).is_block && (uint8_t)prec <= elem.prec_assoc;
-		opstk->len--
+		(elem = veclast(*opstk)) && !elem->is_block && (uint8_t)prec <= elem->prec_assoc;
+		vecpop(*opstk)
 	){	
 		// Try to apply operator onto expression
 		expr_err_t err;
-		if(err = apply_oper(exp, elem.operid)) return err;
+		if(err = apply_oper(exp, elem->operid)) return err;
 	}
 	
 	return EXPR_ERR_OK;
@@ -1046,24 +998,26 @@ static expr_err_t close_parenth(expr_t exp, oper_stack_t *opstk){
 	
 	// Consume commas to find number of values in parenthetical block
 	size_t arity = 1;
-	struct stk_oper_s elem;
-	while(opstk->len > 0 && (elem = stktop(*opstk)).is_block && elem.is_comma){
-		opstk->len--;  arity++;
+	struct stk_oper_s *elem;
+	while((elem = veclast(*opstk)) && elem->is_block && elem->is_comma){
+		vecpop(*opstk);  arity++;
 	}
 	
 	// Check for open parenthesis
-	if(opstk->len == 0 || !(elem = stktop(*opstk)).is_block){
+	if(!(elem = veclast(*opstk)) || !elem->is_block){
 		return PARSE_ERR_PARENTH_MISMATCH;  // No opening parenthesis so parenth mismatch
 	}
-	opstk->len--;  // Remove open parenthesis
+	vecpop(*opstk);  // Remove open parenthesis
 	
 	// Check for function below open parenthesis
-	elem = stktop(*opstk);
-	struct oper_info_s info = expr_opers[elem.operid];
-	if(!elem.is_block && info.is_func){  // Treat parenthetical block as arguments to function
-		opstk->len--;  // Remove builtin function from `opstk`
+	struct oper_info_s info;
+	if((elem = veclast(*opstk))
+	&& !elem->is_block
+	&& (info = expr_opers[elem->operid]).is_func
+	){  // Treat parenthetical block as arguments to function
+		vecpop(*opstk);  // Remove builtin function from `opstk`
 		if(arity != info.arity) return PARSE_ERR_ARITY_MISMATCH;  // Check that arity matches
-		apply_oper(exp, elem.operid);  // Apply operator onto values on stack
+		apply_oper(exp, elem->operid);  // Apply operator onto values on stack
 		
 	}else{  // Treat parenthetical block as value
 		if(arity > 1) return PARSE_ERR_BAD_COMMA;  // Arity must be 1
@@ -1115,12 +1069,14 @@ static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
 	}else return NULL;
 }
 
+// Put constant into expression 
+#define load_const() { size_t __constid = ;}
+
 // Parses String as Expression
 expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err){
 	// Initialize operator stack
 	oper_stack_t opstk;
-	opstk.cap = 256;  opstk.len = 0;
-	opstk.bottom = malloc(opstk.cap * sizeof(struct stk_oper_s));
+	vecinit(opstk, 8);
 	
 	// Initialize expression
 	expr_t exp = expr_new(4, 4, 8);
@@ -1176,14 +1132,14 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			
 			if(opstk.len > 0){
 				// Get info for last operator
-				struct oper_info_s lst_info = expr_opers[stktop(opstk).operid];
+				struct oper_info_s lst_info = expr_opers[veclast(opstk)->operid];
 				
 				// Check that last operator isn't function
 				if(lst_info.is_func){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
 				
 				// When operator is unary
 				// Check that previous operator is a block, unary, right-associative, or lower precedence
-				if(info.arity == 1 && !(stktop(opstk).is_block
+				if(info.arity == 1 && !(veclast(opstk)->is_block
 				|| lst_info.arity == 1
 				|| lst_info.assoc == OPER_RIGHT_ASSOC
 				|| lst_info.prec < info.prec
@@ -1209,11 +1165,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			// Cannot have two values in a row
 			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
-			// Put constant into expression
-			size_t constid = expr_put_const(exp, val);
-			// Place value onto instruction list as constant
-			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-			exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(constid);
+			expr_load_const(exp, val);  // Load constant into expression
 			str = after_tok;
 			was_last_val = true;
 			continue;
@@ -1227,9 +1179,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			
 			if(expr_opers[opid].arity == 0){  // Place constant on value stack (i.e. expression)
 				valclone(val, expr_opers[opid].func.value);
-				size_t constid = expr_put_const(exp, val);
-				inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-				exp->instrs[exp->instrlen++] = INSTR_NEW_CONST(constid);
+				expr_load_const(exp, val);
 			}else{  // Place function on operator stack
 				push_oper(&opstk, opid);
 			}
@@ -1245,11 +1195,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 			// Cannot have two values in a row
 			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
-			// Place variable into variable section
-			size_t varid = expr_put_var(exp, vr);
-			// Place value load instruction into instruction list
-			inc_size(exp->instrs, sizeof(instr_t), exp->instrcap, exp->instrlen);
-			exp->instrs[exp->instrlen++] = INSTR_NEW_VAR(varid);
+			expr_load_var(exp, vr);  // Load variable into expression
 			str = after_tok;
 			was_last_val = true;
 			continue;
@@ -1265,14 +1211,14 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 	if(*err){
 		// Deallocate operator stack and exp
 		expr_free(exp);
-		free(opstk.bottom);
+		vecfree(opstk);
 		return NULL;
 	}
 	
 	// Clear out remaining operators on the operator stack
-	for(; opstk.len > 0; opstk.len--){
-		struct stk_oper_s op = stktop(opstk);
-		
+	struct stk_oper_s op;
+	while(!vecempty(opstk)){
+		op = vecpop(opstk);
 		// Make sure no open parenths are left
 		if(op.is_block){ *err = PARSE_ERR_PARENTH_MISMATCH;  break; }
 		// Or function calls
@@ -1281,8 +1227,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_e
 		// Apply operator to expression
 		if(*err = apply_oper(exp, op.operid)) break;
 	}
-	// Deallocate stack
-	free(opstk.bottom);
+	vecfree(opstk);  // Deallocate stack
 	
 	if(*err){
 		// Deallocate expression on error
