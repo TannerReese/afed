@@ -1,5 +1,5 @@
-#ifndef __EXPR_H
-#define __EXPR_H
+#ifndef __NMSP_H
+#define __NMSP_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -7,12 +7,9 @@
 #include <stdio.h>
 
 
-// Forward declaration of expression type
-struct expr_s;
-typedef struct expr_s *expr_t;
 
 // Error type returned on failure to parse or evaluate expression
-typedef int expr_err_t;
+typedef int nmsp_err_t;
 /* Positive error codes may be used to indicate arithmetic errors
  * These may be returned by expr_opers[id].func.binary and expr_opers[id].func.unary
  * EVAL_ERR_ARITH may be used for a general (unspecified) arithmetic error
@@ -20,7 +17,7 @@ typedef int expr_err_t;
  */
 #define EVAL_ERR_ARITH 1
 
-// Below are reserved values of expr_err_t
+// Below are reserved values of nmsp_err_t
 #define EXPR_ERR_OK (0)
 #define EVAL_ERR_STACK_OVERFLOW (-1)
 #define EVAL_ERR_STACK_UNDERFLOW (-2)
@@ -47,7 +44,7 @@ typedef int expr_err_t;
 #define INSERT_ERR_CIRC (-65)
 
 // Returns a string containing a description of the error
-const char *expr_strerror(expr_err_t err);
+const char *nmsp_strerror(nmsp_err_t err);
 
 
 
@@ -57,8 +54,7 @@ struct var_s;
 typedef struct var_s *var_t;
 
 const char *nmsp_var_name(var_t vr, size_t *len);
-expr_t nmsp_var_expr(var_t vr);
-expr_err_t nmsp_var_value(void *dest, var_t vr);
+nmsp_err_t nmsp_var_value(void *dest, var_t vr);
 int nmsp_var_fprint(FILE *stream, var_t vr);
 
 
@@ -76,11 +72,8 @@ var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen);
 var_t nmsp_put(namespace_t nmsp, const char *key, size_t keylen);
 #define nmsp_putz(nmsp, key) nmsp_put((nmsp), (key), strlen(key))
 
-// Try to insert the given expression under the given key
-var_t nmsp_insert(namespace_t nmsp, const char *key, size_t keylen, expr_t exp);
-#define nmsp_insertz(nmsp, key, exp) nmsp_insert((nmsp), (key), strlen(key), (exp))
 // Parse expression with label and try to insert it into the namespace
-var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, expr_err_t *err);
+var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_err_t *err);
 
 // Used after erroneous `nmsp_insert` call
 
@@ -97,13 +90,13 @@ int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz);
 #define OPER_LEFT_ASSOC 1  // Left Associativity:  a ~ b ~ c  --->  (a ~ b) ~ c
 #define OPER_RIGHT_ASSOC 0  // Right Associativity:  a ~ b ~ c  --->  a ~ (b ~ c)
 
-typedef uint8_t oper_t;
+typedef uint8_t bltn_t;
 #define OPER_NULL 0xff  // Represents undefined or null operator
 
-/* Information used to define infix (unary or binary) operators
- * As well as builtin functions
+/* Information used to define
+ * builtin operators, functions, and constants
  * 
- * Infix operators consist of `isoper` characters
+ * Builtin operators consist of `isoper` characters
  * and are called as
  *     <oper> <arg>
  * for Unary and
@@ -114,59 +107,40 @@ typedef uint8_t oper_t;
  * They are called as
  *     <builtin_func>(<arg1>, <arg2>, ...)
  */
-struct oper_info_s {
+struct bltn_info_s {
 	// String used to represent the operator
 	const char *name;
 	size_t namelen;
 	
-	// Precedence and Associatitivity info
+	// Precedence and Associatitivity info for operators
 	uint8_t prec : 7;
 	uint8_t assoc : 1;
-	// True when operator is a builtin function or constant
-	uint8_t is_func : 1;
+	// True when builtin is a function or constant
+	// Named using alphanumerics (and '_')
+	uint8_t is_alpha : 1;
 	
-	// Number of arguments used by function
-	// arity = 0 for builtin constant
-	// arity = 1 for unary and arity = 2 for binary infix operators
+	/* For unary operators, this is 1
+	 * For binary operators, this is 2
+	 * For functions, this is the number of arguments
+	 * For constants, this is 0
+	 */
 	uint8_t arity : 4;
 	
-	// Function used to apply operation
-	// In all cases, the result will be stored into the first argument
+	// Function or void pointer used to define behavior of builtin
 	union {
-		expr_err_t (*unary)(void *arg);
-		expr_err_t (*binary)(void *arg1, void *arg2);
+		nmsp_err_t (*unary)(void *arg);
+		nmsp_err_t (*binary)(void *arg1, void *arg2);
 		
-		// Used when is_infix = false
 		// args is a pointer to an array of arguments
-		expr_err_t (*nary)(void *args);
+		nmsp_err_t (*nary)(void *args);
 		void *value;  // Stores value of constant
-	} func;
+	} src;
 };
 
-// Null-terminated array of valid operations 
-extern struct oper_info_s expr_opers[];
+// Null-terminated array of builtin operators, functions, and constants
+extern struct bltn_info_s nmsp_bltns[];
 // Resolve arithmetic errors into strings
-extern const char *(*expr_arith_strerror)(expr_err_t err);
-
-
-// Create expression with the given capacities for each section
-expr_t expr_new(size_t varcap, size_t constcap, size_t instrcap);
-// Deallocates memory allocated to expression and any constants it holds
-void expr_free(expr_t exp);
-// Create new expression whose value is the given variable
-expr_t expr_new_var(var_t vr);
-// Create new expression whose value is the given constant
-expr_t expr_new_const(void *val);
-
-// Combine `vr` onto expression `exp` using binary operator `op`
-expr_t expr_binary_var(expr_t exp, var_t vr, oper_t op);
-// Combine `val` onto expression `exp` using binary operator `op`
-expr_t expr_binary_const(expr_t exp, void *val, oper_t op);
-
-// Combine `src` expression onto `dest` using binary operator `op`
-expr_t expr_binary(expr_t dest, expr_t src, oper_t op);
-// Modify `exp` by applying unary operator `op`
-expr_t expr_unary(expr_t exp, oper_t op);
+extern const char *(*expr_arith_strerror)(nmsp_err_t err);
 
 
 
@@ -192,37 +166,29 @@ typedef struct {
 	
 	// Print value to stream pointer
 	int (*print)(FILE *stream, void *val);
-} expr_valctl_t;
+} nmsp_valctl_t;
 
 // Control functions used by expression evaluator
-extern expr_valctl_t expr_valctl;
+extern nmsp_valctl_t nmsp_valctl;
 
 // Macros for working with values
 // Define stack space for value
-#define valdef(vl) uint8_t vl[expr_valctl.size];
-#define valarr_def(vl, num) uint8_t vl[(num) * expr_valctl.size];
+#define valdef(vl) uint8_t vl[nmsp_valctl.size];
+#define valarr_def(vl, num) uint8_t vl[(num) * nmsp_valctl.size];
 // Move value from location `src` to `dest`
-#define valmove(dest, src) memmove(dest, src, expr_valctl.size)
+#define valmove(dest, src) memmove(dest, src, nmsp_valctl.size)
 // Do deep copy of value from `src` into `dest`
-#define valclone(dest, src) (expr_valctl.clone ? expr_valctl.clone(dest, src) : valmove(dest, src))
+#define valclone(dest, src) (nmsp_valctl.clone ? nmsp_valctl.clone(dest, src) : valmove(dest, src))
 // Check if two values are equal
-#define valequal(v1, v2) (expr_valctl.equal ? expr_valctl.equal(v1, v2) : memcmp(v1, v2, expr_valctl.size))
+#define valequal(v1, v2) (nmsp_valctl.equal ? nmsp_valctl.equal(v1, v2) : memcmp(v1, v2, nmsp_valctl.size))
 // Deallocate value
-#define valfree(vl) if(expr_valctl.free) expr_valctl.free(vl)
+#define valfree(vl) if(nmsp_valctl.free) nmsp_valctl.free(vl)
 
 
 
-// Maximum allowed variables on stack during evaluation
-#define EXPR_EVAL_STACK_SIZE 256
-// Evaluate expression
-expr_err_t expr_eval(void *dest, expr_t exp);
-
-// Parse as much as possible of the string as expression
-// If err is not NULL then any errors are stored in it
-expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, expr_err_t *err);
 // Flag used to indicate if constant expressions should be simplified while parsing
 // Defaults to true
-extern bool expr_eval_on_parse;
+extern bool nmsp_eval_on_parse;
 
 #endif
 

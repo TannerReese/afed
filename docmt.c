@@ -1,5 +1,3 @@
-#include "expr.h"
-
 #include "docmt.h"
 
 #include <stdlib.h>
@@ -124,7 +122,7 @@ static int count_lines(const char *start, const char *end){
 }
 
 // Attempt to parse line of document as expression with optional label and print section
-static expr_err_t parse_line(docmt_t doc){
+static nmsp_err_t parse_line(docmt_t doc){
 	skip_blank(doc);
 	if(*(doc->str) == '\0' || *(doc->str) == '#' || *(doc->str) == '\n'){ // Check for comment or end of line
 		skip_line(doc);
@@ -134,7 +132,7 @@ static expr_err_t parse_line(docmt_t doc){
 	
 	// Parse Labelled Expression
 	// --------------------------
-	expr_err_t err = EXPR_ERR_OK;
+	nmsp_err_t err = EXPR_ERR_OK;
 	const char *endptr;
 	var_t vr = nmsp_define(doc->nmsp, doc->str, &endptr, &err);
 	if(err) return err;  // On Parse Error
@@ -166,20 +164,20 @@ static expr_err_t parse_line(docmt_t doc){
 	return EXPR_ERR_OK;
 }
 
-static int print_error(docmt_t doc, FILE *stream, expr_err_t err){
+static int print_error(docmt_t doc, FILE *stream, nmsp_err_t err){
 	if(!stream) return 0;  // Don't print anything to NULL-stream
 	
-	int count = fprintf(stream, "(Line %i) %s\n", doc->line_no, expr_strerror(err));
+	int count = fprintf(stream, "(Line %i) %s\n", doc->line_no, nmsp_strerror(err));
 	
 	// Check for Insert Error
 	if(err == INSERT_ERR_REDEF){
 		char buf[256];
 		nmsp_strredef(doc->nmsp, buf, 256);
-		count += fprintf(stream, "\tRedefinition of %s\n", buf);
+		count += fprintf(stream, "    Redefinition of \"%s\"\n", buf);
 	}else if(err == INSERT_ERR_CIRC){
 		char buf[256];
 		nmsp_strcirc(doc->nmsp, buf, 256);
-		count += fprintf(stream, "\tDependency Chain: %s\n", buf);
+		count += fprintf(stream, "    Dependency Chain: %s\n", buf);
 	}
 	return count;
 }
@@ -187,7 +185,7 @@ static int print_error(docmt_t doc, FILE *stream, expr_err_t err){
 void docmt_parse(docmt_t doc, FILE *errout){
 	while(*(doc->str)){
 		// Try to parse line as expression
-		expr_err_t err = parse_line(doc);
+		nmsp_err_t err = parse_line(doc);
 		if(err){  // On Error
 			print_error(doc, errout, err);  // Print error
 			skip_line(doc);  // Move to next line

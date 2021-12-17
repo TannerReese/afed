@@ -1,7 +1,7 @@
 #ifndef __DOCMT_H
 #define __DOCMT_H
 
-#include "expr.h"
+#include "nmsp.h"
 #include <stdio.h>
 
 struct docmt_s;

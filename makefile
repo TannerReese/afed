@@ -1,33 +1,33 @@
 CC=gcc
 CFLAGS=
-binaries=afed test/expr_test
+binaries=afed test/nmsp_test
 libs=m
 
 # Perform all the tests
-all_test: expr_test afed_test
+all_test: nmsp_test afed_test
 
 # Perform afed test
 afed_test: test/afed_test.sh afed test/cases/*
 	test/afed_test.sh
 
-# Recipe for expression tester
-test/expr_test: test/expr_test.o expr.o expr_dbl.o
-test/expr_test.o: test/expr_test.c expr.h expr_dbl.h
+# Recipe for nmspession tester
+test/nmsp_test: test/nmsp_test.o nmsp.o nmsp_dbl.o
+test/nmsp_test.o: test/nmsp_test.c nmsp.h
 
-# Perform expression test
-expr_test: test/expr_test
+# Perform nmspession test
+nmsp_test: test/nmsp_test
 	$<
 
 
 
 # Recipes for main library files
-expr.o: expr.c expr.h
-expr_dbl.o: expr_dbl.c expr_dbl.h expr.h
+nmsp.o: nmsp.c nmsp.h
+nmsp_dbl.o: nmsp_dbl.c nmsp.h
 
 # Recipe for primary binary
-afed: afed.o docmt.o expr.o expr_dbl.o
-afed.o: afed.c docmt.h expr.h expr_dbl.h
-docmt.o: docmt.c docmt.h expr.h
+afed: afed.o docmt.o nmsp.o nmsp_dbl.o
+afed.o: afed.c docmt.h nmsp.h
+docmt.o: docmt.c docmt.h nmsp.h
 
 
 
@@ -46,5 +46,5 @@ clean:
 	@echo Removing binaries: $(binaries)
 	@rm -f $(binaries)
 
-.PHONY: clean all_test afed_test expr_test
+.PHONY: clean all_test afed_test nmsp_test
 

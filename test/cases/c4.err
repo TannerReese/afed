@@ -1,0 +1,4 @@
+(Line 5) INSERT_ERR_REDEF: Variable already exists
+    Redefinition of "MyVaR"
+(Line 15) INSERT_ERR_CIRC: Variable depends on itself
+    Dependency Chain: peQuot <- Good <- yy5 <- fF12 <- peQuot
