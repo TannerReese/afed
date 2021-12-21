@@ -136,6 +136,7 @@ int main(int argc, char *argv[]){
 	namespace_t nmsp = nmsp_new();
 	docmt_t doc = docmt_new(prog, nmsp);
 	docmt_parse(doc, show_errors ? errfile : NULL);  // Parse file
+	fseek(infile, 0, SEEK_SET);  // Move `infile` back to beginning
 	docmt_fprint(doc, outfile);  // Print new file
 	
 	// Cleanup heap allocations

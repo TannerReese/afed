@@ -18,11 +18,12 @@ typedef int nmsp_err_t;
 #define EVAL_ERR_ARITH 1
 
 // Below are reserved values of nmsp_err_t
-#define EXPR_ERR_OK (0)
-#define EVAL_ERR_STACK_OVERFLOW (-1)
-#define EVAL_ERR_STACK_UNDERFLOW (-2)
-#define EVAL_ERR_STACK_SURPLUS (-3)
-#define EVAL_ERR_NO_EXPR (-4)
+#define NMSP_ERR_OK (0)
+#define EVAL_ERR_STACK_UNDERFLOW (-1)
+#define EVAL_ERR_STACK_SURPLUS (-2)
+#define EVAL_ERR_NO_EXPR (-3)
+#define EVAL_ERR_VAR_NOT_FUNC (-4)
+#define EVAL_ERR_NO_ARGS (-5)
 // Not returned by evaluation, only by parsing
 #define PARSE_ERR_PARENTH_MISMATCH (-16)
 /* PARSE_ERR_LOWPREC_UNARY:
@@ -35,9 +36,8 @@ typedef int nmsp_err_t;
 #define PARSE_ERR_FUNC_NOCALL (-20)
 
 // Errors returned after parsing produces an invalid expression
-#define PARSE_ERR_TOO_MANY_VALUES (-25)
-#define PARSE_ERR_MISSING_VALUES (-26)
-#define PARSE_ERR_MISSING_OPERS (-27)
+#define PARSE_ERR_MISSING_VALUES (-25)
+#define PARSE_ERR_MISSING_OPERS (-26)
 #define PARSE_ERR_EXTRA_CONT (-32)
 // Errors returned on failed insertions
 #define INSERT_ERR_REDEF (-64)
@@ -117,7 +117,7 @@ struct bltn_info_s {
 	uint8_t assoc : 1;
 	// True when builtin is a function or constant
 	// Named using alphanumerics (and '_')
-	uint8_t is_alpha : 1;
+	uint8_t is_word : 1;
 	
 	/* For unary operators, this is 1
 	 * For binary operators, this is 2

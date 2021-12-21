@@ -8,28 +8,61 @@
 
 
 
-// Instruction macros
-// -------------------
+/* Instruction
+ * -------------------
+ * The instr_t type holds a single 16-bit instruction
+ * which will be evaluated by the virtual machine (expr_eval).
+ * The machine maintains a stack and applies operations to it.
+ * 
+ * Every instruction is either a load or apply instruction.
+ * The load instructions cause a value to be pushed onto the stack.
+ * The apply instructions cause values to be popped
+ * and some arithmetic to be applied to them.
+ * 
+ * Apply Instructions:
+ *   OPER : Represents one of the operations or functions in the `nmsp_bltns` array.
+ *   CALL : A user-defined function is called on some number of values on the stack.
+ *          The function is identified using its index in `vars`
+ * Load Instructions:
+ *   CONST : Loads a constant value stored in `consts` onto the stack
+ *   VAR : Loads the cached value of a variable from `vars` onto the stack
+ *   ARG : Loads the value of an argument from `args` onto the stack
+ */
 typedef uint16_t instr_t;
 
-// Create operator instruction using bltn_t
-#define INSTR_NEW_OPER(op) (0x8000 | ((op) & 0x7fff))
-#define INSTR_IS_OPER(inst) ((inst) & 0x8000)
-#define INSTR_OPERID(inst) ((inst) & 0x7fff)
 
-// Create instructions to load a variable or constant
-#define INSTR_NEW_VAR(idx) (0x4000 | ((idx) & 0x3fff))
-#define INSTR_NEW_CONST(idx) ((idx) & 0x3fff)
+// Create apply instruction using bltn_t or variable index
+#define INSTR_NEW_OPER(op) (0x8000 | ((op) & 0x3fff))
+#define INSTR_NEW_CALL(idx) (0xc000 | ((idx) & 0x3fff))
 
-#define INSTR_IS_VAR(inst) (((inst) & 0xc000) == 0x4000)
-#define INSTR_IS_CONST(inst) (!((inst) & 0xc000))
+#define INSTR_IS_APPLY(inst) ((inst) & 0x8000)
+#define INSTR_IS_BLTN(inst) (((inst) & 0xc000) == 0x8000)
+#define INSTR_IS_CALL(inst) (((inst) & 0xc000) == 0xc000)
+
+#define INSTR_BLTNID(inst) ((inst) & 0x3fff)
+#define INSTR_CALL_VAR(inst) ((exp)->vars.ptr[(inst) & 0x3fff])  // Get variable pointer for CALL
+// Get number of values consumed by apply instruction
+#define INSTR_ARITY(inst) (INSTR_IS_BLTN(inst) ?\
+	nmsp_bltns[INSTR_BLTNID(inst)].arity :\
+	INSTR_CALL_VAR(inst)->arity\
+)
+
+// Create instructions to load a variable, constant, or argument
+#define INSTR_NEW_CONST(idx) ((idx) & 0x1fff)
+#define INSTR_NEW_VAR(idx) (0x4000 | ((idx) & 0x1fff))
+#define INSTR_NEW_ARG(idx) (0x2000 | (idx) & 0x1fff)
+
+#define INSTR_IS_LOAD(inst) (!((inst) & 0x8000))
+#define INSTR_IS_CONST(inst) (!((inst) & 0xe000))
+#define INSTR_IS_VAR(inst) (((inst) & 0xe000) == 0x4000)
+#define INSTR_IS_ARG(inst) (((inst) & 0xe000) == 0x2000)
 
 // Get index that this instruction loads from
-#define INSTR_LOAD_INDEX(inst) ((inst) & 0x3fff)
+#define INSTR_LOAD_INDEX(inst) ((inst) & 0x1fff)
 // Get constant, variable, or argument from expression
 #define INSTR_LOAD(exp, inst) (INSTR_IS_VAR(inst) ?\
 	(exp)->vars.ptr[INSTR_LOAD_INDEX(inst)]->cached :\
-	get_const((exp), INSTR_LOAD_INDEX(inst))\
+	valshf((INSTR_IS_CONST(inst) ? (exp)->consts.ptr : (exp)->args), INSTR_LOAD_INDEX(inst))\
 )
 
 
@@ -44,6 +77,7 @@ typedef uint32_t hash_t;
 
 struct var_s {
 	expr_t expr;  // Expression that defines this variables
+	size_t arity;  // Number of arguments to expression (zero if constant)
 	
 	void *cached;  // Cached value of calculation
 	bool is_cached : 1;  // Indicate if a value is stored in cached
@@ -87,15 +121,19 @@ struct expr_s {
 	// Vector's memory contains elements each of size `nmsp_valctl.size`
 	vec_t(void) consts;
 	
+	// Pointer to memory containing arguments
+	void *args;
+	
 	// Instructions to Run
 	vec_t(instr_t) instrs;
 };
 
-// Access constant value at index i
-#define get_const(exp, i) ((exp)->consts.ptr + (i) * nmsp_valctl.size)
-#define set_const(exp, i, val) valmove(get_const(exp, i), val)
 // Perform pointer arithmetic with value pointer
 #define valshf(ptr, shf) ((ptr) + (shf) * nmsp_valctl.size)
+// Access constant value at index i
+#define get_const(exp, i) valshf((exp)->consts.ptr, i)
+#define set_const(exp, i, val) valmove(get_const(exp, i), val)
+#define get_arg(exp, i) valshf((exp)->args, i)
 
 
 // Create expression with the given capacities for each section
@@ -104,20 +142,29 @@ static expr_t expr_new(size_t varcap, size_t constcap, size_t instrcap);
 static void expr_free(expr_t exp);
 
 typedef vec_t(void) valstk_t;  // Stack of values used during evaluation
-// Evaluate expression with result stored in the first element of `stack`
-static nmsp_err_t expr_eval(expr_t exp, valstk_t stack);
+/* Evaluate expression using stack-based virtual machine
+ * Each instruction of the `exp->instrs` vector will
+ * load or manipulate the values in `stack`
+ */
+static nmsp_err_t expr_eval(expr_t exp, valstk_t *stack);
 
 
+
+/* Put variable into expr variable section if not already present
+ * Return the index of the variable
+ */
+static int expr_put_var(expr_t exp, var_t vr);
+// Put variable into expression and add load instruction for it
+#define expr_load_var(exp, vr) vecpush((exp)->instrs, INSTR_NEW_VAR(expr_put_var(exp, vr)))
+// Put variable into expression and add call instruction for it
+#define expr_call_var(exp, vr) vecpush((exp)->instrs, INSTR_NEW_CALL(expr_put_var(exp, vr)))
 
 /* Place variable in expr variable section if not already present
- * And add load instruction to instruction section
+ * Return the index of the constant
  */
-static void expr_load_var(expr_t exp, var_t vr);
-
-/* Place variable in expr variable section if not already present
- * And add load instruction to instruction section
- */
-static void expr_load_const(expr_t exp, void *val);
+static int expr_put_const(expr_t exp, void *val);
+// Put constant into expression and add load instruction for it
+#define expr_load_const(exp, val) vecpush((exp)->instrs, INSTR_NEW_CONST(expr_put_const(exp, val)))
 
 /* Remove the last instruction if it is a const load
  * Additionally remove the corresponding const if no other loads use it
@@ -153,23 +200,27 @@ static bool expr_pop_const_load(expr_t exp, void *dest);
 struct stk_oper_s {
 	// If true then this operator stack element represents an open parenthesis or comma
 	// It cannot be displaced by normal operators
-	uint8_t is_block : 1;
+	bool is_block : 1;
 	// If this element is a comma then it will be displaced only by close parenthesis
-	uint8_t is_comma : 1;
+	bool is_comma : 1;
+	// If this element is a user-defined function call defined by `vr`
+	bool is_var : 1;
 	
 	// Stores Precedence in higher 7 bits and
 	// Associativity in the least significant bit
 	uint8_t prec_assoc;
 	
-	// Id of operator
-	bltn_t operid;
+	union {
+		bltn_t bltnid;  // Id of operator
+		var_t var;
+	} src;
 };
 
 typedef vec_t(struct stk_oper_s) oper_stack_t;  // Operator stack
 
 
 /* Node of operator tree
- * An operator tree is used by `parse_infix_oper`
+ * An operator tree is used by `parse_oper`
  * to identify the longest matching operator for a string
  */
 struct oper_tree_s {
@@ -195,7 +246,7 @@ static nmsp_err_t check_valid(expr_t exp);
  * On Success, a valid operator id is returned
  * Otherwise OPER_NULL is returned
  */
-static bltn_t parse_infix_oper(const char *str, const char **endptr, bool is_unary);
+static bltn_t parse_oper(const char *str, const char **endptr, bool is_unary);
 
 /* Take an operator and apply it to the values in `exp`
  * Usually, this means the operator instruction is added to `exp->instrs`
@@ -205,13 +256,18 @@ static bltn_t parse_infix_oper(const char *str, const char **endptr, bool is_una
  * And the result loaded onto `exp->instrs` as a constant
  */
 bool nmsp_eval_on_parse = true;  // Wehther to evaluate constants while parsing
-static nmsp_err_t apply_oper(expr_t exp, bltn_t opid);
+static nmsp_err_t apply_oper(expr_t exp, struct stk_oper_s op);
 
 /* Place operator with id `opid` on stack
  * If opid == -1 then place an open parenthesis
  * If opid == -2 then place a comma
  */
 static void push_oper(oper_stack_t *opstk, int16_t opid);
+
+/* Place user-defined function call defined by `vr`
+ * onto the operator stack
+ */
+static void push_call(oper_stack_t *opstk, var_t vr);
 
 /* Pops operators from the operator stack (i.e. `opstk`)
  * while they have lower precedence than `prec`
@@ -227,23 +283,32 @@ static nmsp_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec);
  */
 static nmsp_err_t close_parenth(expr_t exp, oper_stack_t *opstk);
 
-/* Read sequence of alphanumerics and '_' as a name
- * Return matching builtin function or constant if found
- * Returns OPER_NULL if none are found
- */
-static bltn_t parse_builtin(const char *str, const char **endptr);
+
+typedef vec_t(struct {
+	size_t len;  // Length of argument
+	const char *arg;
+}) arg_list_t;
 
 /* Read sequence of alphanumerics and '_' as a name
- * Return matching variable from `nmsp` if found
- * Returns NULL if none are found
+ * Return index of matching argument from `args` or -1 if none found
  */
-static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp);
+static int parse_arg(const char *name, size_t namelen, arg_list_t args);
+
+/* Find builtin constant or function matching `name`
+ * If none are found OPER_NULL is returned
+ */
+static bltn_t parse_builtin(const char *name, size_t namelen);
+
+/* Find and return variable which matches `name`
+ * If no such variable exists then create one
+ */
+static var_t parse_var(const char *name, size_t namelen, namespace_t nmsp);
 
 /* Primary method for parsing expression
  * Parses as much as possuble of the string
  * If `err` is not NULL then any errors are stored in it
  */
-static expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_err_t *err);
+static expr_t expr_parse(const char *str, const char **endptr, arg_list_t args, namespace_t nmsp, nmsp_err_t *err);
 
 
 
@@ -252,13 +317,14 @@ static expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp,
 // Returns a string containing a description of errors
 const char *nmsp_strerror(nmsp_err_t err){
 	switch(err){
-		case EXPR_ERR_OK: return "EXPR_ERR_OK: Successful";
+		case NMSP_ERR_OK: return "NMSP_ERR_OK: Successful";
 		
 		// Evaluation Errors
-		case EVAL_ERR_STACK_OVERFLOW: return "EVAL_ERR_STACK_OVERFLOW: Values pushed when Stack full";
 		case EVAL_ERR_STACK_UNDERFLOW: return "EVAL_ERR_STACK_UNDERFLOW: Values popped when Stack empty";
 		case EVAL_ERR_STACK_SURPLUS: return "EVAL_ERR_STACK_SURPLUS: Too Many values on stack at end of program";
 		case EVAL_ERR_NO_EXPR: return "EVAL_ERR_NO_EXPR: Referenced Variable didn't have expression";
+		case EVAL_ERR_VAR_NOT_FUNC: return "EVAL_ERR_VAR_NOT_FUNC: A Variable cannot be called";
+		case EVAL_ERR_NO_ARGS: return "EVAL_ERR_NO_ARGS: Cannot load arguments as there is no argument list";
 		
 		// Parsing Errors
 		case PARSE_ERR_PARENTH_MISMATCH: return "PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis";
@@ -268,7 +334,6 @@ const char *nmsp_strerror(nmsp_err_t err){
 		case PARSE_ERR_FUNC_NOCALL: return "PARSE_ERR_FUNC_NOCALL: Function present but not called";
 		
 		// Produce after parsing produces invalid expression
-		case PARSE_ERR_TOO_MANY_VALUES: return "PARSE_ERR_TOO_MANY_VALUES: Expression tree is too deep";
 		case PARSE_ERR_MISSING_VALUES: return "PARSE_ERR_MISSING_VALUES: Operator is missing argument";
 		case PARSE_ERR_MISSING_OPERS: return "PARSE_ERR_MISSING_OPERS: Multiple values without operator between";
 		case PARSE_ERR_EXTRA_CONT: return "PARSE_ERR_EXTRA_CONT: Values present after expression";
@@ -315,7 +380,8 @@ nmsp_err_t nmsp_var_value(void *dest, var_t vr){
 	if(!vr->is_cached){
 		valstk_t stack;
 		vecinit_sz(stack, 32, nmsp_valctl.size);
-		vr->err = expr_eval(vr->expr, stack);
+		vr->expr->args = NULL;
+		vr->err = expr_eval(vr->expr, &stack);
 		valmove(vr->cached, stack.ptr);
 		vecfree(stack);
 	}
@@ -407,9 +473,10 @@ static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, 
 	var_t vr = malloc(sizeof(struct var_s));
 	// Set Expression with no cached value yet
 	vr->expr = exp;
+	vr->arity = 0;
 	vr->is_cached = false;
 	vr->cached = NULL;
-	vr->err = EXPR_ERR_OK;
+	vr->err = NMSP_ERR_OK;
 	
 	// Store name of variable
 	vr->name = key;
@@ -550,27 +617,73 @@ static bool find_circ(namespace_t nmsp, expr_t start, var_t target){
 	return false;  // No circular dependency
 }
 
+static size_t parse_label(const char *str, const char **endptr, arg_list_t *args){
+	if(endptr) *endptr = str;
+	
+	// Collect label characters
+	const char *lbl = str;
+	while(isalnum(*str) || *str == '_') str++;
+	size_t lbl_len = str - lbl;
+	if(lbl_len == 0) return 0;
+	
+	while(isblank(*str)) str++;  // Skip blankspace after label
+	
+	// Check for argument list
+	if(*str == '('){
+		// Parse arguments
+		do{
+			str++;
+			while(isspace(*str)) str++;  // Skip whitespace before argument
+			const char *start = str;
+			while(isalnum(*str) || *str == '_') str++;
+			size_t len = str - start;
+			while(isspace(*str)) str++;  // Skip whitespace after argument
+			
+			if(len > 0){
+				vecinc(*args);
+				args->ptr[args->len].arg = start;
+				args->ptr[args->len].len = len;
+				args->len++;
+			}else return 0;
+		}while(*str == ',');
+		if(*str != ')') return 0;  // Check for parenthesis at the end
+		str++;  // Consume ')'
+		while(isblank(*str)) str++;  // Skip blankspace after args
+	}
+	
+	// Check for colon after label
+	if(*str != ':') return 0;
+	str++;  // Consume ':'
+	
+	if(endptr) *endptr = str;
+	return lbl_len;
+}
+
 var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_err_t *err){
 	// Parse Label
 	// ------------
 	// Collect label characters
 	while(isblank(*str)) str++;  // Skip whitespace before
 	const char *lbl = str;
-	while(isalnum(*str) || *str == '_') str++;
-	size_t lbl_len = str - lbl;
-	while(isblank(*str)) str++;  // Skip whitespace after
 	
-	// Check for colon after label
-	if(*str != ':' || lbl_len == 0){
-		// No colon --> No label
-		str = lbl;  // Move string pointer back to beginning
-		lbl = NULL;  lbl_len = 0;
-	}else str++;
+	// Try to parse label
+	arg_list_t args;
+	vecinit(args, 0);
+	size_t lbl_len = parse_label(str, &str, &args);
+	
+	if(lbl_len == 0){  // No Label was parsable
+		str = lbl;
+		vecfree(args);
+		lbl = NULL;
+	}
+	size_t arity = args.len;
 	
 	// Parse Expression
 	// -----------------
-	expr_t exp = expr_parse(str, endptr, nmsp, err);
+	expr_t exp = expr_parse(str, endptr, args, nmsp, err);
+	vecfree(args);  // Free argument vector
 	if(!exp || (err && *err)) return NULL;  // On Parse Error
+	
 	
 	// Insert Expression
 	// ------------------
@@ -580,6 +693,11 @@ var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_e
 		if(oldvar->expr){  // Check for redefinition
 			*err = INSERT_ERR_REDEF;
 			nmsp->redef = oldvar;
+			return NULL;
+		}
+		
+		if(oldvar->arity != arity){  // Check for matching arity
+			*err = PARSE_ERR_ARITY_MISMATCH;
 			return NULL;
 		}
 		
@@ -661,39 +779,43 @@ static void expr_free(expr_t exp){
 
 
 // Evaluate `exp` using the provided stack
-static nmsp_err_t expr_eval(expr_t exp, valstk_t stack){
+static nmsp_err_t expr_eval(expr_t exp, valstk_t *stack){
+	size_t start_len = stack->len;  // Keep track of how many values on stack to begin
 	// If no expression is provided
 	if(!exp) return EVAL_ERR_NO_EXPR;
 	
-	// Evaluate any variable dependencies
+	// Evaluate any variable dependencies (that are not functions)
 	for(size_t i = 0; i < exp->vars.len; i++){
 		var_t vr = exp->vars.ptr[i];
+		// Can't preemptively evaluate functions
+		if(vr->arity > 0) continue;
 		
 		// Allocate space for variable if needed
 		if(!vr->cached) vr->cached = malloc(nmsp_valctl.size);
 		// Evaluate expression if no cached variable
 		if(!vr->is_cached){
 			vr->err = expr_eval(vr->expr, stack);
-			valmove(vr->cached, stack.ptr);
+			// Place value into cache if no error occurred
+			if(!vr->err) valmove(vr->cached, vecpop_sz(*stack, nmsp_valctl.size));
 		}
 		
 		if(vr->err) return vr->err;
 	}
 	
-	nmsp_err_t err = EXPR_ERR_OK;  // Track any errors that happen
+	nmsp_err_t err = NMSP_ERR_OK;  // Track any errors that happen
 	
 	// Run Instructions
 	for(size_t i = 0; i < exp->instrs.len; i++){
 		instr_t inst = exp->instrs.ptr[i];
 		
-		if(INSTR_IS_OPER(inst)){  // Operator
-			struct bltn_info_s info = nmsp_bltns[INSTR_OPERID(inst)];
-			void *args = vecremove_sz(stack, info.arity, nmsp_valctl.size);
+		if(INSTR_IS_BLTN(inst)){  // Operation or User-Define Function call
+			struct bltn_info_s info = nmsp_bltns[INSTR_BLTNID(inst)];
+			void *args = vecremove_sz(*stack, info.arity, nmsp_valctl.size);
 			// Check that there are enough arguments
 			if(!args){ err = EVAL_ERR_STACK_UNDERFLOW;  break; }
 			
 			// Apply operator
-			if(info.is_alpha) err = info.src.nary(args);  // Builtin Function
+			if(info.is_word) err = info.src.nary(args);  // Builtin Function
 			else if(info.arity == 1) err = info.src.unary(args);  // Unary Operator
 			else err = info.src.binary(args, valshf(args, 1));  // Binary Operator
 			// Break on error
@@ -701,66 +823,73 @@ static nmsp_err_t expr_eval(expr_t exp, valstk_t stack){
 				
 			// Deallocate used values
 			for(int i = 1; i < info.arity; i++) valfree(valshf(args, i));
-			stack.len++;  // Move stack back up one to include result
+			stack->len++;  // Move stack back up one to include result
 			
-		}else{  // Constant or Variable load	
+		}else if(INSTR_IS_CALL(inst)){  // User-Defined Function call
+			var_t func = INSTR_CALL_VAR(inst);
+			// Check that `func` is a function
+			if(func->arity == 0){ err = EVAL_ERR_VAR_NOT_FUNC;  break; }
+			// Check that there are enough arguments
+			if(stack->len < func->arity){ err = EVAL_ERR_STACK_UNDERFLOW;  break; }
+			
+			// Check that function's expression is defined
+			if(!func->expr){ err = EVAL_ERR_NO_EXPR;  break; }
+			
+			// Give arguments pointer to expression and evaluate it using current stack
+			func->expr->args = valshf(stack->ptr, stack->len - func->arity);
+			if(err = expr_eval(func->expr, stack)) break;
+			
+			// Move result to first argument and reduce stack
+			valmove(func->expr->args, veclast_sz(*stack, nmsp_valctl.size));
+			vecremove_sz(*stack, func->arity, nmsp_valctl.size);
+			
+		}else{  // Constant, Variable, or Argument load	
+			if(INSTR_IS_ARG(inst) && !exp->args){ err = EVAL_ERR_NO_ARGS;  break; }
 			void *val = INSTR_LOAD(exp, inst);  // Pointer to loaded value
-			vec_inc_size(stack, nmsp_valctl.size);
-			valclone(valshf(stack.ptr, stack.len++), val);  // Clone value onto top of stack
+			vecinc_sz(*stack, nmsp_valctl.size);
+			valclone(valshf(stack->ptr, stack->len++), val);  // Clone value onto top of stack
 		}
 	}
 	
 	// Should only be one remaining value after evaluation
 	if(!err){
-		if(stack.len == 0) err = EVAL_ERR_STACK_UNDERFLOW;
-		else if(stack.len > 1) err = EVAL_ERR_STACK_SURPLUS;
+		if(stack->len == start_len) err = EVAL_ERR_STACK_UNDERFLOW;
+		else if(stack->len > start_len + 1) err = EVAL_ERR_STACK_SURPLUS;
 	}
 	
 	if(err){  // On error, cleanup values on stack
-		for(int i = 0; i < stack.len; i++) valfree(valshf(stack.ptr, i));
+		for(int i = 0; i < stack->len; i++) valfree(valshf(stack->ptr, i));
 		return err;
 	}
 	
 	// There will be one value left at the bottom of the stack
-	return EXPR_ERR_OK;
+	return NMSP_ERR_OK;
 }
 
 
 
 // Add variable load to expression
-static void expr_load_var(expr_t exp, var_t vr){
+static int expr_put_var(expr_t exp, var_t vr){
 	// Check if variable already present
-	int varid = -1;
-	for(int i = 0; i < exp->vars.len; i++) if(exp->vars.ptr[i] == vr){
-		varid = i;
-		break;
-	}
+	for(int i = 0; i < exp->vars.len; i++) if(exp->vars.ptr[i] == vr) return i;
 	
-	if(varid < 0){
-		varid = exp->vars.len;
-		vecpush(exp->vars, vr);
-	}
-	vecpush(exp->instrs, INSTR_NEW_VAR(varid));
+	vecpush(exp->vars, vr);
+	return exp->vars.len - 1;
 }
 
 // Add constant load to expression
-static void expr_load_const(expr_t exp, void *val){
+static int expr_put_const(expr_t exp, void *val){
 	// Check if constant value is already present
-	int constid = -1;
 	for(size_t i = 0; i < exp->consts.len; i++){
 		if(valequal(get_const(exp, i), val)){
 			// If `val` is not placed into the constant list then it must be deallocated
 			valfree(val);
-			constid = i;
-			break;
+			return i;
 		}
 	}
 	
-	if(constid < 0){
-		constid = exp->consts.len;
-		vecpush_sz(exp->consts, val, nmsp_valctl.size);
-	}
-	vecpush(exp->instrs, INSTR_NEW_CONST(constid));
+	vecpush_sz(exp->consts, val, nmsp_valctl.size);
+	return exp->consts.len - 1;
 }
 
 /* Remove the last instruction if it is a const load
@@ -805,22 +934,22 @@ static nmsp_err_t check_valid(expr_t exp){
 	size_t height = 0;  // Track height of stack
 	for(size_t i = 0; i < exp->instrs.len; i++){
 		instr_t inst = exp->instrs.ptr[i];
-		if(INSTR_IS_OPER(inst)){
-			struct bltn_info_s info = nmsp_bltns[INSTR_OPERID(inst)];
+		if(INSTR_IS_APPLY(inst)){
+			size_t arity = INSTR_ARITY(inst);
 			// Check that there are sufficient operators
-			if(height < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
+			if(height < arity) return PARSE_ERR_MISSING_VALUES;
 			
 			// Remove consumed arguments with result in first argument
-			height -= info.arity - 1;
-		}else height++;  // Load Instructions add one element
+			height -= arity - 1;
+		}else if(INSTR_IS_LOAD(inst)) height++;  // Load Instructions add one element
 	}
 	
 	// No return value
-	if(height == 0) return EVAL_ERR_STACK_UNDERFLOW;
+	if(height == 0) return PARSE_ERR_MISSING_VALUES;
 	// More than one return value
-	if(height > 1) return EVAL_ERR_STACK_SURPLUS;
+	if(height > 1) return PARSE_ERR_MISSING_OPERS;
 	
-	return EXPR_ERR_OK;
+	return NMSP_ERR_OK;
 }
 
 
@@ -829,7 +958,7 @@ static nmsp_err_t check_valid(expr_t exp){
 
 
 // Identify operator matching `str`
-static bltn_t parse_infix_oper(const char *str, const char **endptr, bool is_unary){
+static bltn_t parse_oper(const char *str, const char **endptr, bool is_unary){
 	// Root of operator trees
 	static struct oper_tree_s *binary_tree = NULL, *unary_tree = NULL;
 	
@@ -842,7 +971,7 @@ static bltn_t parse_infix_oper(const char *str, const char **endptr, bool is_una
 		struct bltn_info_s info;
 		for(bltn_t opid = 0; (info = nmsp_bltns[opid]).name; opid++){
 			// Only add operators (not builtin functions) of the specified type
-			if(info.is_alpha || info.arity != arity) continue;
+			if(info.is_word || info.arity != arity) continue;
 			
 			// Iterate through name adding nodes into tree
 			const char *name = info.name;
@@ -905,11 +1034,11 @@ static bltn_t parse_infix_oper(const char *str, const char **endptr, bool is_una
 }
 
 // Apply single operator to value stack by appending
-static nmsp_err_t apply_oper(expr_t exp, bltn_t opid){
+static nmsp_err_t apply_oper(expr_t exp, struct stk_oper_s op){
 	// If `nmsp_eval_on_parse` is set then try to
 	// Evaluate constants using operator on the stack
-	if(nmsp_eval_on_parse){
-		struct bltn_info_s info = nmsp_bltns[opid];
+	if(nmsp_eval_on_parse && !op.is_var){
+		struct bltn_info_s info = nmsp_bltns[op.src.bltnid];
 		
 		// Check for sufficient arguments
 		if(exp->instrs.len < info.arity) return EVAL_ERR_STACK_UNDERFLOW;
@@ -917,8 +1046,8 @@ static nmsp_err_t apply_oper(expr_t exp, bltn_t opid){
 		
 		// Check that all arguments are constant
 		for(int i = 0; i < info.arity; i++) if(!INSTR_IS_CONST(inst[i])){
-			vecpush(exp->instrs, INSTR_NEW_OPER(opid));  // Put operator onto instrs section
-			return EXPR_ERR_OK;
+			vecpush(exp->instrs, INSTR_NEW_OPER(op.src.bltnid));  // Put operator onto instrs section
+			return NMSP_ERR_OK;
 		}
 		
 		// Pop constants off of instruction array and onto args
@@ -927,7 +1056,7 @@ static nmsp_err_t apply_oper(expr_t exp, bltn_t opid){
 		
 		// Apply operator
 		nmsp_err_t err;
-		if(info.is_alpha) err = info.src.nary(args);  // Builtin Functions
+		if(info.is_word) err = info.src.nary(args);  // Builtin Functions
 		else if(info.arity == 1) err = info.src.unary(args);  // Unary Operator
 		else err = info.src.binary(args, valshf(args, 1));  // Binary Operator
 		
@@ -941,11 +1070,15 @@ static nmsp_err_t apply_oper(expr_t exp, bltn_t opid){
 		
 		// On Success push result onto consts array and load it
 		expr_load_const(exp, args);
-		return EXPR_ERR_OK;
+		return NMSP_ERR_OK;
 	}
 	
-	vecpush(exp->instrs, INSTR_NEW_OPER(opid));  // Put operator onto instrs section
-	return EXPR_ERR_OK;
+	if(op.is_var){  // Call variable when user-defined function
+		expr_call_var(exp, op.src.var);
+	}else{  // Apply operator when builtin
+		vecpush(exp->instrs, INSTR_NEW_OPER(op.src.bltnid));
+	}
+	return NMSP_ERR_OK;
 }
 
 
@@ -955,15 +1088,26 @@ static nmsp_err_t apply_oper(expr_t exp, bltn_t opid){
  */
 static void push_oper(oper_stack_t *opstk, int16_t opid){
 	struct stk_oper_s elem;
+	elem.is_var = false;
 	if(opid >= 0){
 		struct bltn_info_s info = nmsp_bltns[opid];
-		elem.is_block = 0;
+		elem.is_block = false;
 		elem.prec_assoc = (info.prec << 1) | info.assoc | (info.arity == 1);
-		elem.operid = (bltn_t)opid;
+		elem.src.bltnid = (bltn_t)opid;
 	}else{
-		elem.is_block = 1;
+		elem.is_block = true;
 		elem.is_comma = opid == -2;
 	}
+	vecpush(*opstk, elem);
+}
+
+// Place a user-defined function call on the stack
+static void push_call(oper_stack_t *opstk, var_t vr){
+	struct stk_oper_s elem;
+	elem.is_var = true;
+	elem.is_block = false;
+	elem.is_comma = false;
+	elem.src.var = vr;
 	vecpush(*opstk, elem);
 }
 
@@ -987,10 +1131,10 @@ static nmsp_err_t displace_opers(expr_t exp, oper_stack_t *opstk, int8_t prec){
 	){	
 		// Try to apply operator onto expression
 		nmsp_err_t err;
-		if(err = apply_oper(exp, elem->operid)) return err;
+		if(err = apply_oper(exp, *elem)) return err;
 	}
 	
-	return EXPR_ERR_OK;
+	return NMSP_ERR_OK;
 }
 
 // Clears out parenthetical block from operator stack
@@ -1016,51 +1160,51 @@ static nmsp_err_t close_parenth(expr_t exp, oper_stack_t *opstk){
 	// Check for function below open parenthesis
 	struct bltn_info_s info;
 	if((elem = veclast(*opstk))
-	&& !elem->is_block
-	&& (info = nmsp_bltns[elem->operid]).is_alpha
-	){  // Treat parenthetical block as arguments to function
-		vecpop(*opstk);  // Remove builtin function from `opstk`
-		if(arity != info.arity) return PARSE_ERR_ARITY_MISMATCH;  // Check that arity matches
-		apply_oper(exp, elem->operid);  // Apply operator onto values on stack
+	&& (
+	    elem->is_var // User-Defined Function
+	||  (!elem->is_block && (info = nmsp_bltns[elem->src.bltnid]).is_word)  // Builtin Function
+	)){  // Treat parenthetical block as arguments to function
+		vecpop(*opstk);  // Remove function from `opstk`
+		if(elem->is_var){
+			var_t vr = elem->src.var;
+			// If variable hasn't been initialized set arity
+			if(!vr->expr) vr->arity = arity;
+			// Otherwise check that arity matches
+			else if(arity != vr->arity) return PARSE_ERR_ARITY_MISMATCH;
+		}else{
+			if(arity != info.arity) return PARSE_ERR_ARITY_MISMATCH;  // Check that arity matches
+		}
+		apply_oper(exp, *elem);  // Apply operator onto values on stack
 		
 	}else{  // Treat parenthetical block as value
 		if(arity > 1) return PARSE_ERR_BAD_COMMA;  // Arity must be 1
 	}
 	
-	return EXPR_ERR_OK;
+	return NMSP_ERR_OK;
+}
+
+// Try to parse sequence of alphanumerics into argument name
+static int parse_arg(const char *name, size_t namelen, arg_list_t args){
+	for(int i = 0; i < args.len; i++){
+		if(namelen == args.ptr[i].len && strncmp(name, args.ptr[i].arg, namelen) == 0) return i;
+	}
+	return -1;
 }
 
 // Try to parse sequence of alphanumerics into builtin function or constant
-static bltn_t parse_builtin(const char *str, const char **endptr){
-	// Collect function name
-	const char *name = str;
-	while(isalnum(*str) || *str == '_') str++;
-	size_t namelen = str - name;
-	
+static bltn_t parse_builtin(const char *name, size_t namelen){
 	// Search Builtin Functions for match
 	struct bltn_info_s info;
-	for(bltn_t opid = 0; (info = nmsp_bltns[opid]).name; opid++) if(info.is_alpha){
-		size_t minlen = namelen < info.namelen ? namelen : info.namelen;
-		if(strncmp(info.name, name, minlen) == 0){
-			if(endptr) *endptr = str;
-			return opid;
-		}
+	for(bltn_t id = 0; (info = nmsp_bltns[id]).name; id++) if(info.is_word){
+		if(namelen == info.namelen
+		&& strncmp(info.name, name, namelen) == 0
+		) return id;
 	}
 	return OPER_NULL;
 }
 
 // Try to parse sequence of alphanumerics into variable
-static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
-	if(endptr) *endptr = str;  // Set endptr to beginning
-	
-	// Collect variable name characters
-	const char *name = str;
-	while(isalnum(*str) || *str == '_') str++;
-	size_t namelen = str - name;
-	
-	// Leave if nothing collected
-	if(str == name) return NULL;
-	
+static var_t parse_var(const char *name, size_t namelen, namespace_t nmsp){
 	var_t vr;
 	if(nmsp && (
 		// Query namespace for variable
@@ -1068,13 +1212,12 @@ static var_t parse_var(const char *str, const char **endptr, namespace_t nmsp){
 		// Otherwise create new variable with name
 		(vr = nmsp_put(nmsp, name, namelen))
 	)){
-		if(endptr) *endptr = str;
 		return vr;
 	}else return NULL;
 }
 
 // Parses String as Expression
-expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_err_t *err){
+expr_t expr_parse(const char *str, const char **endptr, arg_list_t args, namespace_t nmsp, nmsp_err_t *err){
 	// Initialize operator stack
 	oper_stack_t opstk;
 	vecinit(opstk, 8);
@@ -1085,7 +1228,7 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 	// Give err reference to prevent null dereferences
 	nmsp_err_t tmperr;
 	if(!err) err = &tmperr;
-	*err = EXPR_ERR_OK;
+	*err = NMSP_ERR_OK;
 	
 	// Track if the last token parsed was a constant or variable
 	bool was_last_val = false;
@@ -1126,22 +1269,23 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 		}
 		
 		// Try to parse operator
-		bltn_t opid = parse_infix_oper(str, &after_tok, !was_last_val);
+		bltn_t opid = parse_oper(str, &after_tok, !was_last_val);
 		if(opid != OPER_NULL && after_tok > str){
 			// Get info for current operator
 			struct bltn_info_s info = nmsp_bltns[opid];
 			
-			if(opstk.len > 0){
-				// Get info for last operator
-				struct bltn_info_s lst_info = nmsp_bltns[veclast(opstk)->operid];
+			struct stk_oper_s *last = veclast(opstk);
+			if(last && !last->is_block){  // For non-block previous operator
+				struct bltn_info_s lst_info;
 				
 				// Check that last operator isn't function
-				if(lst_info.is_alpha){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
+				if(last->is_var  // User-defined function
+				|| (lst_info = nmsp_bltns[last->src.bltnid]).is_word  // Builtin function
+				){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
 				
 				// When operator is unary
-				// Check that previous operator is a block, unary, right-associative, or lower precedence
-				if(info.arity == 1 && !(veclast(opstk)->is_block
-				|| lst_info.arity == 1
+				// Check that previous operator is a unary, right-associative, or lower precedence
+				if(info.arity == 1 && !(lst_info.arity == 1
 				|| lst_info.assoc == OPER_RIGHT_ASSOC
 				|| lst_info.prec < info.prec
 				// Otherwise we have a unary operator coming after a binary operator of higher precedence
@@ -1172,9 +1316,28 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 			continue;
 		}
 		
+		
+		// Collect word characters
+		after_tok = str;
+		while(isalnum(*after_tok) || *after_tok == '_') after_tok++;
+		size_t namelen = after_tok - str;
+		if(namelen == 0) break;  // Unknown token
+		
+		// Try to parse argument name
+		int argind;
+		if((argind = parse_arg(str, namelen, args)) >= 0){
+			// Cannot have two values in a row
+			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
+			
+			vecpush(exp->instrs, INSTR_NEW_ARG(argind));
+			str = after_tok;
+			was_last_val = true;
+			continue;
+		}
+		
 		// Try to parse builtin function or constant name
-		opid = parse_builtin(str, &after_tok);
-		if(opid != OPER_NULL && after_tok > str){
+		opid = parse_builtin(str, namelen);
+		if(opid != OPER_NULL){
 			// Cannot have two values in a row
 			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
@@ -1184,19 +1347,28 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 			}else{  // Place function on operator stack
 				push_oper(&opstk, opid);
 			}
-			was_last_val = true;
 			str = after_tok;
+			was_last_val = true;
 			continue;
 		}
 		
 		// Try to parse variable name
 		// Collect alphanumerics and _
 		var_t vr;
-		if(vr = parse_var(str, &after_tok, nmsp)){
+		if(vr = parse_var(str, namelen, nmsp)){
 			// Cannot have two values in a row
 			if(was_last_val){ *err = PARSE_ERR_MISSING_OPERS;  break; }
 			
-			expr_load_var(exp, vr);  // Load variable into expression
+			// Check if next character is '('
+			const char *tmp = after_tok;
+			while(parenth_depth > 0 ? isspace(*tmp) : isblank(*tmp)) tmp++;
+			if(*tmp == '('){  // Treat `vr` as a user-defined function
+				// If already defined check that `vr` is a function
+				if(vr->expr && vr->arity == 0){ *err = PARSE_ERR_MISSING_OPERS;  break; }
+				push_call(&opstk, vr);
+			}else{  // Treat `vr` as a variable
+				expr_load_var(exp, vr);  // Load variable into expression
+			}
 			str = after_tok;
 			was_last_val = true;
 			continue;
@@ -1223,10 +1395,10 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 		// Make sure no open parenths are left
 		if(op.is_block){ *err = PARSE_ERR_PARENTH_MISMATCH;  break; }
 		// Or function calls
-		if(nmsp_bltns[op.operid].is_alpha){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
+		if(nmsp_bltns[op.src.bltnid].is_word){ *err = PARSE_ERR_FUNC_NOCALL;  break; }
 		
 		// Apply operator to expression
-		if(*err = apply_oper(exp, op.operid)) break;
+		if(*err = apply_oper(exp, op)) break;
 	}
 	vecfree(opstk);  // Deallocate stack
 	
@@ -1238,8 +1410,6 @@ expr_t expr_parse(const char *str, const char **endptr, namespace_t nmsp, nmsp_e
 	
 	// Check that expression will evaluate appropriately
 	if(*err = check_valid(exp)){
-		// Shift error code down to be more descriptive
-		*err += PARSE_ERR_TOO_MANY_VALUES - EVAL_ERR_STACK_OVERFLOW;
 		expr_free(exp);
 		return NULL;
 	}

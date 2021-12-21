@@ -14,5 +14,5 @@ word
 
 word : ln(e + pi)
 
-notdefined = ERR -4 # Should produce no expr error
+notdefined = ERR -3 # Should produce no expr error
 

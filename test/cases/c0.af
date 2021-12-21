@@ -1,7 +1,7 @@
 # This is the first test
 # It is a valid file and should contain no errors
 
-d + 0.5 ^ (-z / 2) = previous stuff # Result without label
+d + (1/2) ^-z/2 = previous stuff # Result without label
 
 wood / d =
 

@@ -58,25 +58,25 @@ const char *(*expr_arith_strerror)(nmsp_err_t err) = NULL;
 
 
 // Unary Operation Implementation
-static nmsp_err_t neg_d(void *arg){ fst(arg) = -fst(arg);  return EXPR_ERR_OK; }
+static nmsp_err_t neg_d(void *arg){ fst(arg) = -fst(arg);  return NMSP_ERR_OK; }
 // Binary Operation Implementation
-static nmsp_err_t add_d(void *arg1, void *arg2){ fst(arg1) += fst(arg2);  return EXPR_ERR_OK; }
-static nmsp_err_t sub_d(void *arg1, void *arg2){ fst(arg1) -= fst(arg2);  return EXPR_ERR_OK; }
-static nmsp_err_t mul_d(void *arg1, void *arg2){ fst(arg1) *= fst(arg2);  return EXPR_ERR_OK; }
-static nmsp_err_t div_d(void *arg1, void *arg2){ fst(arg1) /= fst(arg2);  return EXPR_ERR_OK; }
-static nmsp_err_t flrdiv_d(void *arg1, void *arg2){ fst(arg1) = floor(fst(arg1) / fst(arg2));  return EXPR_ERR_OK; }
-static nmsp_err_t mod_d(void *arg1, void *arg2){ fst(arg1) = fmod(fst(arg1), fst(arg2));  return EXPR_ERR_OK; }
-static nmsp_err_t pow_d(void *arg1, void *arg2){ fst(arg1) = pow(fst(arg1), fst(arg2));  return EXPR_ERR_OK; }
+static nmsp_err_t add_d(void *arg1, void *arg2){ fst(arg1) += fst(arg2);  return NMSP_ERR_OK; }
+static nmsp_err_t sub_d(void *arg1, void *arg2){ fst(arg1) -= fst(arg2);  return NMSP_ERR_OK; }
+static nmsp_err_t mul_d(void *arg1, void *arg2){ fst(arg1) *= fst(arg2);  return NMSP_ERR_OK; }
+static nmsp_err_t div_d(void *arg1, void *arg2){ fst(arg1) /= fst(arg2);  return NMSP_ERR_OK; }
+static nmsp_err_t flrdiv_d(void *arg1, void *arg2){ fst(arg1) = floor(fst(arg1) / fst(arg2));  return NMSP_ERR_OK; }
+static nmsp_err_t mod_d(void *arg1, void *arg2){ fst(arg1) = fmod(fst(arg1), fst(arg2));  return NMSP_ERR_OK; }
+static nmsp_err_t pow_d(void *arg1, void *arg2){ fst(arg1) = pow(fst(arg1), fst(arg2));  return NMSP_ERR_OK; }
 
 
 
 // Builtin Functions Implementation
-static nmsp_err_t abs_d(void *args){ fst(args) = fabs(fst(args));  return EXPR_ERR_OK; }
-static nmsp_err_t sqrt_d(void *args){ fst(args) = sqrt(fst(args));  return EXPR_ERR_OK; }
-static nmsp_err_t log_d(void *args){ fst(args) = log(fst(args)) / log(snd(args));  return EXPR_ERR_OK; }
-static nmsp_err_t ln_d(void *args){ fst(args) = log(fst(args));  return EXPR_ERR_OK; }
-static nmsp_err_t sin_d(void *args){ fst(args) = sin(fst(args));  return EXPR_ERR_OK; }
-static nmsp_err_t cos_d(void *args){ fst(args) = cos(fst(args));  return EXPR_ERR_OK; }
+static nmsp_err_t abs_d(void *args){ fst(args) = fabs(fst(args));  return NMSP_ERR_OK; }
+static nmsp_err_t sqrt_d(void *args){ fst(args) = sqrt(fst(args));  return NMSP_ERR_OK; }
+static nmsp_err_t log_d(void *args){ fst(args) = log(fst(args)) / log(snd(args));  return NMSP_ERR_OK; }
+static nmsp_err_t ln_d(void *args){ fst(args) = log(fst(args));  return NMSP_ERR_OK; }
+static nmsp_err_t sin_d(void *args){ fst(args) = sin(fst(args));  return NMSP_ERR_OK; }
+static nmsp_err_t cos_d(void *args){ fst(args) = cos(fst(args));  return NMSP_ERR_OK; }
 
 
 

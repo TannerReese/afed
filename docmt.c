@@ -126,13 +126,13 @@ static nmsp_err_t parse_line(docmt_t doc){
 	skip_blank(doc);
 	if(*(doc->str) == '\0' || *(doc->str) == '#' || *(doc->str) == '\n'){ // Check for comment or end of line
 		skip_line(doc);
-		return EXPR_ERR_OK;
+		return NMSP_ERR_OK;
 	}
 	
 	
 	// Parse Labelled Expression
 	// --------------------------
-	nmsp_err_t err = EXPR_ERR_OK;
+	nmsp_err_t err = NMSP_ERR_OK;
 	const char *endptr;
 	var_t vr = nmsp_define(doc->nmsp, doc->str, &endptr, &err);
 	if(err) return err;  // On Parse Error
@@ -161,7 +161,7 @@ static nmsp_err_t parse_line(docmt_t doc){
 	// Skip Comment
 	skip_line(doc);
 	
-	return EXPR_ERR_OK;
+	return NMSP_ERR_OK;
 }
 
 static int print_error(docmt_t doc, FILE *stream, nmsp_err_t err){
