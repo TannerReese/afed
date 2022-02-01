@@ -11,7 +11,7 @@ afed_test: test/afed_test.sh afed test/cases/*
 	test/afed_test.sh
 
 # Recipe for nmspession tester
-test/nmsp_test: test/nmsp_test.o nmsp.o nmsp_dbl.o
+test/nmsp_test: test/nmsp_test.o nmsp.o nmsp_dbl.o util/queue.o util/ptree.o
 test/nmsp_test.o: test/nmsp_test.c nmsp.h
 
 # Perform nmspession test
@@ -20,12 +20,16 @@ nmsp_test: test/nmsp_test
 
 
 
+# Recipes for utilities
+util/ptree.o: util/ptree.c util/ptree.h
+util/queue.o: util/queue.c util/queue.h
+
 # Recipes for main library files
-nmsp.o: nmsp.c nmsp.h
+nmsp.o: nmsp.c nmsp.h util/vec.h util/queue.h util/ptree.h
 nmsp_dbl.o: nmsp_dbl.c nmsp.h
 
 # Recipe for primary binary
-afed: afed.o docmt.o nmsp.o nmsp_dbl.o
+afed: afed.o docmt.o nmsp.o nmsp_dbl.o util/queue.o util/ptree.o
 afed.o: afed.c docmt.h nmsp.h
 docmt.o: docmt.c docmt.h nmsp.h
 

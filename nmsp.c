@@ -3,7 +3,11 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "vec.h"  // Utility for vector operations
+// Utilities
+#include "util/vec.h"  // Vector operations
+#include "util/queue.h"  // Queue of variables
+#include "util/ptree.h"  // Tree of operators used to find longest prefix match
+
 #include "nmsp.h"
 
 
@@ -40,11 +44,11 @@ typedef uint16_t instr_t;
 #define INSTR_IS_CALL(inst) (((inst) & 0xc000) == 0xc000)
 
 #define INSTR_BLTNID(inst) ((inst) & 0x3fff)
-#define INSTR_CALL_VAR(inst) ((exp)->vars.ptr[(inst) & 0x3fff])  // Get variable pointer for CALL
+#define INSTR_CALL_VAR(exp, inst) ((exp)->vars.ptr[(inst) & 0x3fff])  // Get variable pointer for CALL
 // Get number of values consumed by apply instruction
-#define INSTR_ARITY(inst) (INSTR_IS_BLTN(inst) ?\
+#define INSTR_ARITY(exp, inst) (INSTR_IS_BLTN(inst) ?\
 	nmsp_bltns[INSTR_BLTNID(inst)].arity :\
-	INSTR_CALL_VAR(inst)->arity\
+	INSTR_CALL_VAR(exp, inst)->arity\
 )
 
 // Create instructions to load a variable, constant, or argument
@@ -102,10 +106,6 @@ static hash_t hash(const char *str, size_t len);
 static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, expr_t exp);
 
 // Queue methods (used for dependency checking)
-static struct queue_s queue_new(size_t cap);
-static size_t queue_enlarge(struct queue_s *q, size_t newlen);
-static void queue_push(struct queue_s *q, var_t *vars, size_t varlen);
-static var_t queue_pop(struct queue_s *q);
 // Return true if `start` depends on variable `target`
 static bool find_circ(namespace_t nmsp, expr_t start, var_t target);
 
@@ -219,22 +219,6 @@ struct stk_oper_s {
 typedef vec_t(struct stk_oper_s) oper_stack_t;  // Operator stack
 
 
-/* Node of operator tree
- * An operator tree is used by `parse_oper`
- * to identify the longest matching operator for a string
- */
-struct oper_tree_s {
-	// Character to compare against current value in string
-	char value;
-	// Id of operator or OPER_NULL if this node isn't an operator
-	bltn_t operid;
-	
-	// Pointer to next sibling node
-	struct oper_tree_s *next;
-	// Pointer to first child
-	struct oper_tree_s *child;
-};
-
 /* Check validity of parsed expression
  * by counting how the stack would move if evaluated
  * Returns the error that would occur
@@ -255,7 +239,7 @@ static bltn_t parse_oper(const char *str, const char **endptr, bool is_unary);
  * Then the operator will be immediately evaluated
  * And the result loaded onto `exp->instrs` as a constant
  */
-bool nmsp_eval_on_parse = true;  // Wehther to evaluate constants while parsing
+bool nmsp_eval_on_parse = true;  // Whether to evaluate constants while parsing
 static nmsp_err_t apply_oper(expr_t exp, struct stk_oper_s op);
 
 /* Place operator with id `opid` on stack
@@ -483,7 +467,7 @@ static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, 
 	vr->namelen = keylen;
 	vr->hash = hash(key, keylen);
 	
-	// Will be used during nmsp_insert
+	// Will be used during nmsp_define by find_circ
 	vr->used_by = NULL;
 	
 	// Place variable at head of linked list
@@ -502,78 +486,9 @@ var_t nmsp_put(namespace_t nmsp, const char *key, size_t keylen){
 }
 
 
-// Queue methods used by nmsp_insert
-// ----------------------------------
-struct queue_s {
-	// Pointer to memory allocated for queue
-	var_t *ptr;
-	
-	// Offset of beginning of queue from `ptr`
-	size_t start;
-	// Number of elements in queue & Maximum number possible
-	size_t len, cap;
-};
 
-// Create queue with given capacity and initial content
-static struct queue_s queue_new(size_t cap){
-	struct queue_s q;
-	q.ptr = malloc(cap * sizeof(var_t));
-	q.start = 0;  q.len = 0;
-	q.cap = cap;
-	return q;
-}
-
-// Returns the new capacity
-static size_t queue_enlarge(struct queue_s *q, size_t newlen){
-	if(newlen > q->cap){
-		size_t oldcap = q->cap;
-		
-		while(newlen > q->cap) q->cap <<= 1;
-		// Allocate new capacity
-		q->ptr = realloc(q->ptr, sizeof(var_t) * q->cap);
-		
-		if(q->start + q->len > oldcap){
-			// Move any discontiguous piece together
-			memcpy(q->ptr + oldcap, q->ptr, (q->start + q->len - oldcap) * sizeof(var_t));
-		}
-
-	}
-	return q->cap;
-}
-
-// Add element to the end of the queue
-static void queue_push(struct queue_s *q, var_t *vars, size_t varlen){
-	// Make sure queue is long enough
-	queue_enlarge(q, q->len + varlen);
-	
-	// Find end of queue
-	size_t end = q->start + q->len;
-	end -= (end >= q->cap) * q->cap;
-	
-	// Increase number of elements
-	q->len += varlen;
-	// Copy elements
-	int extra = (int)(end + varlen) - q->cap;
-	if(extra > 0){
-		memcpy(q->ptr + end, vars, sizeof(var_t) * (varlen - extra));
-		memcpy(q->ptr, vars + extra, sizeof(var_t) * extra);
-	}else{
-		memcpy(q->ptr + end, vars, sizeof(var_t) * varlen);
-	}
-}
-
-// Remove element from the beginning of the queue
-static var_t queue_pop(struct queue_s *q){
-	// Return NULL if no values in the queue
-	if(q->len == 0) return NULL;
-	
-	var_t vr = q->ptr[q->start];
-	q->start++;
-	q->start -= (q->start >= q->cap) * q->cap;
-	q->len--;
-	return vr;
-}
-
+// Methods used by nmsp_define
+// ----------------------------
 
 // Find circular dependency
 static bool find_circ(namespace_t nmsp, expr_t start, var_t target){
@@ -585,9 +500,9 @@ static bool find_circ(namespace_t nmsp, expr_t start, var_t target){
 	
 	// Initialize with exp's immediate dependencies
 	struct queue_s q = queue_new(start->vars.len << 1);
-	queue_push(&q, start->vars.ptr, start->vars.len);
+	queue_push(&q, (void**)start->vars.ptr, start->vars.len);
 	// Set their reference to `target`
-	for(size_t i = 0; i < start->vars.len; i++) start->vars.ptr[i]->used_by = target;
+	for(int i = 0; i < start->vars.len; i++) start->vars.ptr[i]->used_by = target;
 	
 	// Iterate over variables checking their dependencies
 	while(q.len > 0){  // While there are remaining variables to check
@@ -597,7 +512,7 @@ static bool find_circ(namespace_t nmsp, expr_t start, var_t target){
 		// Check if it matches the root variable
 		if(target == vr){
 			nmsp->circ_root = target;
-			free(q.ptr);  // Cleanup queue
+			queue_free(q);  // Cleanup queue
 			return true;  // Circular dependency found
 		}
 		
@@ -607,16 +522,18 @@ static bool find_circ(namespace_t nmsp, expr_t start, var_t target){
 		var_t *deps = vr->expr->vars.ptr;
 		size_t deplen = vr->expr->vars.len;
 		// Add all variables used by `vr` to the queue
-		queue_push(&q, deps, deplen);
+		queue_push(&q, (void**)deps, deplen);
 		// If `used_by` is not already set
 		// Set the `used_by` pointer to point to the parent node in the dependency tree
-		for(size_t i = 0; i < deplen; i++) if(!deps[i]->used_by) deps[i]->used_by = vr;
+		for(int i = 0; i < deplen; i++) if(!deps[i]->used_by) deps[i]->used_by = vr;
 	}
 	
-	free(q.ptr);  // Free queue
+	queue_free(q);  // Free queue
 	return false;  // No circular dependency
 }
 
+// Parse the name of the variable before an expression
+// If a function the argument list will also be found
 static size_t parse_label(const char *str, const char **endptr, arg_list_t *args){
 	if(endptr) *endptr = str;
 	
@@ -826,7 +743,7 @@ static nmsp_err_t expr_eval(expr_t exp, valstk_t *stack){
 			stack->len++;  // Move stack back up one to include result
 			
 		}else if(INSTR_IS_CALL(inst)){  // User-Defined Function call
-			var_t func = INSTR_CALL_VAR(inst);
+			var_t func = INSTR_CALL_VAR(exp, inst);
 			// Check that `func` is a function
 			if(func->arity == 0){ err = EVAL_ERR_VAR_NOT_FUNC;  break; }
 			// Check that there are enough arguments
@@ -935,7 +852,7 @@ static nmsp_err_t check_valid(expr_t exp){
 	for(size_t i = 0; i < exp->instrs.len; i++){
 		instr_t inst = exp->instrs.ptr[i];
 		if(INSTR_IS_APPLY(inst)){
-			size_t arity = INSTR_ARITY(inst);
+			size_t arity = INSTR_ARITY(exp, inst);
 			// Check that there are sufficient operators
 			if(height < arity) return PARSE_ERR_MISSING_VALUES;
 			
@@ -960,48 +877,18 @@ static nmsp_err_t check_valid(expr_t exp){
 // Identify operator matching `str`
 static bltn_t parse_oper(const char *str, const char **endptr, bool is_unary){
 	// Root of operator trees
-	static struct oper_tree_s *binary_tree = NULL, *unary_tree = NULL;
+	static ptree_t binary_tree = ptree_new(), unary_tree = ptree_new();
 	
 	// Select tree to use
-	struct oper_tree_s **root = is_unary ? &unary_tree : &binary_tree;
+	ptree_t *root = is_unary ? &unary_tree : &binary_tree;
 	size_t arity = 1 + !is_unary;
 	// Construct operator tree if it doesn't exist for given type
 	if(!*root){
 		// Add each operator to tree
 		struct bltn_info_s info;
-		for(bltn_t opid = 0; (info = nmsp_bltns[opid]).name; opid++){
-			// Only add operators (not builtin functions) of the specified type
-			if(info.is_word || info.arity != arity) continue;
-			
-			// Iterate through name adding nodes into tree
-			const char *name = info.name;
-			const char *end = name + info.namelen;
-			
-			struct oper_tree_s **node = root;  // Pointer to next node location
-			for(; name < end; name++){
-				// Iterate through sibling list to find node matching current character
-				for(; *node; node = &((*node)->next)){
-					// When character matches leave
-					if(*name == (*node)->value) break;
-				}
-				
-				// If no node matches create a new one
-				if(!*node){
-					*node = malloc(sizeof(struct oper_tree_s));
-					(*node)->value = *name;
-					(*node)->operid = OPER_NULL;
-					(*node)->next = NULL;
-					(*node)->child = NULL;
-					
-					// If this is the last character
-					// identify the node with this operator
-					if(name == end - 1) (*node)->operid = opid;
-				}
-				
-				// After each loop iteration `node` will point to the child pointer of
-				// the node corresponding to the character `*name`
-				node = &((*node)->child);
-			}
+		for(bltn_t id = 0; (info = nmsp_bltns[id]).name; id++){
+			if(!info.is_word && info.arity == arity)
+				ptree_putn(root, info.name, info.namelen, id);
 		}
 	}
 	
@@ -1009,28 +896,7 @@ static bltn_t parse_oper(const char *str, const char **endptr, bool is_unary){
 	if(endptr) *endptr = str;
 	
 	// Use operator tree to identify string
-	struct oper_tree_s *node = *root;
-	bltn_t opid = OPER_NULL;
-	for(; isoper(*str); str++){
-		// Iterate through linked list of siblings to find match
-		for(; node; node = node->next){
-			if(node->value == *str){
-				// `node` represents an operator record it
-				if(node->operid != OPER_NULL){
-					opid = node->operid;
-					// If operator found set endptr
-					if(endptr) *endptr = str + 1;
-				}
-				// If character matches descend to children of `node`
-				node = node->child;
-				break;
-			}
-		}
-		
-		// If no match found or child list is empty then leave
-		if(!node) break;
-	}
-	return opid;
+	return (bltn_t)ptree_get(*root, str, endptr);
 }
 
 // Apply single operator to value stack by appending
