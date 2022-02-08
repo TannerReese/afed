@@ -24,6 +24,13 @@ do
 		echo Errors:
 		cat $cases/tmp$i.err
 		
+	# If no error file make sure no errors occur
+	elif [ ! -f "$cases/c$i.err" ] && [ -n "$(cat $cases/tmp$i.err)" ]; then
+		((fails++))
+		echo Case $i Failed due to Errors
+		echo Errors:
+		cat $cases/tmp$i.err
+		
 	# Check that error file matches if present
 	elif [ -f "$cases/c$i.err" ] && ! diff -s $cases/c$i.err $cases/tmp$i.err ; then
 		((fails++))
