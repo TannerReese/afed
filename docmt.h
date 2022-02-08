@@ -20,9 +20,11 @@ namespace_t docmt_get_nmsp(docmt_t doc);
 void docmt_free(docmt_t doc);
 
 // Parse statements in string producing pieces
-void docmt_parse(docmt_t doc, FILE *errout);
+// Return number of parse errors that occur
+int docmt_parse(docmt_t doc, FILE *errout);
 // Print pieces to `stream`
-int docmt_fprint(docmt_t doc, FILE *stream);
+// Return number of evaluation errors
+int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout);
 
 #endif
 

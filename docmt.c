@@ -182,42 +182,51 @@ static int print_error(docmt_t doc, FILE *stream, nmsp_err_t err){
 	return count;
 }
 
-void docmt_parse(docmt_t doc, FILE *errout){
+int docmt_parse(docmt_t doc, FILE *errout){
+	int err_count = 0;
 	while(*(doc->str)){
 		// Try to parse line as expression
 		nmsp_err_t err = parse_line(doc);
 		if(err){  // On Error
 			print_error(doc, errout, err);  // Print error
 			skip_line(doc);  // Move to next line
+			err_count++;
 		}
 	}
+	return err_count;
 }
 
 
-int docmt_fprint(docmt_t doc, FILE *stream){
-	int printed = 0;  // Keep track of how many character are printed
+int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout){
+	int errcnt = 0;  // Keep track of how many errors occur
 	for(size_t i = 0; i < doc->pclen; i++){
 		struct piece_s pc = doc->pieces[i];
 		if(pc.is_slice){  // Print slice
-			printed += fprintf(stream, "%.*s", pc.source.slice.length, pc.source.slice.start);
+			if(stream) fprintf(stream, "%.*s",
+				pc.source.slice.length,
+				pc.source.slice.start
+			);
 		}else{
-			// Buffer result with space
-			fputc(' ', stream);
-			printed++;
+			// Evaluate variable
+			nmsp_err_t err = nmsp_var_value(NULL, pc.source.var);
+			errcnt += !!err;
 			
 			// Print value or error
-			printed += nmsp_var_fprint(stream, pc.source.var);
+			if(stream){
+				fputc(' ', stream);  // Buffer result with space
+				nmsp_var_fprint(stream, pc.source.var);
+				fputc(' ', stream);
+			}
 			
-			// Buffer result with space
-			fputc(' ', stream);
-			printed++;
+			// Print any errors
+			if(err && errout) print_error(doc, errout, err);
 		}	
 	}
 	
 	// Print remaining portion of string
-	printed += fprintf(stream, "%s", doc->remd);
+	if(stream) fprintf(stream, "%s", doc->remd);
 	
-	return printed;
+	return errcnt;
 }
 
 

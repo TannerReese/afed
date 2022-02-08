@@ -7,7 +7,7 @@ test/nmsp_test
 *.sw*
 
 # Vim Session files
-*.vim
+Session.vim
 
 # Object files
 *.o

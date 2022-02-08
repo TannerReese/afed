@@ -14,6 +14,7 @@ FILE *infile = NULL;
 FILE *outfile = NULL;
 FILE *errfile = NULL;
 
+bool only_check = 0;
 bool allow_overwrite = 1;
 bool show_errors = 1;
 
@@ -23,7 +24,8 @@ const char help_msg[] =
 	"Evaluate expressions in place\n"
 	"\n"
 	"  -i, --input INFILES...  List of files to evaluate\n"
-	"  -o, --output OUTFILE    Output file to store result to (only allowed if one INFILE is given)\n"
+	"  -o, --output OUTFILE    Output file to store result to\n"
+	"  -C, --check             Don't output file only check for errors\n"
 	"  -n, --no-clobber        Make sure none of the INFILES are used as outputs\n"
 	"  -e, --errors ERRFILE    File to send errors to. Sent to stderr if not specified\n"
 	"  -E, --no-errors         Don't print any error messages\n"
@@ -37,9 +39,10 @@ const char usage_msg[] = "Usage: " PROG_NAME " [OPTION]... [-i] INFILE [-o OUTFI
 struct option longopts[] = {
 	{"input", required_argument, NULL, 'i'},
 	{"output", required_argument, NULL, 'o'},
+	{"check", no_argument, NULL, 'C'},
+	{"no-clobber", no_argument, NULL, 'n'},
 	{"errors", required_argument, NULL, 'e'},
 	{"no-errors", required_argument, NULL, 'E'},
-	{"no-clobber", no_argument, NULL, 'n'},
 	{"help", no_argument, NULL, 'h'},
 	{0}
 };
@@ -77,6 +80,10 @@ void parse_opt(int key){
 			}
 		break;
 		
+		// Only check for errors
+		case 'C': only_check = 1;
+		break;
+		
 		// Don't allow overwriting of input files
 		case 'n': allow_overwrite = 0;
 		break;
@@ -111,7 +118,7 @@ int main(int argc, char *argv[]){
 	// Parse Command Line Arguments
 	// -----------------------------
 	int c;
-	while((c = getopt_long(argc, argv, "i:o:e:nE", longopts, NULL)) != -1) parse_opt(c);
+	while((c = getopt_long(argc, argv, "i:o:e:nEC", longopts, NULL)) != -1) parse_opt(c);
 	for(int i = optind; i < argc; i++){
 		optarg = argv[i];
 		parse_opt(-1);
@@ -121,7 +128,7 @@ int main(int argc, char *argv[]){
 	if(!infile) usage(4, "No Input file given\n");
 	
 	// Set default outfile as infile unless --no-clobber present
-	if(!outfile){
+	if(!outfile && !only_check){
 		if(allow_overwrite) outfile = infile == stdin ? stdout : infile;
 		else usage(3, "No Output file given and --no-clobber present\n");
 	}
@@ -135,9 +142,20 @@ int main(int argc, char *argv[]){
 	// Parse and evaluate
 	namespace_t nmsp = nmsp_new();
 	docmt_t doc = docmt_new(prog, nmsp);
-	docmt_parse(doc, show_errors ? errfile : NULL);  // Parse file
+	int errcnt = docmt_parse(doc, show_errors ? errfile : NULL);  // Parse file
 	fseek(infile, 0, SEEK_SET);  // Move `infile` back to beginning
-	docmt_fprint(doc, outfile);  // Print new file
+	
+	// Print out to new file
+	errcnt += docmt_fprint(doc,
+		only_check ? NULL : outfile,
+		show_errors ? errfile : NULL
+	);
+	
+	if(only_check){
+		// Print out number of errors
+		if(errcnt > 0) fprintf(errfile, "%i Parse Error%c\n", errcnt, errcnt > 1 ? 's' : ' ');
+		else fprintf(errfile, "No Parse Errors\n");
+	}
 	
 	// Cleanup heap allocations
 	free(prog);
