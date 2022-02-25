@@ -109,22 +109,22 @@ int check_parse_errs(){
 	printf("Checking Parsing Errors\n");
 	if(eval(nmsp,
 		"x + y - + * z\t",
-		0.0, PARSE_ERR_MISSING_VALUES, NMSP_ERR_OK
+		0.0, NMSP_ERR_MISSING_VALUES, NMSP_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"x * y - (x y)",
-		0.0, PARSE_ERR_MISSING_OPERS, NMSP_ERR_OK
+		0.0, NMSP_ERR_MISSING_OPERS, NMSP_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"((x * y - z) + x * z",
-		0.0, PARSE_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
+		0.0, NMSP_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"(x * y - z % 6)) / 7.0 ",
-		0.0, PARSE_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
+		0.0, NMSP_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
 	)) fails++;
 	
 	nmsp_free(nmsp);
@@ -211,7 +211,7 @@ namespace_t safe_decl(const char *decls[]){
 		var_t vr = nmsp_define(nmsp, *dcl, &endptr, &err);
 		printf("Consumed %u character(s) ; End-Pointer: \"%s\"\n", (size_t)(endptr - *dcl), endptr);
 		printf("Parsing Errno: %i\n", err);
-		printf("Expression Pointer: %p\n", exp);
+		printf("Variable Pointer: %p\n", vr);
 		
 		if(err || !vr){
 			puts(err ? "**** Failed to Parse Expression" : "**** Failed to Define Variable");
@@ -253,15 +253,16 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, nmsp_err_t perr, nms
 	// Evaluate expression
 	if(!err && vr){
 		printf("\nEvaluating Expression\n");
-		double res;
-		err = nmsp_var_value(&res, vr);
+		
+		arith_err_t err;
+		arith_t res = nmsp_var_value(vr, &err);
 		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
 		printf("Result Pointer: %p\n", res);
-		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, res);
+		if(res) printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, arith_todbl(res));
 		if(everr != err){
 			puts("**** Failed to Evaluate Expression");
 			return 1;
-		}else if(fabs(tgt - res) > 0.00001){
+		}else if(!res || fabs(tgt - arith_todbl(res)) > 0.00001){
 			puts("**** Failed to Evaluate Expression Correctly");
 			return 1;
 		}

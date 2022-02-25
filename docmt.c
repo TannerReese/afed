@@ -5,6 +5,8 @@
 #include <ctype.h>
 #include <stdio.h>
 
+#include "mcode.h"
+
 // A piece that will be printed to the output file
 struct piece_s {
 	// Indicate if the piece is a slice or an named / unnamed value
@@ -155,7 +157,7 @@ static nmsp_err_t parse_line(docmt_t doc){
 		
 	// Check that there is no extra content
 	}else if(*(doc->str) != '\n' && *(doc->str) != '#'){
-		return PARSE_ERR_EXTRA_CONT;
+		return NMSP_ERR_EXTRA_CONT;
 	}
 	
 	// Skip Comment
@@ -208,7 +210,8 @@ int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout){
 			);
 		}else{
 			// Evaluate variable
-			nmsp_err_t err = nmsp_var_value(NULL, pc.source.var);
+			nmsp_err_t err;
+			nmsp_var_value(pc.source.var, &err);
 			errcnt += !!err;
 			
 			// Print value or error
@@ -219,7 +222,9 @@ int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout){
 			}
 			
 			// Print any errors
-			if(err && errout) print_error(doc, errout, err);
+			if(err && errout){
+				fprintf(errout, "(Line %i) %s\n", doc->line_no, mcode_strerror(err));
+			}
 		}	
 	}
 	

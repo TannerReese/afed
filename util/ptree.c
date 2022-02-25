@@ -4,14 +4,14 @@
 
 // Store set of words and find longest prefix match
 struct ptree_s {
-	// Last few characters of word
-	char value;
+	// Last character of word
+	char c;
 	
-	/* If positive (or 0) then `id` is the ID
+	/* If non-NULL then `target` is the target
 	 * of the word associated with this node
-	 * If negative then this node has no word
+	 * If NULL then this node has no word
 	 */
-	int id;
+	void *target;
 	
 	struct ptree_s *next;  // Pointer to next sibling node
 	struct ptree_s *child;  // Pointer to first child node
@@ -28,7 +28,7 @@ void ptree_free(ptree_t pt){
 	}
 }
 
-bool ptree_putn(ptree_t *pt, const char *word, int n, int id){
+bool ptree_putn(ptree_t *pt, const char *word, int n, void *tgt){
 	if(!*word) return false;
 	
 	ptree_t *loc = pt;
@@ -41,40 +41,40 @@ bool ptree_putn(ptree_t *pt, const char *word, int n, int id){
 		
 		// Check if current letter exists in tree
 		for(; *loc; loc = &((*loc)->next)){
-			if((*loc)->value == *word) break;
+			if((*loc)->c == *word) break;
 		}
 		
 		if(!*loc){  // If no node found, make new node for character
 			ptree_t nd = malloc(sizeof(struct ptree_s));
-			nd->value = *word;
-			nd->id = -1;
+			nd->c = *word;
+			nd->target = NULL;
 			nd->next = NULL;  nd->child = NULL;
 			*loc = nd;
 		}
 	}
 	
-	// Set ID of node equal to `id`
-	(*loc)->id = id;
+	// Set target of node equal to `tgt`
+	(*loc)->target = tgt;
 	return true;
 }
 
 
-int ptree_getn(ptree_t pt, const char *str, int n, const char **endptr){
+void *ptree_getn(ptree_t pt, const char *str, int n, const char **endptr){
 	const char *end = str + n;
-	int id = -1;  // Track current longest prefix
+	void *tgt = NULL;  // Track target of current longest prefix
 	for(; *str && (n < 0 || str < end); str++){
 		// Find character
-		for(; pt; pt = pt->next) if(pt->value == *str) break;
+		for(; pt; pt = pt->next) if(pt->c == *str) break;
 		if(!pt) break;  // If no node found then leave
 		
-		if(pt->id >= 0){  // If node has ID set `id` to it
-			id = pt->id;
+		if(pt->target){  // If node has ID set `id` to it
+			tgt = pt->target;
 			if(endptr) *endptr = str + 1;
 		}
 		pt = pt->child;  // Descend to child and continue
 	}
 	
-	return id;
+	return tgt;
 }
 
 
