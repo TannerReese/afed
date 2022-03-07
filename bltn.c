@@ -17,11 +17,14 @@ struct bltn_oper_s builtin_opers[] = {
 
 struct bltn_s builtins[] = {
 	{"abs", 1, arith_abs},
+	{"floor", 1, arith_floor},
+	{"ceil", 1, arith_ceil},
 	{"sqrt", 1, arith_sqrt},
 	{"log", 2, arith_log},
 	{"ln", 1, arith_ln},
 	{"sin", 1, arith_sin},
 	{"cos", 1, arith_cos},
+	{"tan", 1, arith_tan},
 	{"pi", 0, arith_PI},
 	{"e", 0, arith_E},
 	{0}

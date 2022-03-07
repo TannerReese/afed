@@ -11,6 +11,7 @@
 struct piece_s {
 	// Indicate if the piece is a slice or an named / unnamed value
 	bool is_slice : 1;
+	int line_no;  // Line number of beginning of slice
 	
 	// Reference to value to be printed
 	union {
@@ -46,6 +47,7 @@ struct docmt_s {
 static void add_slice(docmt_t doc){
 	struct piece_s pc;
 	pc.is_slice = true;
+	pc.line_no = doc->line_no;
 	
 	// Set content of slice
 	pc.source.slice.start = doc->remd;
@@ -67,6 +69,7 @@ static void add_slice(docmt_t doc){
 static void add_expr(docmt_t doc, var_t vr){
 	struct piece_s pc;
 	pc.is_slice = false;
+	pc.line_no = doc->line_no;
 	// Set pointer to variable
 	pc.source.var = vr;
 	// Move the remaining pointer forward
@@ -223,7 +226,7 @@ int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout){
 			
 			// Print any errors
 			if(err && errout){
-				fprintf(errout, "(Line %i) %s\n", doc->line_no, mcode_strerror(err));
+				fprintf(errout, "(Line %i) %s\n", pc.line_no, mcode_strerror(err));
 			}
 		}	
 	}

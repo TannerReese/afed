@@ -70,11 +70,14 @@ ARITH_FUNC(arith_pow){ args[0]->num = pow(args[0]->num, args[1]->num);  return a
 
 // Builtin Functions Implementation
 ARITH_FUNC(arith_abs){ args[0]->num = fabs(args[0]->num); return args[0]; }
+ARITH_FUNC(arith_floor){ args[0]->num = floor(args[0]->num); return args[0]; }
+ARITH_FUNC(arith_ceil){ args[0]->num = ceil(args[0]->num); return args[0]; }
 ARITH_FUNC(arith_sqrt){ args[0]->num = sqrt(args[0]->num); return args[0]; }
 ARITH_FUNC(arith_log){ args[0]->num = log(args[0]->num) / log(args[1]->num); return args[0]; }
 ARITH_FUNC(arith_ln){ args[0]->num = log(args[0]->num); return args[0]; }
 ARITH_FUNC(arith_sin){ args[0]->num = sin(args[0]->num); return args[0]; }
 ARITH_FUNC(arith_cos){ args[0]->num = cos(args[0]->num); return args[0]; }
+ARITH_FUNC(arith_tan){ args[0]->num = tan(args[0]->num); return args[0]; }
 
 // Constants
 static arith_t arith_from(double val){

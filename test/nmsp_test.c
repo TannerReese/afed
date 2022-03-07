@@ -9,18 +9,16 @@
 namespace_t safe_decl(const char *decls[]);
 // Parse and Evaluate the given definition
 // Returns 1 if there is an unexpected parse or eval error
-bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, parse_err_t everr);
+bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, arith_err_t everr);
 // Check that the stored dependency chain matches the given `names`
 bool circ_loop(namespace_t nmsp, const char *chain);
 
 #define sep()     puts("\n+-----------------+\n")
 #define big_sep() puts("\n#=================#\n")
 
-// Check valid parsing
 int check_parsing();
-// Check errneous parsing
+int check_func_parsing();
 int check_parse_errs();
-// Check insertion errors
 int check_insert_errs();
 
 int main(int argc, char *argv[]){
@@ -28,6 +26,8 @@ int main(int argc, char *argv[]){
 	int fails = 0;
 	
 	fails += check_parsing();
+	big_sep();
+	fails += check_func_parsing();
 	big_sep();
 	fails += check_parse_errs();
 	big_sep();
@@ -37,6 +37,7 @@ int main(int argc, char *argv[]){
 	printf("\nFailures: %i\n", fails);
 	return 0;
 }
+
 
 
 int check_parsing(){
@@ -100,6 +101,40 @@ int check_parsing(){
 	return fails;
 }
 
+int check_func_parsing(){
+	namespace_t nmsp;
+	int fails = 0;
+	puts("\n### Checking Function Parsing");
+	
+	const char *decls1[] = {
+		"_ \t(\n\t__cfs\n,nj4X\n)\t :  (__cfs \n- nj4X/(__cfs ^-a__56JJ\n))",
+		"__3NJr22(_,__,a__56JJ):_*__^(a__56JJ+_)-cos(__)",
+		"  a__56JJ    :  -2.3\t* 7.8",
+		NULL
+	};
+	if(!(nmsp = safe_decl(decls1))
+	|| eval(nmsp,
+		"_(abs(__3NJr22(a__56JJ,a__56JJ * _ \n( 1, 2), log(3,4))), sin(ln(abs(floor(a__56JJ^2*10)))))",
+		-6139.752640153787, PARSE_ERR_OK, EVAL_ERR_OK
+	)) fails++;
+	
+	const char *decls2[] = {
+		"    my_Func(t):t - x  * 5*x",
+		"\ttwoArg(x ,\n y) :x - y *y^ceil(x)",
+		"x   : 4.5 - 3.2+31^2",
+		NULL
+	};
+	if(!(nmsp = safe_decl(decls2))
+	|| eval(nmsp,
+		"   my_Func(twoArg(1.23, ln(\v5.12)))/cos(x) - tan(x * 5.6)",
+		-8222343.424436592, PARSE_ERR_OK, EVAL_ERR_OK
+	)) fails++;
+	
+	return fails;
+}
+
+
+
 int check_parse_errs(){	
 	int fails = 0;
 	puts("\n### Checking Parse Errors");
@@ -154,17 +189,17 @@ int check_insert_errs(){
 	// Check redefinition errors
 	if(eval(nmsp,
 		"__23 : \t(1 + xruje * 8) / 9",
-		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
+		0.0, INSERT_ERR_REDEF, EVAL_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"gt56y : yjug //2\t^2",
-		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
+		0.0, INSERT_ERR_REDEF, EVAL_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"HEllo : xruje * yjug ^ 3",
-		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
+		0.0, INSERT_ERR_REDEF, EVAL_ERR_OK
 	)) fails++;
 	sep();
 	
@@ -173,21 +208,21 @@ int check_insert_errs(){
 	const char chn1[] = "_5_ <- xruje <- __er34 <- HEllo <- __23 <- _5_";
 	if(eval(nmsp,
 		"_5_:23//__23",
-		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
+		0.0, INSERT_ERR_CIRC, EVAL_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn1)) fails++;
 	
 	const char chn2[] = "ler <- __er34 <- ler";
 	if(eval(nmsp,
 		"ler:__er34-73",
-		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
+		0.0, INSERT_ERR_CIRC, EVAL_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn2)) fails++;
 	
 	const char chn3[] = "two <- yjug <- gt56y <- HEllo <- two";
 	if(eval(nmsp,
 		"two:(1+(2*(HEllo%4)+3)/4)//5",
-		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
+		0.0, INSERT_ERR_CIRC, EVAL_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn3)) fails++;
 	
@@ -236,7 +271,7 @@ bool circ_loop(namespace_t nmsp, const char *chain){
 	return 0;
 }
 
-bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, parse_err_t everr){
+bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, arith_err_t everr){
 	// Parse expression
 	const char *endptr;
 	parse_err_t err;

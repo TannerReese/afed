@@ -14,5 +14,7 @@ word
 
 word : ln(e + pi)
 
-notdefined = # Should produce no expr error
+# Should produce no expr errors
+notdefined =
+mything: undef_func(word, 67) =
 

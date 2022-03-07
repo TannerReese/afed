@@ -48,11 +48,14 @@ ARITH_FUNC(arith_pow);
 
 // Builtin Functions
 ARITH_FUNC(arith_abs);
+ARITH_FUNC(arith_floor);
+ARITH_FUNC(arith_ceil);
 ARITH_FUNC(arith_sqrt);
 ARITH_FUNC(arith_log);
 ARITH_FUNC(arith_ln);
 ARITH_FUNC(arith_sin);
 ARITH_FUNC(arith_cos);
+ARITH_FUNC(arith_tan);
 
 // Constants
 ARITH_FUNC(arith_PI);

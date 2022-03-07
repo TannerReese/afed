@@ -332,6 +332,11 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 			
 			case INSTR_CODE_CALL:  // Call another code section
 			case INSTR_FUNC_CALL:  // Call a function
+				if(instr.arity < 0){  // Check that arity is defined
+					err = EVAL_ERR_INCOMPLETE_CODE;
+					break;
+				}
+				
 				argidx = (int)stk->top - instr.arity;
 				if(argidx < 0){  // Check for sufficient arguments
 					err = EVAL_ERR_MISSING_ARGS;
