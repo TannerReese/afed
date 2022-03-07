@@ -53,11 +53,11 @@ struct mcode_s {
 // Print out error or refer to arith_strerror
 const char *mcode_strerror(arith_err_t err){
 	switch(err){
-		case MCODE_ERR_MISSING_ARGS: return "MCODE_ERR_MISSING_ARGS: Not enough arguments for function call";
-		case MCODE_ERR_UNKNOWN_INSTR: return "MCODE_ERR_UNKNOWN_INSTR: Instruction type not recognized";
-		case MCODE_ERR_STACK_SURPLUS: return "MCODE_ERR_STACK_SURPLUS: Values on Stack after Execution complete";
-		case MCODE_ERR_UNDERFLOW: return "MCODE_ERR_UNDERFLOW: Too few values on stack";
-		case MCODE_ERR_INCOMPLETE_CODE: return "MCODE_INCOMPLETE_CODE: Code Block doesn't have enough instructions";
+		case EVAL_ERR_MISSING_ARGS: return "EVAL_ERR_MISSING_ARGS: Not enough arguments for function call";
+		case EVAL_ERR_UNKNOWN_INSTR: return "EVAL_ERR_UNKNOWN_INSTR: Instruction type not recognized";
+		case EVAL_ERR_STACK_SURPLUS: return "EVAL_ERR_STACK_SURPLUS: Values on Stack after Execution complete";
+		case EVAL_ERR_UNDERFLOW: return "EVAL_ERR_UNDERFLOW: Too few values on stack";
+		case EVAL_ERR_INCOMPLETE_CODE: return "EVAL_ERR_INCOMPLETE_CODE: Code Block doesn't have enough instructions";
 	}
 	
 	return arith_strerror(err);
@@ -78,7 +78,7 @@ mcode_t mcode_new(int arity, size_t cap){
 	
 	// Cache is initially empty
 	code->is_cached = false;
-	code->err = MCODE_ERR_OK;
+	code->err = EVAL_ERR_OK;
 	code->value = NULL;
 	return code;
 }
@@ -158,7 +158,7 @@ bool mcode_clear(mcode_t code){
 	if(!code->is_cached) return false;
 	
 	code->is_cached = false;
-	code->err = MCODE_ERR_OK;
+	code->err = EVAL_ERR_OK;
 	if(code->value) arith_free(code->value);
 	code->value = NULL;
 	return true;
@@ -180,6 +180,7 @@ arith_err_t mcode_error(mcode_t code){
 
 static inline struct instr_s *instrs_inc(mcode_t code){
 	if(code->len >= code->cap){  // Resize if necessary
+		code->cap += code->cap == 0;  // Make sure capacity is at least one
 		code->cap <<= 1;
 		code->instrs = realloc(code->instrs, code->cap * sizeof(struct instr_s));
 	}
@@ -310,13 +311,13 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 	}
 	
 	if(code->stk_ht != 1){  // Check that code block is valid
-		return MCODE_ERR_INCOMPLETE_CODE;
+		return EVAL_ERR_INCOMPLETE_CODE;
 	}
 	
 	size_t start = stk->top;  // Save starting position of top
 	
 	// Execute instructions
-	arith_err_t err = MCODE_ERR_OK;
+	arith_err_t err = EVAL_ERR_OK;
 	for(size_t i = 0; i < code->len && !err; i++){
 		struct instr_s instr = code->instrs[i];
 		int argidx;  // Stack index of first call argument
@@ -333,7 +334,7 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 			case INSTR_FUNC_CALL:  // Call a function
 				argidx = (int)stk->top - instr.arity;
 				if(argidx < 0){  // Check for sufficient arguments
-					err = MCODE_ERR_MISSING_ARGS;
+					err = EVAL_ERR_MISSING_ARGS;
 					break;
 				}
 				
@@ -359,14 +360,14 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 				stk->top = argidx + 1;  // Move stack top to just above argidx
 			break;
 			
-			default: err = MCODE_ERR_UNKNOWN_INSTR;
+			default: err = EVAL_ERR_UNKNOWN_INSTR;
 		}
 	}
 	
 	// Check for incorrect number of arguments after execution
 	if(!err){
-		if(stk->top > start + 1) err = MCODE_ERR_STACK_SURPLUS;
-		else if(stk->top <= start) err = MCODE_ERR_UNDERFLOW;
+		if(stk->top > start + 1) err = EVAL_ERR_STACK_SURPLUS;
+		else if(stk->top <= start) err = EVAL_ERR_UNDERFLOW;
 	}
 	
 	// If code takes no arguments

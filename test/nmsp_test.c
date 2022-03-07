@@ -9,7 +9,7 @@
 namespace_t safe_decl(const char *decls[]);
 // Parse and Evaluate the given definition
 // Returns 1 if there is an unexpected parse or eval error
-bool eval(namespace_t nmsp, const char *expstr, double tgt, nmsp_err_t perr, nmsp_err_t everr);
+bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, parse_err_t everr);
 // Check that the stored dependency chain matches the given `names`
 bool circ_loop(namespace_t nmsp, const char *chain);
 
@@ -53,7 +53,7 @@ int check_parsing(){
 	if(!(nmsp = safe_decl(decls1))
 	|| eval(nmsp,
 		"(- \n x) ^-(y\n+z)*   x %\ty \t/ (z// 0.03)",
-		0.0069547480181, NMSP_ERR_OK, NMSP_ERR_OK
+		0.0069547480181, PARSE_ERR_OK, PARSE_ERR_OK
 	)) fails++;
 	sep();
 	
@@ -67,7 +67,7 @@ int check_parsing(){
 	if(!(nmsp = safe_decl(decls2))
 	|| eval(nmsp,
 		"x *(foo_bar*x//y\v)//  -0.654=&*",
-		-303764747679.0, NMSP_ERR_OK, NMSP_ERR_OK
+		-303764747679.0, PARSE_ERR_OK, PARSE_ERR_OK
 	)) fails++;
 	sep();
 	
@@ -80,7 +80,7 @@ int check_parsing(){
 	if(!(nmsp = safe_decl(decls3))
 	|| eval(nmsp,
 		"___*__-__OP/__^__",
-		204.122506542, NMSP_ERR_OK, NMSP_ERR_OK
+		204.122506542, PARSE_ERR_OK, PARSE_ERR_OK
 	)) fails++;
 	sep();
 	
@@ -94,7 +94,7 @@ int check_parsing(){
 	if(!(nmsp = safe_decl(decls4))
 	|| eval(nmsp,
 		"xray*beta + beta*stuff -stuff*xray",
-		-61.39002848156, NMSP_ERR_OK, NMSP_ERR_OK
+		-61.39002848156, PARSE_ERR_OK, PARSE_ERR_OK
 	)) fails++;
 	
 	return fails;
@@ -103,28 +103,28 @@ int check_parsing(){
 int check_parse_errs(){	
 	int fails = 0;
 	puts("\n### Checking Parse Errors");
-	namespace_t nmsp = nmsp_new();
+	namespace_t nmsp = nmsp_new(true);
 	
 	// Check for correct parsing errors
 	printf("Checking Parsing Errors\n");
 	if(eval(nmsp,
 		"x + y - + * z\t",
-		0.0, NMSP_ERR_MISSING_VALUES, NMSP_ERR_OK
+		0.0, PARSE_ERR_MISSING_VALUES, PARSE_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"x * y - (x y)",
-		0.0, NMSP_ERR_MISSING_OPERS, NMSP_ERR_OK
+		0.0, PARSE_ERR_MISSING_OPERS, PARSE_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"((x * y - z) + x * z",
-		0.0, NMSP_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
+		0.0, PARSE_ERR_PARENTH_MISMATCH, PARSE_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"(x * y - z % 6)) / 7.0 ",
-		0.0, NMSP_ERR_PARENTH_MISMATCH, NMSP_ERR_OK
+		0.0, PARSE_ERR_PARENTH_MISMATCH, PARSE_ERR_OK
 	)) fails++;
 	
 	nmsp_free(nmsp);
@@ -148,23 +148,23 @@ int check_insert_errs(){
 	if(!nmsp) return 6;
 	
 	int fails = 0;
-	nmsp_err_t err;
+	parse_err_t err;
 	const char *endptr;
 	
 	// Check redefinition errors
 	if(eval(nmsp,
 		"__23 : \t(1 + xruje * 8) / 9",
-		0.0, INSERT_ERR_REDEF, NMSP_ERR_OK
+		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"gt56y : yjug //2\t^2",
-		0.0, INSERT_ERR_REDEF, NMSP_ERR_OK
+		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
 	)) fails++;
 	
 	if(eval(nmsp,
 		"HEllo : xruje * yjug ^ 3",
-		0.0, INSERT_ERR_REDEF, NMSP_ERR_OK
+		0.0, INSERT_ERR_REDEF, PARSE_ERR_OK
 	)) fails++;
 	sep();
 	
@@ -173,21 +173,21 @@ int check_insert_errs(){
 	const char chn1[] = "_5_ <- xruje <- __er34 <- HEllo <- __23 <- _5_";
 	if(eval(nmsp,
 		"_5_:23//__23",
-		0.0, INSERT_ERR_CIRC, NMSP_ERR_OK
+		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn1)) fails++;
 	
 	const char chn2[] = "ler <- __er34 <- ler";
 	if(eval(nmsp,
 		"ler:__er34-73",
-		0.0, INSERT_ERR_CIRC, NMSP_ERR_OK
+		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn2)) fails++;
 	
 	const char chn3[] = "two <- yjug <- gt56y <- HEllo <- two";
 	if(eval(nmsp,
 		"two:(1+(2*(HEllo%4)+3)/4)//5",
-		0.0, INSERT_ERR_CIRC, NMSP_ERR_OK
+		0.0, INSERT_ERR_CIRC, PARSE_ERR_OK
 	)) fails++;
 	else if(circ_loop(nmsp, chn3)) fails++;
 	
@@ -199,15 +199,15 @@ int check_insert_errs(){
 
 namespace_t safe_decl(const char *decls[]){
 	// Create namespace
-	namespace_t nmsp = nmsp_new();
+	namespace_t nmsp = nmsp_new(true);
 	
 	// Declare all variables and parse their expressions
 	const char *endptr;
-	nmsp_err_t err;
+	parse_err_t err;
 	for(const char **dcl = decls; *dcl; dcl++){
 		printf("Defining \"%s\"\n", *dcl);
 		
-		err = NMSP_ERR_OK;
+		err = PARSE_ERR_OK;
 		var_t vr = nmsp_define(nmsp, *dcl, &endptr, &err);
 		printf("Consumed %u character(s) ; End-Pointer: \"%s\"\n", (size_t)(endptr - *dcl), endptr);
 		printf("Parsing Errno: %i\n", err);
@@ -236,10 +236,10 @@ bool circ_loop(namespace_t nmsp, const char *chain){
 	return 0;
 }
 
-bool eval(namespace_t nmsp, const char *expstr, double tgt, nmsp_err_t perr, nmsp_err_t everr){
+bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, parse_err_t everr){
 	// Parse expression
 	const char *endptr;
-	nmsp_err_t err;
+	parse_err_t err;
 	printf("Defining Expression \"%s\"\n", expstr);
 	var_t vr = nmsp_define(nmsp, expstr, &endptr, &err);
 	printf("Consumed %u character(s) ; End-Pointer: \"%s\"\n", (size_t)(endptr - expstr), endptr);

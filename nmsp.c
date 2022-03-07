@@ -4,12 +4,11 @@
 #include <ctype.h>
 
 // Utilities
-#include "util/vec.h"  // Vector operations
 #include "util/queue.h"  // Queue of variables
+#include "util/mcode.h"  // Executable code blocks
 
 #include "nmsp.h"
 #include "bltn.h"
-#include "mcode.h"
 
 
 
@@ -37,102 +36,46 @@ struct var_s {
 	struct var_s *used_by;
 };
 
+struct namespace_s {
+	// Head of Linked List of variables
+	struct var_s *head;
+	
+	/* On Insertion Error due to Redefinition
+	 *  Store the variable that was attempted to be redefined
+	 */
+	var_t redef;
+	
+	/* Used by dependency checker
+	 *  `circ_root` is a variable which depends
+	 *  on itself through a series of variables
+	 */
+	var_t circ_root;
+	
+	/* If this namespace should try
+	 * to simplify literals while parsing
+	 */
+	bool try_eval;
+};
+
+
 
 static hash_t hash(const char *str, size_t len);
+
 /* Put given `code` into namespace under name `key`
  * Without performing checks for redefinition or circular dependency
  */
 static var_t place_var_unsafe(namespace_t nmsp, const char *key, size_t keylen, mcode_t code, bool isimpl);
+
 /* Try to set `code` after variable has been already been added to namespace
  * Return true if unable to set `code`
  */
 static bool var_calc_deps(namespace_t nmsp, var_t vr);
 
-// Queue methods (used for dependency checking)
-// Return true if `start` depends on variable `target`
+/* Check for dependencies cycles starting from `start`
+ * Return true if a circular dependency is found
+ */
 static bool find_circ(namespace_t nmsp, var_t start);
 
-
-
-
-// Methods and Macros involved in expression parsing
-
-#define isoper(c) ( \
-		(c) == '!' || \
-		(c) == '$' || \
-		(c) == '%' || \
-		(c) == '&' || \
-		(c) == '*' || \
-		(c) == '+' || \
-		(c) == '-' || \
-		(c) == '/' || \
-		(c) == '<' || \
-		(c) == '=' || \
-		(c) == '>' || \
-		(c) == '?' || \
-		(c) == '@' || \
-		(c) == '^' || \
-		(c) == '~')
-
-// Element of operator stack
-struct stk_oper_s {
-	// If true then this operator stack element represents an open parenthesis or comma
-	// It cannot be displaced by normal operators
-	bool is_block : 1;
-	// If this element is a comma then it will be displaced only by close parenthesis
-	bool is_comma : 1;
-	// If this element is a user-defined function call defined by `code`
-	bool is_code : 1;
-	// If ths element is an alphanumeric 
-	bool is_oper : 1;
-	
-	// Stores Precedence in higher 7 bits and
-	// Associativity in the least significant bit
-	uint8_t prec_assoc;
-	
-	union {
-		bltn_t bltn;  // Alphanumerically Named Builtin Function
-		bltn_oper_t oper;  // Builtin Operator
-		mcode_t code; // User-defined function
-	};
-};
-
-typedef vec_t(struct stk_oper_s) oper_stack_t;  // Operator stack
-
-
-/* Take an operator and apply it to the values in `exp`
- * Usually, this means the operator instruction is added to `exp->instrs`
- * 
- * If evaluation-on-parsing is turned on and the loaded values are constants
- * Then the operator will be immediately evaluated
- * And the result loaded onto `exp->instrs` as a constant
- */
-bool nmsp_eval_on_parse = true;  // Whether to evaluate constants while parsing
-
-// Place builtin operator onto stack
-static void push_oper(oper_stack_t *opstk, bltn_oper_t oper);
-
-/* Place user-defined function call defined
- * by code block `code` onto the operator stack
- */
-static void push_call(oper_stack_t *opstk, mcode_t code);
-
-// Apply given stk_oper_s onto the code
-static nmsp_err_t apply_oper(mcode_t code, struct stk_oper_s elem);
-
-/* Pops operators from the operator stack (i.e. `opstk`)
- * while they have lower precedence than `prec`
- * Each popped operator is applied to the value stack
- * (i.e. `exp->instrs`) using `apply_oper`
- * Search "Shunting Yard Algorithm" for explanation
- */
-static nmsp_err_t displace_opers(mcode_t code, oper_stack_t *opstk, int8_t prec);
-
-/* Called when a ')' is encountered
- * Removes any remaining operators
- * And checks for function calls
- */
-static nmsp_err_t close_parenth(mcode_t code, oper_stack_t *opstk);
 
 /* Read sequence of alphanumerics and '_' as a name
  * Return index of matching argument from `args` or -1 if none found
@@ -148,28 +91,29 @@ static var_t parse_var(const char *name, size_t namelen, namespace_t nmsp);
  * Parses as much as possuble of the string
  * If `err` is not NULL then any errors are stored in it
  */
-static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr, const char *args, namespace_t nmsp);
+static parse_err_t mcode_parse(mcode_t code, const char *str, const char **endptr, const char *args, namespace_t nmsp);
 
 
 
 
 
 // Returns a string containing a description of errors
-const char *nmsp_strerror(nmsp_err_t err){
+const char *nmsp_strerror(parse_err_t err){
 	switch(err){
-		case NMSP_ERR_OK: return "NMSP_ERR_OK: Successful";
+		case PARSE_ERR_OK: return "PARSE_ERR_OK: Successful";
 		
 		// Parsing Errors
-		case NMSP_ERR_PARENTH_MISMATCH: return "NMSP_ERR_PARENTH_MISMATCH: Missing open or close parenthesis";
-		case NMSP_ERR_LOWPREC_UNARY: return "NMSP_ERR_LOWPREC_UNARY: Unary operator follows Binary of Higher Precedence";
-		case NMSP_ERR_ARITY_MISMATCH: return "NMSP_ERR_ARITY_MISMATCH: Wrong number of arguments given to function";
-		case NMSP_ERR_BAD_COMMA: return "NMSP_ERR_BAD_COMMA: Comma in wrong location";
-		case NMSP_ERR_FUNC_NOCALL: return "NMSP_ERR_FUNC_NOCALL: Function present but not called";
+		case PARSE_ERR_PARENTH_MISMATCH: return "PARSE_ERR_PARENTH_MISMATCH: Missing open or close parenthesis";
+		case PARSE_ERR_LOWPREC_UNARY: return "PARSE_ERR_LOWPREC_UNARY: Unary operator follows Binary of Higher Precedence";
+		case PARSE_ERR_ARITY_MISMATCH: return "PARSE_ERR_ARITY_MISMATCH: Wrong number of arguments given to function";
+		case PARSE_ERR_BAD_COMMA: return "PARSE_ERR_BAD_COMMA: Comma in wrong location";
+		case PARSE_ERR_VAR_CALL: return "PARSE_ERR_VAR_CALL: Variable cannot be called";
+		case PARSE_ERR_FUNC_NOCALL: return "PARSE_ERR_FUNC_NOCALL: Function present but not called";
 		
 		// Produce after parsing produces invalid expression
-		case NMSP_ERR_MISSING_VALUES: return "NMSP_ERR_MISSING_VALUES: Operator is missing argument";
-		case NMSP_ERR_MISSING_OPERS: return "NMSP_ERR_MISSING_OPERS: Multiple values without operator between";
-		case NMSP_ERR_EXTRA_CONT: return "NMSP_ERR_EXTRA_CONT: Values present after expression";
+		case PARSE_ERR_MISSING_VALUES: return "PARSE_ERR_MISSING_VALUES: Operator is missing argument";
+		case PARSE_ERR_MISSING_OPERS: return "PARSE_ERR_MISSING_OPERS: Multiple values without operator between";
+		case PARSE_ERR_EXTRA_CONT: return "PARSE_ERR_EXTRA_CONT: Values present after expression";
 		
 		// Insertion Errors
 		case INSERT_ERR_REDEF: return "INSERT_ERR_REDEF: Variable already exists";
@@ -178,7 +122,6 @@ const char *nmsp_strerror(nmsp_err_t err){
 	
 	return "NMSP_ERR: Unknown Error";
 }
-
 
 
 
@@ -197,14 +140,14 @@ const char *nmsp_var_name(var_t vr, size_t *len){
 // Get value of variable and place into `dest`
 arith_t nmsp_var_value(var_t vr, arith_err_t *errp){
 	if(vr->has_impl) return mcode_eval(vr->code, NULL, errp);
-	if(errp) *errp = MCODE_ERR_INCOMPLETE_CODE;
+	if(errp) *errp = EVAL_ERR_INCOMPLETE_CODE;
 	return NULL;
 }
 
 // Print variable value to a file
 int nmsp_var_fprint(FILE *stream, var_t vr){
 	// Calculate value
-	arith_err_t err = MCODE_ERR_OK;
+	arith_err_t err = EVAL_ERR_OK;
 	void *val = mcode_eval(vr->code, NULL, &err);
 	
 	// Print value
@@ -214,27 +157,16 @@ int nmsp_var_fprint(FILE *stream, var_t vr){
 
 
 
-struct namespace_s {
-	// Head of Linked List of variables
-	struct var_s *head;
-	
-	/* On Insertion Error due to Redefinition
-	 *  Store the variable that was attempted to be redefined
-	 */
-	var_t redef;
-	/* Used by dependency checker
-	 *  `circ_root` is a variable which depends
-	 *  on itself through a series of variables
-	 */
-	var_t circ_root;
-};
-
-// Create new empty namespace
-namespace_t nmsp_new(){
+/* Allocate namespace
+ *  If eval_on_parse then the namespace will
+ *  attempt to simplify literals while parsing.
+ */
+namespace_t nmsp_new(bool eval_on_parse){
 	namespace_t nmsp = malloc(sizeof(struct namespace_s));
 	nmsp->head = NULL;
 	nmsp->redef = NULL;
 	nmsp->circ_root = NULL;
+	nmsp->try_eval = eval_on_parse;
 	return nmsp;
 }
 
@@ -256,6 +188,8 @@ void nmsp_free(namespace_t nmsp){
 	// Deallocate namespace itself
 	free(nmsp);
 }
+
+
 
 // Get instance of variable using name
 var_t nmsp_get(namespace_t nmsp, const char *key, size_t keylen){
@@ -436,7 +370,7 @@ static size_t parse_label(const char *str, const char **endptr, const char **arg
 	return lbl_len;
 }
 
-var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_err_t *errp){
+var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, parse_err_t *errp){
 	// Parse Label
 	// ------------
 	// Collect label characters
@@ -456,9 +390,9 @@ var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_e
 	}
 	
 	// Make sure errp points to something
-	nmsp_err_t tmperr;
+	parse_err_t tmperr;
 	if(!errp) errp = &tmperr;
-	*errp = NMSP_ERR_OK;  // Set error to successful
+	*errp = PARSE_ERR_OK;  // Set error to successful
 	
 	// Check for Existing Variable
 	// ----------------------------
@@ -472,11 +406,12 @@ var_t nmsp_define(namespace_t nmsp, const char *str, const char **endptr, nmsp_e
 		}
 		
 		if(mcode_get_arity(oldvar->code) != arity){  // Check for matching arity
-			*errp = NMSP_ERR_ARITY_MISMATCH;
+			*errp = PARSE_ERR_ARITY_MISMATCH;
 			return NULL;
 		}
 		
 		code = oldvar->code;  // Use old code block
+		mcode_set_arity(code, arity);
 	}
 	// Create new code block if none present
 	if(!code) code = mcode_new(arity, 8);
@@ -547,149 +482,6 @@ int nmsp_strredef(namespace_t nmsp, char *buf, size_t sz){
 
 
 
-
-
-
-
-// Place builtin on stack from bltn
-static void push_bltn(oper_stack_t *opstk, bltn_t bltn){
-	struct stk_oper_s elem;
-	elem.is_code = false;
-	elem.is_block = false;
-	elem.is_oper = false;
-	elem.prec_assoc = 0;
-	elem.bltn = bltn;
-	vecpush(*opstk, elem);
-}
-
-static void push_oper(oper_stack_t *opstk, bltn_oper_t oper){
-	struct stk_oper_s elem;
-	elem.is_code = false;
-	elem.is_block = false;
-	elem.is_oper = true;
-	elem.prec_assoc = (oper->prec << 1) | oper->assoc | !!oper->is_unary;
-	elem.oper = oper;
-	vecpush(*opstk, elem);
-}
-
-// Place comma or open parenthesis on operator stack
-static void push_block(oper_stack_t *opstk, bool is_comma){
-	struct stk_oper_s elem;
-	elem.is_code = false;
-	elem.is_block = true;
-	elem.is_oper = false;
-	elem.is_comma = is_comma;
-	vecpush(*opstk, elem);
-}
-
-// Place a user-defined function call on the stack
-static void push_call(oper_stack_t *opstk, mcode_t code){
-	struct stk_oper_s elem;
-	elem.is_code = true;
-	elem.is_block = false;
-	elem.is_oper = false;
-	elem.prec_assoc = 0;
-	elem.code = code;
-	vecpush(*opstk, elem);
-}
-
-
-static nmsp_err_t apply_oper(mcode_t code, struct stk_oper_s elem){
-	bool is_err;
-	if(elem.is_code){
-		is_err = mcode_call_code(code, elem.code);
-	}else if(elem.is_oper){
-		is_err = mcode_call_func(code,
-			1 + !(elem.oper->is_unary),
-			elem.oper->func,
-			nmsp_eval_on_parse
-		);
-	}else{
-		is_err = mcode_call_func(code,
-			elem.bltn->arity,
-			elem.bltn->func,
-			nmsp_eval_on_parse
-		);
-	}
-	
-	if(is_err) return NMSP_ERR_MISSING_VALUES;
-	return NMSP_ERR_OK;
-}
-
-// Place `op` onto `opstk` displacing operators as necessary and applying them to `exp`
-static nmsp_err_t displace_opers(mcode_t code, oper_stack_t *opstk, int8_t prec){
-	// If prec is negative displace all
-	if(prec < 0) prec = 0;
-	/* The bitwise-or with OPER_LEFT_ASSOC pushes up the prec_assoc of new
-	 * For Left-Associative operators this doesn't do anything
-	 * so they remain equal and the bottom operator is displaced
-	 * For Right-Associative operators new will be greater
-	 * so the lower operator won't be displaced
-	 */
-	else prec = (prec << 1) | OPER_LEFT_ASSOC;
-	
-	// Iterate down through operators on the stack
-	struct stk_oper_s *elem;
-	for(;
-		(elem = veclast(*opstk)) && !elem->is_block && (uint8_t)prec <= elem->prec_assoc;
-		vecpop(*opstk)
-	){	
-		// Try to add operator onto code
-		nmsp_err_t err = apply_oper(code, *elem);
-		if(err) return err;
-	}
-	
-	return NMSP_ERR_OK;
-}
-
-// Clears out parenthetical block from operator stack
-// And calls function if necessary
-static nmsp_err_t close_parenth(mcode_t code, oper_stack_t *opstk){
-	// Remove all operators until close parenthesis
-	nmsp_err_t err;
-	if(err = displace_opers(code, opstk, -1)) return err;
-	
-	// Consume commas to find number of values in parenthetical block
-	size_t arity = 1;
-	struct stk_oper_s *elem;
-	while((elem = veclast(*opstk)) && elem->is_block && elem->is_comma){
-		vecpop(*opstk);  arity++;
-	}
-	
-	// Check for open parenthesis
-	if(!(elem = veclast(*opstk)) || !elem->is_block){
-		return NMSP_ERR_PARENTH_MISMATCH;  // No opening parenthesis so parenth mismatch
-	}
-	vecpop(*opstk);  // Remove open parenthesis
-	
-	// Check for function below open parenthesis
-	if((elem = veclast(*opstk))
-	&& !elem->is_block && !elem->is_oper
-	){  // Treat parenthetical block as arguments to function
-		vecpop(*opstk);  // Remove function from `opstk`
-		if(elem->is_code){
-			mcode_t callee = elem->code;
-			// If variable hasn't been initialized set arity
-			mcode_set_arity(callee, arity);
-			// Check that arity matches
-			if(arity != mcode_get_arity(callee)) return NMSP_ERR_ARITY_MISMATCH;
-			
-			mcode_call_code(code, callee);  // Append call to `callee` onto `code`
-		}else{
-			bltn_t bltn = elem->bltn;
-			if(arity != bltn->arity) return NMSP_ERR_ARITY_MISMATCH;  // Check that arity matches
-			
-			// Append call to `bltn` onto `code`
-			mcode_call_func(code, bltn->arity, bltn->func, nmsp_eval_on_parse);
-		}
-		
-	}else{  // Treat parenthetical block as value
-		if(arity > 1) return NMSP_ERR_BAD_COMMA;  // Arity must be 1
-	}
-	
-	return NMSP_ERR_OK;
-}
-
 // Try to parse sequence of alphanumerics into argument name
 static int parse_arg(const char *name, size_t namelen, const char *args){
 	if(!args) return -1;
@@ -734,85 +526,48 @@ static var_t parse_var(const char *name, size_t namelen, namespace_t nmsp){
 }
 
 // Parses String as Expression
-static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr, const char *args, namespace_t nmsp){
-	// Initialize operator stack
-	oper_stack_t opstk;
-	vecinit(opstk, 8);
+static parse_err_t mcode_parse(mcode_t code, const char *str, const char **endptr, const char *args, namespace_t nmsp){
+	shunt_t shn = shunt_new(code, nmsp->try_eval, 4);  // Initialize shunting yard
+	parse_err_t err = PARSE_ERR_OK;  // Store any parse errors
 	
-	nmsp_err_t err = NMSP_ERR_OK;  // Store any parse errors
-	
-	bool was_last_val = false;  // Track if the last token parsed was a constant or variable
-	bool was_last_block = false;  // Track is last token was parenth or comma
 	// Track parenthesis depth to see if newlines should be consumed
 	int parenth_depth = 0;
-	while(*str){
+	const char *after_tok = str;  // Pointer to after parse token
+	for(; *str; str = after_tok){
 		// Skip whitespace
 		while(parenth_depth > 0 ? isspace(*str) : isblank(*str)) str++;
 		if(parenth_depth == 0 && *str == '\n') break;  // Leave at newline outside parenthesis
+		after_tok = str;
 		
 		int c = *str;
-		const char *after_tok = str;  // Pointer to after parsed token
-		
-		// Check for parentheses
 		if(c == '('){
-			str++;  // Consume '('
+			after_tok++;  // Consume '('
 			parenth_depth++;
-			push_block(&opstk, false);  // Place open parenthesis on operator stack
-			was_last_val = false;  // New expression so there is no last value
-			was_last_block = true;
+			if(err = shunt_open_parenth(shn)) break;
 			continue;
 		}else if(c == ','){
 			if(parenth_depth == 0){  // Comma must be inside parentheses
-				err = NMSP_ERR_BAD_COMMA;
+				err = PARSE_ERR_BAD_COMMA;
 				break;
 			}
-			str++;  // Consume ','
-			if(err = displace_opers(code, &opstk, -1)) break;  // Displace all operators until block
-			
-			push_block(&opstk, true);  // Place comma on operator stack
-			was_last_val = false;  // New expression so there is no last value
-			was_last_block = true;
+			after_tok++;  // Consume ','
+			if(err = shunt_put_comma(shn)) break;
 			continue;
 		}else if(c == ')'){
-			if(was_last_block){
-				err = NMSP_ERR_MISSING_VALUES;
-				break;
-			}
-			
-			str++;  // Consume ')'
+			after_tok++;  // Consume ')'
 			parenth_depth--;
-			if(err = close_parenth(code, &opstk)) break;
-			was_last_val = true;
+			if(err = shunt_close_parenth(shn)) break;
 			continue;
 		}
-		was_last_block = false;
 		
 		// Try to parse operator
-		bltn_oper_t oper = bltn_oper_parse(str, &after_tok, !was_last_val);
+		bltn_oper_t oper = bltn_oper_parse(str, &after_tok, !shunt_was_last_val(shn));
 		if(oper && after_tok > str){
-			struct stk_oper_s *last = veclast(opstk);
-			if(last && !last->is_block){  // For non-block previous operator
-				// Check that last operator isn't function
-				if(!last->is_oper){ err = NMSP_ERR_FUNC_NOCALL;  break; }
-				
-				// When operator is unary
-				// Check that previous operator is a unary, right-associative, or lower precedence
-				bltn_oper_t lst_oper = last->oper;
-				if(oper->is_unary == 1 && !(lst_oper->is_unary
-				|| lst_oper->assoc == OPER_RIGHT_ASSOC
-				|| lst_oper->prec < oper->prec
-				// Otherwise we have a unary operator conflicting with a binary operator
-				)){ err = NMSP_ERR_LOWPREC_UNARY;  break; }
+			if(oper->is_unary){
+				if(err = shunt_put_unary(shn, oper->func, oper->prec)) break;
+			}else{
+				if(err = shunt_put_binary(shn, oper->func, oper->prec, oper->assoc)) break;
 			}
-			
-			
-			// Only displace operators if binary operator
-			if(!oper->is_unary){  // If operator follows val it is binary
-				if(err = displace_opers(code, &opstk, (int8_t)(oper->prec))) break;
-			}
-			push_oper(&opstk, oper);  // Place operator at top of stack
-			str = after_tok;  // Move string forward
-			was_last_val = false;  // Operator is not a value
 			continue;
 		}
 		
@@ -820,12 +575,7 @@ static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr
 		// Try to parse constant
 		arith_t val = arith_parse(str, &after_tok);
 		if(val){
-			// Cannot have two values in a row
-			if(was_last_val){ err = NMSP_ERR_MISSING_OPERS;  break; }
-			
-			mcode_load_const(code, val);  // Load constant into code block
-			str = after_tok;
-			was_last_val = true;
+			if(err = shunt_load_const(shn, val)) break;
 			continue;
 		}
 		
@@ -839,28 +589,18 @@ static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr
 		// Try to parse argument name
 		int argind = parse_arg(str, namelen, args);
 		if(argind >= 0){
-			// Cannot have two values in a row
-			if(was_last_val){ err = NMSP_ERR_MISSING_OPERS;  break; }
-			
-			mcode_load_arg(code, argind);
-			str = after_tok;
-			was_last_val = true;
+			if(err = shunt_load_arg(shn, argind)) break;
 			continue;
 		}
 		
 		// Try to parse builtin function or constant name
 		bltn_t bltn = bltn_parse(str, namelen);
 		if(bltn){
-			// Cannot have two values in a row
-			if(was_last_val){ err = NMSP_ERR_MISSING_OPERS;  break; }
-			
-			if(bltn->arity == 0){  // Place constant on value stack (i.e. expression)
-				mcode_load_const(code, bltn->func(NULL, NULL));
-			}else{  // Place function on operator stack
-				push_bltn(&opstk, bltn);
+			if(bltn->arity == 0){  // When `bltn` is a constant
+				if(err = shunt_load_const(shn, bltn->func(NULL, NULL))) break;
+			}else{  // When `bltn` is a function
+				if(err = shunt_func_call(shn, bltn->arity, bltn->func)) break;
 			}
-			str = after_tok;
-			was_last_val = true;
 			continue;
 		}
 		
@@ -868,22 +608,15 @@ static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr
 		// Collect alphanumerics and _
 		var_t vr = parse_var(str, namelen, nmsp);
 		if(vr){
-			// Cannot have two values in a row
-			if(was_last_val){ err = NMSP_ERR_MISSING_OPERS;  break; }
-			
 			// Check if next character is '('
 			const char *tmp = after_tok;
 			while(parenth_depth > 0 ? isspace(*tmp) : isblank(*tmp)) tmp++;
+			
 			if(*tmp == '('){  // Treat `vr` as a user-defined function
-				// If already defined check that `vr` is a function
-				if(mcode_get_arity(vr->code) == 0){ err = NMSP_ERR_MISSING_OPERS;  break; }
-				push_call(&opstk, vr->code);
+				if(err = shunt_code_call(shn, vr->code)) break;
 			}else{  // Treat `vr` as a variable
-				mcode_set_arity(vr->code, 0);  // Variable has no args
-				mcode_call_code(code, vr->code);  // Load variable into code
+				if(err = shunt_load_var(shn, vr->code)) break;
 			}
-			str = after_tok;
-			was_last_val = true;
 			continue;
 		}
 		
@@ -893,26 +626,14 @@ static nmsp_err_t mcode_parse(mcode_t code, const char *str, const char **endptr
 	// Move endpointer to after parsed section
 	if(endptr) *endptr = str;
 	
-	// On error cleanup and leave
-	if(err){
-		vecfree(opstk);  // Deallocate operator stack
+	if(err){  // On error cleanup and leave
+		shunt_free(shn);
 		return err;
 	}
 	
 	// Clear out remaining operators on the operator stack
-	struct stk_oper_s op;
-	while(!vecempty(opstk)){
-		op = vecpop(opstk);
-		// Make sure no open parenths are left
-		if(op.is_block){ err = NMSP_ERR_PARENTH_MISMATCH;  break; }
-		// Or function calls
-		if(!op.is_oper){ err = NMSP_ERR_FUNC_NOCALL;  break; }
-		
-		// Apply operator to expression
-		if(err = apply_oper(code, op)) break;
-	}
-	vecfree(opstk);  // Deallocate stack
-	
-	return err;
+	if(err = shunt_clear(shn)) return err;
+	shunt_free(shn);
+	return PARSE_ERR_OK;
 }
 

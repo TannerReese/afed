@@ -140,7 +140,7 @@ int main(int argc, char *argv[]){
 	char *prog = read_file(infile);
 	
 	// Parse and evaluate
-	namespace_t nmsp = nmsp_new();
+	namespace_t nmsp = nmsp_new(true);
 	docmt_t doc = docmt_new(prog, nmsp);
 	int errcnt = docmt_parse(doc, show_errors ? errfile : NULL);  // Parse file
 	fseek(infile, 0, SEEK_SET);  // Move `infile` back to beginning

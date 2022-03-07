@@ -4,15 +4,15 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "arith/arith.h"
+#include "../arith/arith.h"
 
 // arith_err_t values for Stack related errors
-#define MCODE_ERR_OK (0)
-#define MCODE_ERR_MISSING_ARGS (-1)
-#define MCODE_ERR_UNKNOWN_INSTR (-2)
-#define MCODE_ERR_STACK_SURPLUS (-3)
-#define MCODE_ERR_UNDERFLOW (-4)
-#define MCODE_ERR_INCOMPLETE_CODE (-5)
+#define EVAL_ERR_OK (0)
+#define EVAL_ERR_MISSING_ARGS (-1)
+#define EVAL_ERR_UNKNOWN_INSTR (-2)
+#define EVAL_ERR_STACK_SURPLUS (-3)
+#define EVAL_ERR_UNDERFLOW (-4)
+#define EVAL_ERR_INCOMPLETE_CODE (-5)
 
 // Convert error code to string
 const char *mcode_strerror(arith_err_t err);

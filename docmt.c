@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <stdio.h>
 
-#include "mcode.h"
+#include "util/mcode.h"
 
 // A piece that will be printed to the output file
 struct piece_s {
@@ -124,17 +124,17 @@ static int count_lines(const char *start, const char *end){
 }
 
 // Attempt to parse line of document as expression with optional label and print section
-static nmsp_err_t parse_line(docmt_t doc){
+static parse_err_t parse_line(docmt_t doc){
 	skip_blank(doc);
 	if(*(doc->str) == '\0' || *(doc->str) == '#' || *(doc->str) == '\n'){ // Check for comment or end of line
 		skip_line(doc);
-		return NMSP_ERR_OK;
+		return PARSE_ERR_OK;
 	}
 	
 	
 	// Parse Labelled Expression
 	// --------------------------
-	nmsp_err_t err = NMSP_ERR_OK;
+	parse_err_t err = PARSE_ERR_OK;
 	const char *endptr;
 	var_t vr = nmsp_define(doc->nmsp, doc->str, &endptr, &err);
 	if(err) return err;  // On Parse Error
@@ -157,16 +157,16 @@ static nmsp_err_t parse_line(docmt_t doc){
 		
 	// Check that there is no extra content
 	}else if(*(doc->str) != '\n' && *(doc->str) != '#'){
-		return NMSP_ERR_EXTRA_CONT;
+		return PARSE_ERR_EXTRA_CONT;
 	}
 	
 	// Skip Comment
 	skip_line(doc);
 	
-	return NMSP_ERR_OK;
+	return PARSE_ERR_OK;
 }
 
-static int print_error(docmt_t doc, FILE *stream, nmsp_err_t err){
+static int print_error(docmt_t doc, FILE *stream, parse_err_t err){
 	if(!stream) return 0;  // Don't print anything to NULL-stream
 	
 	int count = fprintf(stream, "(Line %i) %s\n", doc->line_no, nmsp_strerror(err));
@@ -188,7 +188,7 @@ int docmt_parse(docmt_t doc, FILE *errout){
 	int err_count = 0;
 	while(*(doc->str)){
 		// Try to parse line as expression
-		nmsp_err_t err = parse_line(doc);
+		parse_err_t err = parse_line(doc);
 		if(err){  // On Error
 			print_error(doc, errout, err);  // Print error
 			skip_line(doc);  // Move to next line
@@ -210,7 +210,7 @@ int docmt_fprint(docmt_t doc, FILE *stream, FILE *errout){
 			);
 		}else{
 			// Evaluate variable
-			nmsp_err_t err;
+			parse_err_t err;
 			nmsp_var_value(pc.source.var, &err);
 			errcnt += !!err;
 			
