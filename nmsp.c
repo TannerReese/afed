@@ -141,14 +141,13 @@ const char *nmsp_var_name(var_t vr, size_t *len){
 arith_t nmsp_var_value(var_t vr, arith_err_t *errp){
 	if(vr->has_impl) return mcode_eval(vr->code, NULL, errp);
 	if(errp) *errp = EVAL_ERR_INCOMPLETE_CODE;
-	return NULL;
 }
 
 // Print variable value to a file
 int nmsp_var_fprint(FILE *stream, var_t vr){
 	// Calculate value
 	arith_err_t err = EVAL_ERR_OK;
-	void *val = mcode_eval(vr->code, NULL, &err);
+	arith_t val = mcode_eval(vr->code, NULL, &err);
 	
 	// Print value
 	if(err) return fprintf(stream, "ERR %i", err);
@@ -574,7 +573,7 @@ static parse_err_t mcode_parse(mcode_t code, const char *str, const char **endpt
 		
 		// Try to parse constant
 		arith_t val = arith_parse(str, &after_tok);
-		if(val){
+		if(after_tok > str){
 			if(err = shunt_load_const(shn, val)) break;
 			continue;
 		}

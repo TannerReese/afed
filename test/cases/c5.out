@@ -5,7 +5,7 @@ w :Func   (   1-xerg,ln(2),     3) * sqrt(xerg) = -22.360680 # Single call
 
   Func (a, bee, sea) : a + bee * sea // a - xerg
 
-xerg: 1 - 2 * 3 + 50 / 5= 5.000000 # A variable
+xerg: 1 - 2 * 3 + 50 / 5= 5 # A variable
 
 # Incorrectly defined functions
 Bad_fnc(x,) : x * xerg - w

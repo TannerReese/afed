@@ -81,6 +81,7 @@ int check_parsing(){
 	if(!(nmsp = safe_decl(decls3))
 	|| eval(nmsp,
 		"___*__-__OP/__^__",
+//		"___",
 		204.122506542, PARSE_ERR_OK, PARSE_ERR_OK
 	)) fails++;
 	sep();
@@ -293,11 +294,11 @@ bool eval(namespace_t nmsp, const char *expstr, double tgt, parse_err_t perr, ar
 		arith_t res = nmsp_var_value(vr, &err);
 		printf("Desired Errno: %i     Eval Errno: %i\n", everr, err);
 		printf("Result Pointer: %p\n", res);
-		if(res) printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, arith_todbl(res));
+		printf("Desired Result: %.8lf     Result: %.8lf\n", tgt, arith_todbl(res));
 		if(everr != err){
 			puts("**** Failed to Evaluate Expression");
 			return 1;
-		}else if(!res || fabs(tgt - arith_todbl(res)) > 0.00001){
+		}else if(fabs(tgt - arith_todbl(res)) > 0.00001){
 			puts("**** Failed to Evaluate Expression Correctly");
 			return 1;
 		}

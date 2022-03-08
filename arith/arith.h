@@ -15,8 +15,24 @@ const char *arith_strerror(arith_err_t err);
 
 
 // Type for value that can have operations performed on it
-struct arith_s;
-typedef struct arith_s *arith_t;
+enum arith_type {
+	ARITH_REAL,
+	ARITH_RATIO
+};
+
+typedef struct {
+	enum arith_type type;
+	
+	union {
+		double real;
+		
+		struct{  // Rational number
+			long num;
+			unsigned long den;
+		};
+	};
+} arith_t;
+
 // Type for functions which handle values
 typedef arith_t (*arith_func_t)(arith_t *args, arith_err_t *errp);
 // Macro to create signature for arith_func_t functions

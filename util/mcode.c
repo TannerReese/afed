@@ -79,7 +79,6 @@ mcode_t mcode_new(int arity, size_t cap){
 	// Cache is initially empty
 	code->is_cached = false;
 	code->err = EVAL_ERR_OK;
-	code->value = NULL;
 	return code;
 }
 
@@ -159,8 +158,7 @@ bool mcode_clear(mcode_t code){
 	
 	code->is_cached = false;
 	code->err = EVAL_ERR_OK;
-	if(code->value) arith_free(code->value);
-	code->value = NULL;
+	arith_free(code->value);
 	return true;
 }
 
@@ -188,7 +186,7 @@ static inline struct instr_s *instrs_inc(mcode_t code){
 }
 
 bool mcode_load_const(mcode_t code, arith_t value){
-	if(!code || code->stk_ht < 0 || !value) return true;  // Value can't be NULL
+	if(!code || code->stk_ht < 0) return true;  // Value can't be NULL
 	mcode_clear(code);
 	
 	struct instr_s *instr = instrs_inc(code);  // Get pointer to new instr
@@ -251,11 +249,6 @@ bool mcode_call_func(mcode_t code, int arity, arith_func_t func, bool try_eval){
 			arith_err_t err = ARITH_ERR_OK;
 			arith_t ret = func(args, &err);
 			
-			// Deallocate arguments
-			for(i = 0; i < arity; i++){
-				arith_t val = args[i];
-				if(val && val != ret) arith_free(val);
-			}
 			code->len -= arity;  // Remove instructions
 			code->stk_ht -= arity;  // Update Stack Height
 			
@@ -293,20 +286,19 @@ struct stack_s {
 };
 
 // Push value onto stack and return the its index
-static size_t stk_push(struct stack_s *stk, arith_t val){
+static arith_t *stk_push(struct stack_s *stk){
 	if(stk->top >= stk->cap){  // Check for resize
 		stk->cap <<= 1;
 		stk->ptr = realloc(stk->ptr, stk->cap * sizeof(arith_t));
 	}
-	stk->ptr[stk->top++] = val;  // Add value
-	return stk->top - 1;
+	return stk->ptr + (stk->top++);
 }
 
 
 
 static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *stk){
 	if(code->is_cached){  // Check for cached value
-		if(code->value) stk_push(stk, arith_clone(code->value));
+		*stk_push(stk) = arith_clone(code->value);
 		return code->err;
 	}
 	
@@ -324,10 +316,10 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 		
 		switch(instr.type){
 			case INSTR_CONST_LOAD:  // Place copy of value on stack
-				stk_push(stk, arith_clone(instr.value));
+				*stk_push(stk) = arith_clone(instr.value);
 			break;
 			case INSTR_ARG_LOAD:  // Place copy of argument on stack
-				stk_push(stk, arith_clone(args[instr.arg]));
+				*stk_push(stk) = arith_clone(args[instr.arg]);
 			break;
 			
 			case INSTR_CODE_CALL:  // Call another code section
@@ -347,21 +339,15 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 					err = mcode_eval_stk(instr.code, stk->ptr + argidx, stk);
 				}else{
 					// Call function and place return value above arguments
-					size_t retidx = stk_push(stk, NULL);
-					stk->ptr[retidx] = instr.func(stk->ptr + argidx, &err);
+					arith_t *ret = stk_push(stk);
+					*ret = instr.func(stk->ptr + argidx, &err);
 				}
 				
 				if(err) break;  // Leave on error
 				stk->top--;  // Make stk->top point to return value
 				
-				// Free arguments
-				arith_t ret = stk->ptr[stk->top];  // Get return value
-				for(int j = argidx; j < stk->top; j++){
-					arith_t val = stk->ptr[j];
-					if(val && val != ret) arith_free(val);  // Don't free return value or NULL value
-				}
 				// Move return value to beginning of where arguments were
-				stk->ptr[argidx] = ret;
+				stk->ptr[argidx] = stk->ptr[stk->top];
 				stk->top = argidx + 1;  // Move stack top to just above argidx
 			break;
 			
@@ -389,8 +375,7 @@ static arith_err_t mcode_eval_stk(mcode_t code, arith_t *args, struct stack_s *s
 arith_t mcode_eval(mcode_t code, arith_t *args, arith_err_t *errp){
 	if(code->is_cached){  // Check for cached value
 		if(errp) *errp = code->err;
-		if(code->value) return arith_clone(code->value);
-		else return NULL;
+		return arith_clone(code->value);
 	}
 	
 	// Create stack to store values
@@ -404,12 +389,9 @@ arith_t mcode_eval(mcode_t code, arith_t *args, arith_err_t *errp){
 	if(errp) *errp = err;
 	
 	// Get return value
-	arith_t ret = err ? NULL : stk.ptr[0];
+	arith_t ret = stk.ptr[0];
 	// Deallocate any values remaining on stack
-	for(size_t i = 0; i < stk.top; i++){
-		arith_t val = stk.ptr[i];
-		if(val && val != ret) arith_free(stk.ptr[i]);
-	}
+	for(size_t i = 1; i < stk.top; i++) arith_free(stk.ptr[i]);
 	// Deallocate stack
 	free(stk.ptr);
 	return ret;
