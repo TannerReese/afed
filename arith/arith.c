@@ -113,7 +113,7 @@ static void simplify(arith_t *val){
 		a = tmp;
 	}
 	
-	val->num /= b;
+	val->num /= (long)b;
 	val->den /= b;
 }
 
@@ -132,7 +132,7 @@ ARITH_FUNC(arith_add){
 		break;
 		case both(ARITH_RATIO, ARITH_RATIO):
 			fst.num *= snd.den;
-			fst.num += fst.den * snd.num;
+			fst.num += snd.num * (long)fst.den;
 			fst.den *= snd.den;
 			simplify(&fst);
 		break;
@@ -154,7 +154,7 @@ ARITH_FUNC(arith_sub){
 		break;
 		case both(ARITH_RATIO, ARITH_RATIO):
 			fst.num *= snd.den;
-			fst.num -= fst.den * snd.num;
+			fst.num -= snd.num * (long)fst.den;
 			fst.den *= snd.den;
 			simplify(&fst);
 		break;
@@ -201,8 +201,8 @@ ARITH_FUNC(arith_div){
 			fst.num *= snd.den;
 			if(snd.num < 0){
 				fst.num = -fst.num;
-				fst.den *= -snd.num;
-			}else fst.den *= snd.num;
+				fst.den *= (unsigned long)(-snd.num);
+			}else fst.den *= (unsigned long)(snd.num);
 			simplify(&fst);
 		break;
 	}

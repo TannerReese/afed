@@ -1,12 +1,13 @@
 
-if exists('b:did_ftplugin') && b:did_ftplugin
+if exists('b:afed_plugin') && b:afed_plugin
 	finish
 endif
-let b:did_ftplugin = 1
+let b:afed_plugin = 1
 
 function! AfedEval()
-	let curs = getcurpos()  " Save cursor position
-	%! afed -E -  " Filter entire document
+	let curs = getcurpos()
+	" Filter through Afed without printing errors
+	:%! afed -E -
 	call setpos('.', curs)
 endfunction
 
