@@ -434,9 +434,9 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         while !self.pos.is_empty() {
             let before = self.pos;
             match self.parse_member() {
-                Ok((Some(label), body)) => if let Some(_) = elems.insert(label, body) {
-                    return Err(self.error("Redefinition of label in map"));
-                },
+                Ok((Some(label), body)) => if elems.contains_key(&label) {
+                    self.print_err(self.error("Redefinition of label in map"));
+                } else { elems.insert(label, body); },
                 Ok((None, body)) => free_elems.push(body),
                 Err(err) => {
                     self.print_err(err);

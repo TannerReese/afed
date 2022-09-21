@@ -1,0 +1,13 @@
+# Tests deep references
+# Tests erasure of substitutions
+
+x  : { 
+y: {
+ z
+: 
+{r
+: 78 - 45 / 3 ^
+2}}},
+
+answer: 2 * x.y.z.r = `bjnkkm`
+

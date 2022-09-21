@@ -4,10 +4,6 @@ if exists("b:current_syntax") && b:current_syntax
 endif
 let b:current_syntax = 1
 
-" Match multiline regex patterns accurately
-" syn sync linecont /\v([{,]\s*$)|(^\s*$)/
-syn sync minlines=300
-
 " Expression operators
 syn match afedOper /\v[!$%&*+-/<=>?@^~]+/
 syn match afedOper /:/
@@ -31,9 +27,7 @@ syn region afedResult start=/`/ skip=/\\`/ end=/`/ keepend
 hi link afedResult Special
 
 " Identifier in Map
-syn match afedName /\v\a\w*/ contained
-syn match afedLabel /\v(%^|[{,])(\s|\n)*(\a\w*(\s|\n)*)*:/ contains=afedName,afedOper
-hi link afedLabel Ignore
+syn match afedName /\v(\a\w*|\s|\n|#[^\n]*\n|#\{.{-}\}#)*:/ contains=afedOper,afedComment
 hi link afedName Identifier 
 
 " Single line comments

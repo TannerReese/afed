@@ -1,0 +1,24 @@
+# Test for circular dependence error
+
+# x Should parse and evaluate correctly
+x: {
+	y: {
+		audio: "good",
+		z: y.audio + " " + video.content
+			= `"good VIDEO_CONTENT good"`
+	},
+	video: {
+		content: "VIDEO_CONTENT " + x.y.audio
+	}
+},
+
+# Should produce redefinition error
+x: true + true = `false`,
+
+# Should produce circular dependence error
+video: {
+	foo: {x: 5 * bar.y =`Eval Error: Circular dependence from variable bar.y`},
+	bar: {y: baz.z - 6 =`Eval Error: Circular dependence from variable baz.z`},
+	baz: {z: foo.x^2 =`Eval Error: Circular dependence from variable foo.x`}
+}
+

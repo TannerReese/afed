@@ -1,0 +1,14 @@
+# Tests multiline comments
+# Tests boolean arithmetic
+# Tests string arithmetic
+
+this #{ Check that
+	multiline comments,
+can be placed anytwhere
+}# : {
+	x : [ true + false #{ Try bolean arithmetic }# =  `Before`
+	,	"Hel" + "lo, " + "World!" # And string arithmetic
+	= ``
+]
+}
+

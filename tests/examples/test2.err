@@ -1,0 +1,12 @@
+Parse Error in line 16, column 20
+	x: true + true = ``,
+	                   ^
+Error: Redefinition of label in map
+
+1 Parse Error encountered
+
+
+line 20, column 24 Eval Error: Circular dependence from variable bar.y
+line 21, column 24 Eval Error: Circular dependence from variable baz.z
+line 22, column 22 Eval Error: Circular dependence from variable foo.x
+3 Eval Errors encountered

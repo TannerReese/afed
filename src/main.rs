@@ -83,7 +83,7 @@ struct Params {
 
 const USAGE_MSG: &str = concat!(
     "Usage: afed [OPTION...] [-i] INPUT [[-o] OUTPUT]\n",
-    "Try 'afed -h' or 'afed --help' for more information\n",
+    "Try 'afed -h' or 'afed --help' for more information",
 );
 const HELP_MSG: &str = concat!(
     "Usage: afed [OPTION...] [-i] INPUT [[-o] OUTPUT]\n",
@@ -127,7 +127,7 @@ impl Params {
                 } else if let Some(path) = args.next() {
                     input = Some(Stream::new(path, true));
                 } else {
-                    eprintln!("No input file provided to -i\n{}\n", USAGE_MSG);
+                    eprintln!("No input file provided to -i\n{}", USAGE_MSG);
                     exit(1);
                 },
                 "-o" | "--ouput" => if let Some(_) = output {
@@ -136,7 +136,7 @@ impl Params {
                 } else if let Some(path) = args.next() {
                     output = Some(Stream::new(path, false));
                 } else {
-                    eprintln!("No output file provided to -i\n{}\n", USAGE_MSG);
+                    eprintln!("No output file provided to -o\n{}", USAGE_MSG);
                     exit(1);
                 },
                 
@@ -149,7 +149,7 @@ impl Params {
                 } else if let Some(path) = args.next() {
                     errors = Some(Stream::new(path, false));
                 } else {
-                    eprintln!("No error file provided to -e\n{}\n", USAGE_MSG);
+                    eprintln!("No error file provided to -e\n{}", USAGE_MSG);
                     exit(1);
                 },
                 "-E" | "--no-errors" => { no_errors = true; },
@@ -182,7 +182,7 @@ impl Params {
             else { Stream::Stderr };
         
         if no_clobber && input == output {
-            eprintln!("Input and output files match, but --no-clobber is on\n{}\n", USAGE_MSG);
+            eprintln!("Input and output files match, but --no-clobber is on\n{}", USAGE_MSG);
             exit(1);
         }
         
@@ -202,9 +202,9 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     if let Err(count) = doc.parse(&mut errout) {
         any_errors = true;
         if count == 1 {
-            write!(&mut errout, "1 Parse Error encountered\n")?;
+            write!(&mut errout, "1 Parse Error encountered\n\n\n")?;
         } else {
-            write!(&mut errout, "{} Parse Errors encountered\n", count)?;
+            write!(&mut errout, "{} Parse Errors encountered\n\n\n", count)?;
         }
     }
     
