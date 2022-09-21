@@ -1,0 +1,8 @@
+[package]
+name = "afed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+id-arena = "2"
+

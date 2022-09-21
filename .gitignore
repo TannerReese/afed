@@ -1,15 +1,9 @@
-# Binaries
-afed
-# Test executables
-test/nmsp_test
+# Build files
+target
 
 # Vim Swap files
 *.sw*
 
 # Vim Session files
 Session.vim
-
-# Object files
-*.o
-*.obj
 
