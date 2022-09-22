@@ -34,6 +34,9 @@ fn parse_test() {
         let stdout = String::from_utf8(stdout).expect("Failed to parse STDOUT as Unicode");
         let stderr = String::from_utf8(stderr).expect("Failed to parse STDERR as Unicode");
         
+        println!("Stdout: \n{}", stdout);
+        println!("Stderr: \n{}", stderr);
+        
         path.set_extension("out");
         println!("Checking stdout against {}", path.file_name().unwrap().to_str().unwrap());
         let mut expected_stdout = String::new();

@@ -5,6 +5,11 @@ use std::collections::HashMap;
 
 use super::opers;
 use super::object::{Object, EvalError};
+use super::object::null::Null;
+use super::object::bool::Bool;
+use super::object::number::Number;
+use super::object::string::Str;
+
 use super::expr::{Expr, ExprArena};
 
 struct Subst {
@@ -118,14 +123,6 @@ impl Display for Docmt {
         } else { Ok(()) }
     }
 }
-
-
-pub const CONSTANTS: [(&str, Object); 4] = [
-    ("null", Object::Null),
-    ("true", Object::Bool(true)),
-    ("false", Object::Bool(false)),
-    ("pi", Object::Num(std::f64::consts::PI)),
-];
 
 
 
@@ -325,7 +322,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         let mut value = if let Some(op) = self.parse_unary() {
             let prec = op.prec();
             let arg = self.parse_expr(prec)?;
-            self.doc.arena.new_unary(op, arg).unwrap()
+            self.doc.arena.create_unary(op, arg).unwrap()
         } else { self.parse_single()? };
         
         let mut before_oper = self.pos;
@@ -336,7 +333,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             
             let arg = self.parse_expr(prec)?;
             self.skip();
-            value = self.doc.arena.new_binary(op, value, arg).unwrap();
+            value = self.doc.arena.create_binary(op, value, arg).unwrap();
             before_oper = self.pos;
         }
         self.pos = before_oper;
@@ -348,10 +345,14 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     fn parse_num(&mut self) -> Result<Expr, ParseError> {
         let numstr = self.pos.ptr;
         let len = self.pos.skip_while(|c| c.is_ascii_digit() || c == '.');
-        numstr[..len].parse::<f64>().map_or(
-            Err(self.error("Invalid number")),
-            |num| Ok(self.doc.arena.new_num(num))
-        )
+        let numstr = &numstr[..len];
+        
+        let num = if let Ok(i) = numstr.parse::<i64>() {
+            Number::Ratio(i, 1)
+        } else if let Ok(f) = numstr.parse::<f64>() {
+            Number::Real(f)
+        } else { return Err(self.error("Invalid number")); };
+        Ok(self.doc.arena.create_obj(num))
     }
     
     fn parse_name(&mut self) -> Result<String, ParseError> {
@@ -406,7 +407,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
         
         self.expect(']', "Missing closing bracket in array")?;
-        Ok(self.doc.arena.new_arr(elems).unwrap())
+        Ok(self.doc.arena.create_array(elems).unwrap())
     }
     
     fn parse_member(&mut self) -> Result<(Option<String>, Expr), ParseError> {
@@ -429,15 +430,15 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     fn parse_map(&mut self, is_root: bool) -> Result<Expr, ParseError> {
         if !is_root { self.expect('{', "Missing opening brace in map")?; }
         
-        let mut free_elems = Vec::new();
-        let mut elems = HashMap::new();
+        let mut unnamed = Vec::new();
+        let mut named = HashMap::new();
         while !self.pos.is_empty() {
             let before = self.pos;
             match self.parse_member() {
-                Ok((Some(label), body)) => if elems.contains_key(&label) {
+                Ok((Some(label), body)) => if named.contains_key(&label) {
                     self.print_err(self.error("Redefinition of label in map"));
-                } else { elems.insert(label, body); },
-                Ok((None, body)) => free_elems.push(body),
+                } else { named.insert(label, body); },
+                Ok((None, body)) => unnamed.push(body),
                 Err(err) => {
                     self.print_err(err);
                     self.pos = before;
@@ -458,7 +459,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
         
         if !is_root { self.expect('}', "Missing closing brace in map")?; }
-        Ok(self.doc.arena.new_map(free_elems, elems).unwrap())
+        Ok(self.doc.arena.create_map(unnamed, named).unwrap())
     }
     
     fn parse_single(&mut self) -> Result<Expr, ParseError> {
@@ -466,8 +467,8 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         match self.pos.peek() {
             None => Err(self.error("Unexpected End of Input")),
             Some('"') => {
-                let s = self.parse_string()?;
-                Ok(self.doc.arena.new_str(s))
+                let s = Str(self.parse_string()?);
+                Ok(self.doc.arena.create_obj(s))
             },
             Some('(') => {
                 self.pos.next();
@@ -481,15 +482,25 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                 if c.is_ascii_digit() { self.parse_num() }
                 else if c.is_alphabetic() {
                     let name = self.parse_name()?;
-                    Ok(if let Some((_, obj)) = CONSTANTS.iter()
-                    .filter(|(key, _)| key == &name).next() {
+                    Ok(if let Some(obj) = Self::parse_constant(&name) {
                         self.doc.arena.from_obj(obj)
                     } else {
-                        self.doc.arena.new_name(name)
+                        self.doc.arena.create_name(name)
                     })
                 } else { Err(self.error("Unknown token at beginning of value")) }
             },
         }
+    }
+    
+    fn parse_constant(name: &str) -> Option<Object> {
+        Some(match name {
+            "null" => Object::new(Null()),
+            "true" => Object::new(Bool(true)),
+            "false" => Object::new(Bool(false)),
+            "e" => Object::new(Number::Real(std::f64::consts::E)),
+            "pi" => Object::new(Number::Real(std::f64::consts::PI)),
+            _ => return None,
+        })
     }
 }
 

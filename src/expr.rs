@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
 use super::opers;
-use super::object::{Object, EvalError, EvalResult};
+use super::object::{Object, Objectish, EvalError, EvalResult};
+use super::object::array::Array;
+use super::object::map::Map;
 
 pub struct ExprArena(Arena<Node>);
 pub type Expr = Id<Node>;
@@ -26,11 +28,8 @@ impl Display for Path {
 
 #[derive(Debug, Clone)]
 enum Inner {
-    Null,
-    Bool(bool),
-    Num(f64),
-    Str(String),
-    Arr(Vec<Expr>),
+    Const(Object),
+    Array(Vec<Expr>),
     Map(Vec<Expr>, HashMap<String, Expr>),
     
     Cache(Expr, Option<EvalResult>),
@@ -103,25 +102,7 @@ impl ExprArena {
     
     pub fn new() -> ExprArena { ExprArena(Arena::new()) }
     
-    #[allow(dead_code)]
-    pub fn new_null(&mut self) -> Expr {
-        self.0.alloc(Node {owned: false, names: None, inner: Inner::Null})
-    }
-    
-    #[allow(dead_code)]
-    pub fn new_bool(&mut self, b: bool) -> Expr {
-        self.0.alloc(Node {owned: false, names: None, inner: Inner::Bool(b)})
-    }
-    
-    pub fn new_num(&mut self, num: f64) -> Expr {
-        self.0.alloc(Node {owned: false, names: None, inner: Inner::Num(num)})
-    }
-    
-    pub fn new_str(&mut self, s: String) -> Expr {
-        self.0.alloc(Node {owned: false, names: None, inner: Inner::Str(s)})
-    }
-    
-    pub fn new_arr(&mut self, elems: Vec<Expr>) -> Option<Expr> {
+    pub fn create_array(&mut self, elems: Vec<Expr>) -> Option<Expr> {
         if elems.iter().any(|&id| self.is_owned(id)) { return None; }
         
         let mut arr_names: Option<Vec<Name>> = None;
@@ -132,10 +113,10 @@ impl ExprArena {
             }
         }
         
-        Some(self.0.alloc(Node {owned: false, names: arr_names, inner: Inner::Arr(elems)}))
+        Some(self.0.alloc(Node {owned: false, names: arr_names, inner: Inner::Array(elems)}))
     }
     
-    pub fn new_map(&mut self, free_elems: Vec<Expr>, mut elems: HashMap<String, Expr>) -> Option<Expr> {
+    pub fn create_map(&mut self, free_elems: Vec<Expr>, mut elems: HashMap<String, Expr>) -> Option<Expr> {
         if free_elems.iter().any(|&id| self.is_owned(id)) { return None; }
         if elems.iter().any(|(_, &id)| self.is_owned(id)) { return None; }
         
@@ -173,30 +154,34 @@ impl ExprArena {
         }))
     }
     
-    pub fn from_obj(&mut self, obj: &Object) -> Expr {
-        let inner = match obj {
-            Object::Null => Inner::Null,
-            Object::Bool(b) => Inner::Bool(*b),
-            Object::Num(r) => Inner::Num(*r),
-            Object::Str(s) => Inner::Str(s.clone()),
-            Object::Arr(elems) => Inner::Arr(
-                elems.iter().map(|child| self.from_obj(child)).collect()
-            ),
-            Object::Map(free_elems, elems) => Inner::Map(
-                free_elems.iter().map(|child|
+    pub fn from_obj(&mut self, mut obj: Object) -> Expr {
+        let inner = if let Some(Map {unnamed, named}) = obj.downcast_mut::<Map>() {
+            let unnamed = mem::take(unnamed);
+            let named = mem::take(named);
+            Inner::Map(
+                unnamed.into_iter().map(|child|
                     self.from_obj(child)
                 ).collect(),
-                elems.iter().map(|(key, child)|
+                named.into_iter().map(|(key, child)|
                     (key.clone(), self.from_obj(child))
                 ).collect(),
-            ),
-        };
+            )
+        } else if let Some(Array(elems)) = obj.downcast_mut::<Array>() {
+            let elems = mem::take(elems);
+            Inner::Array(elems.into_iter().map(|child|
+                self.from_obj(child)
+            ).collect())
+        } else { Inner::Const(obj) };
         self.0.alloc(Node {owned: false, names: None, inner})
+    }
+    
+    pub fn create_obj<T>(&mut self, obj: T) -> Expr where T: Objectish {
+        self.from_obj(Object::new(obj))
     }
     
     
     
-    pub fn new_name(&mut self, name: String) -> Expr {
+    pub fn create_name(&mut self, name: String) -> Expr {
         let name = Path(name.split('.').map(|s| s.to_owned()).collect());
         let mut name_ids = Vec::new();
         self.0.alloc_with_id(|id| {
@@ -205,7 +190,7 @@ impl ExprArena {
         })
     }
     
-    pub fn new_unary(&mut self, op: opers::Unary, arg: Expr) -> Option<Expr> {
+    pub fn create_unary(&mut self, op: opers::Unary, arg: Expr) -> Option<Expr> {
         if self.is_owned(arg) { return None; }
         
         let names = if let Some(Node {owned, names, ..}) = self.0.get_mut(arg) {
@@ -216,7 +201,7 @@ impl ExprArena {
         Some(self.0.alloc(Node {owned: false, names, inner: Inner::Unary(op, arg)}))
     }
     
-    pub fn new_binary(&mut self, op: opers::Binary, arg1: Expr, arg2: Expr) -> Option<Expr> {
+    pub fn create_binary(&mut self, op: opers::Binary, arg1: Expr, arg2: Expr) -> Option<Expr> {
         if self.is_owned(arg1) || self.is_owned(arg2) { return None; }
         
         let mut names = if let Some(Node {owned, names: ns, ..}) = self.0.get_mut(arg1) {
@@ -272,27 +257,24 @@ impl ExprArena {
     
     pub fn eval(&mut self, target: Expr) -> EvalResult {
         if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
-            Inner::Null => Ok(Object::Null),
-            Inner::Bool(b) => Ok(Object::Bool(*b)),
-            Inner::Num(r) => Ok(Object::Num(*r)),
-            Inner::Str(s) => Ok(Object::Str(s.clone())),
-            Inner::Arr(elems) => Ok(Object::Arr({
+            Inner::Const(obj) => Ok(obj.clone()),
+            Inner::Array(elems) => Ok(Object::new(Array({
                 let elems = elems.clone();
                 elems.iter().map(|id| self.eval(*id))
                 .collect::<Result<Vec<Object>, EvalError>>()?
-            })),
-            Inner::Map(free_elems, elems) => {
-                let free_elems = free_elems.clone();
-                let elems = elems.clone();
+            }))),
+            Inner::Map(unnamed, named) => {
+                let unnamed = unnamed.clone();
+                let named = named.clone();
                 
-                Ok(Object::Map(
-                    free_elems.into_iter().map(|val|
+                Ok(Object::new(Map {
+                    unnamed: unnamed.into_iter().map(|val|
                         self.eval(val)
                     ).collect::<Result<Vec<Object>, EvalError>>()?,
-                    elems.into_iter().map(|(key, val)| {
+                    named: named.into_iter().map(|(key, val)| {
                         self.eval(val).map(|obj| (key, obj))
                     }).collect::<Result<HashMap<String, Object>, EvalError>>()?,
-                ))
+                }))
             },
             
             Inner::Cache(body, value) => if let Some(res) = value {
@@ -314,9 +296,9 @@ impl ExprArena {
                 res
             },
             
-            &mut Inner::Unary(op, arg) => self.eval(arg).and_then(|val| val.apply_unary(op)),
+            &mut Inner::Unary(op, arg) => self.eval(arg).and_then(|mut val| val.apply_unary(op)),
             &mut Inner::Binary(op, arg1, arg2) => {
-                self.eval(arg1).and_then(|val1|
+                self.eval(arg1).and_then(|mut val1|
                     self.eval(arg2).and_then(|val2|
                         val1.apply_binary(op, val2)
                     )

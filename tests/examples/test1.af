@@ -1,4 +1,5 @@
 # Tests multiline comments
+# Tests for null constant
 # Tests boolean arithmetic
 # Tests string arithmetic
 
@@ -8,7 +9,8 @@ can be placed anytwhere
 }# : {
 	x : [ true + false #{ Try bolean arithmetic }# =  `Before`
 	,	"Hel" + "lo, " + "World!" # And string arithmetic
-	= ``
+	= ``,
+	null=``
 ]
 }
 
