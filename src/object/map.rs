@@ -3,7 +3,7 @@ use core::slice::Iter;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::collections::HashMap;
 
-use super::super::opers::{Unary, Binary};
+use super::opers::{Unary, Binary};
 use super::{Operable, Object, Objectish, EvalError, EvalResult};
 use super::string::Str;
 
@@ -13,6 +13,12 @@ pub struct Map {
     pub named: HashMap<String, Object>,
 }
 impl_objectish!{Map}
+
+impl Map {
+    pub fn from_map(named: HashMap<String, Object>) -> Object {
+        Object::new(Map {unnamed: Vec::new(), named})
+    }
+}
 
 impl Operable<Object> for Map {
     type Output = EvalResult;

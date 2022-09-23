@@ -2,7 +2,7 @@ use std::any::Any;
 use core::slice::Iter;
 use std::fmt::{Display, Formatter, Error};
 
-use super::super::opers::{Unary, Binary};
+use super::opers::{Unary, Binary};
 use super::{Operable, Object, Objectish, EvalError, EvalResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

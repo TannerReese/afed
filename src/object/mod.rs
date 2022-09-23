@@ -4,7 +4,7 @@ use std::clone::Clone;
 use std::ops::{Deref, DerefMut};
 use std::fmt::{Debug, Display, Formatter, Error};
 
-use super::opers::{Unary, Binary};
+use opers::{Unary, Binary};
 
 #[macro_export]
 macro_rules! eval_err {
@@ -44,6 +44,7 @@ macro_rules! impl_objectish {
 }
 
 
+pub mod opers;
 pub mod null;
 pub mod bool;
 pub mod number;

@@ -1,12 +1,18 @@
 # Tests deep references
 # Tests erasure of substitutions
+# Tests unnamed map members
+# Tests numeric arithmetic
 
+48 / 32 + (100 / 70)^(6/3) = ``,
 x  : { 
+	2 / 3 - 5/7 = ``,
+	67 ^ (2 / 3) * 67^-1 - pi = ``,
+	23 % num.e = ``,
 y: {
  z
 : 
 {r
-: 78 - 45 / 3 ^
+: 78 - 45 / 5 ^
 2}}},
 
 answer: 2 * x.y.z.r = `bjnkkm`

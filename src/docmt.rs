@@ -3,8 +3,8 @@ use std::io::Write;
 use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 
-use super::opers;
 use super::object::{Object, EvalError};
+use super::object::opers;
 use super::object::null::Null;
 use super::object::bool::Bool;
 use super::object::number::Number;
@@ -42,15 +42,29 @@ impl Docmt {
         }
     }
     
-    pub fn parse<W>(&mut self, err_out: &mut W) -> Result<(), usize> where W: Write {
+    pub fn parse<W>(&mut self, err_out: &mut W, bltns: HashMap<String, Object>) -> Result<(), usize> where W: Write {
         if !self.is_parsed {
             let src: String = mem::take(&mut self.src);
+            
             let mut prs = Parser {doc: self, pos: Pos::new(&src), err_out, err_count: 0};
-            _ = prs.parse_map(true);
+            let root = match prs.parse_map(true) {
+                Ok(root) => Some(root),
+                Err(err) => {
+                    prs.print_err(err);
+                    None
+                },
+            };
+            
             if !prs.pos.is_empty() {
                 prs.print_err(prs.error("Extra unparsed content in document"))
             }
             self.err_count = prs.err_count;
+            
+            if let Some(root) = root {
+                if self.arena.resolve_builtins(root, bltns).is_some() {
+                    unreachable!();
+                }
+            }
             
             self.src = src;
             self.is_parsed = true;
@@ -320,7 +334,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     
     fn parse_expr(&mut self, min_prec: usize) -> Result<Expr, ParseError> {
         let mut value = if let Some(op) = self.parse_unary() {
-            let prec = op.prec();
+            let prec = std::cmp::max(op.prec(), min_prec);
             let arg = self.parse_expr(prec)?;
             self.doc.arena.create_unary(op, arg).unwrap()
         } else { self.parse_single()? };
@@ -482,7 +496,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                 if c.is_ascii_digit() { self.parse_num() }
                 else if c.is_alphabetic() {
                     let name = self.parse_name()?;
-                    Ok(if let Some(obj) = Self::parse_constant(&name) {
+                    Ok(if let Some(obj) = Self::parse_constant(name.as_str()) {
                         self.doc.arena.from_obj(obj)
                     } else {
                         self.doc.arena.create_name(name)
@@ -497,8 +511,6 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             "null" => Object::new(Null()),
             "true" => Object::new(Bool(true)),
             "false" => Object::new(Bool(false)),
-            "e" => Object::new(Number::Real(std::f64::consts::E)),
-            "pi" => Object::new(Number::Real(std::f64::consts::PI)),
             _ => return None,
         })
     }

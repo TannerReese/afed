@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::io::{Write, Read, Error, empty, sink, stdin, stdout, stderr};
 use std::process::exit;
 use std::fs::{File, canonicalize};
 use std::path::PathBuf;
 
-mod opers;
+use object::map::Map;
+
 #[macro_use] mod object;
 mod expr;
 mod docmt;
@@ -198,8 +200,12 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut doc = docmt::Docmt::new(prog);
     let mut any_errors = false;
     
+    let bltns = HashMap::from([
+        ("num".to_owned(), Map::from_map(object::number::make_bltns())),
+    ]);
+    
     let mut errout = prms.errors.to_writer();
-    if let Err(count) = doc.parse(&mut errout) {
+    if let Err(count) = doc.parse(&mut errout, bltns) {
         any_errors = true;
         if count == 1 {
             write!(&mut errout, "1 Parse Error encountered\n\n\n")?;

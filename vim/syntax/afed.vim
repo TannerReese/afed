@@ -19,8 +19,12 @@ syn region afedString start=/"/ skip=/\\"/ end=/"/ keepend
 hi link afedString String
 
 " Named constants
-syn keyword afedConstant true false pi e
-hi link afedConstant Structure
+syn keyword afedConstant null true false
+hi link afedConstant Constant
+
+" Builtin objects
+syn keyword afedBuiltin num
+hi link afedBuiltin Structure
 
 " Results of Calculation
 syn region afedResult start=/`/ skip=/\\`/ end=/`/ keepend

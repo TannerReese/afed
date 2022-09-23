@@ -6,8 +6,8 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::opers;
 use super::object::{Object, Objectish, EvalError, EvalResult};
+use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;
 
@@ -73,7 +73,8 @@ impl ExprArena {
     }
     
     // Resolve names, merge remaining names, and set ownership
-    fn resolve(&mut self, map: &HashMap<String, Expr>, names: Option<Vec<Name>>) -> Option<Vec<Name>> {
+    // Returns unresolved names
+    fn resolve_names(&mut self, map: &HashMap<String, Expr>, names: Option<Vec<Name>>) -> Option<Vec<Name>> {
         let names = if let Some(names) = names { names } else { return None };
         let names: Vec<Name> = names.into_iter().filter(|&name_id| {
             if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
@@ -98,6 +99,29 @@ impl ExprArena {
         }
     }
     
+    pub fn resolve_builtins(&mut self, root: Expr, bltns: HashMap<String, Object>) -> Option<HashMap<String, Object>> {
+        let names = if let Some(Node {names, ..}) = self.0.get_mut(root) {
+            mem::take(names)
+        } else { return Some(bltns) };
+        
+        let bltns = bltns.into_iter().map(|(key, obj)|
+            (key, self.from_obj(obj))
+        ).collect();
+        
+        let mut unresolved = self.resolve_names(&bltns, names);
+        for (_, &obj) in bltns.iter() {
+            if let Some(Node {inner: Inner::Map(_, named), ..}) = self.0.get_mut(obj) {
+                let map = mem::replace(named, HashMap::new());
+                unresolved = self.resolve_names(&map, unresolved);
+                
+                if let Some(Node {inner: Inner::Map(_, named), ..}) = self.0.get_mut(obj) {
+                    *named = map;
+                } else { unreachable!() }
+            }
+        }
+        return None;
+    }
+    
     
     
     pub fn new() -> ExprArena { ExprArena(Arena::new()) }
@@ -109,70 +133,76 @@ impl ExprArena {
         for &id in elems.iter() {
             if let Some(Node {owned, names, ..}) = self.0.get_mut(id) {
                 *owned = true;
-                ExprArena::merge_names(&mut arr_names, mem::take(names));
+                Self::merge_names(&mut arr_names, mem::take(names));
             }
         }
         
         Some(self.0.alloc(Node {owned: false, names: arr_names, inner: Inner::Array(elems)}))
     }
     
-    pub fn create_map(&mut self, free_elems: Vec<Expr>, mut elems: HashMap<String, Expr>) -> Option<Expr> {
-        if free_elems.iter().any(|&id| self.is_owned(id)) { return None; }
-        if elems.iter().any(|(_, &id)| self.is_owned(id)) { return None; }
+    pub fn create_map(&mut self, unnamed: Vec<Expr>, mut named: HashMap<String, Expr>) -> Option<Expr> {
+        if unnamed.iter().any(|&id| self.is_owned(id)) { return None; }
+        if named.iter().any(|(_, &id)| self.is_owned(id)) { return None; }
         
-        let mut map_names: Option<Vec<Name>> = None;
+        let mut map_nms: Option<Vec<Name>> = None;
         
         // Merge name list and resolve names for unnamed members
-        for &id in free_elems.iter() {
-            if let Some(Node {owned, names, ..}) = self.0.get_mut(id) {
+        for &id in unnamed.iter() {
+            if let Some(Node {owned, names: nms, ..}) = self.0.get_mut(id) {
                 *owned = true;
-                let names = mem::take(names);
-                ExprArena::merge_names(&mut map_names, self.resolve(&elems, names));
+                let nms = mem::take(nms);
+                Self::merge_names(&mut map_nms, self.resolve_names(&named, nms));
             } else { panic!("Unknown Expression ID") }
         }
         
         // Merge name list and resolve names for named members
-        for (_, &id) in elems.iter() {
-            if let Some(Node {owned, names, ..}) = self.0.get_mut(id) {
+        for (_, &id) in named.iter() {
+            if let Some(Node {owned, names: nms, ..}) = self.0.get_mut(id) {
                 *owned = true;
-                let names = mem::take(names);
-                ExprArena::merge_names(&mut map_names, self.resolve(&elems, names));
+                let nms = mem::take(nms);
+                Self::merge_names(&mut map_nms, self.resolve_names(&named, nms));
             } else { panic!("Unknown Expression ID") }
         }
         
-        // Wrap the elems in Cache nodes
+        // Wrap the named in Cache nodes
         // so their results can be reused
-        for (_, id) in elems.iter_mut() {
+        for (_, id) in named.iter_mut() {
             *id = self.0.alloc(Node {
                 owned: true, names: None, inner: Inner::Cache(*id, None)
             });
         }
         
         Some(self.0.alloc(Node {
-            owned: false, names: map_names,
-            inner: Inner::Map(free_elems, elems)
+            owned: false, names: map_nms,
+            inner: Inner::Map(unnamed, named)
         }))
     }
     
-    pub fn from_obj(&mut self, mut obj: Object) -> Expr {
+    pub fn from_obj(&mut self, obj: Object) -> Expr { self.from_obj_raw(obj, false) }
+    
+    fn from_obj_raw(&mut self, mut obj: Object, owned: bool) -> Expr {
         let inner = if let Some(Map {unnamed, named}) = obj.downcast_mut::<Map>() {
             let unnamed = mem::take(unnamed);
             let named = mem::take(named);
             Inner::Map(
                 unnamed.into_iter().map(|child|
-                    self.from_obj(child)
+                    self.from_obj_raw(child, true)
                 ).collect(),
-                named.into_iter().map(|(key, child)|
-                    (key.clone(), self.from_obj(child))
-                ).collect(),
+                named.into_iter().map(|(key, child)| {
+                    let id = self.from_obj_raw(child, true);
+                    (key, self.0.alloc(Node {
+                        owned: true, names: None,
+                        inner: Inner::Cache(id, None)
+                    }))
+                }).collect(),
             )
         } else if let Some(Array(elems)) = obj.downcast_mut::<Array>() {
             let elems = mem::take(elems);
             Inner::Array(elems.into_iter().map(|child|
-                self.from_obj(child)
+                self.from_obj_raw(child, true)
             ).collect())
         } else { Inner::Const(obj) };
-        self.0.alloc(Node {owned: false, names: None, inner})
+        self.0.alloc(Node {owned, names: None, inner})
     }
     
     pub fn create_obj<T>(&mut self, obj: T) -> Expr where T: Objectish {
@@ -211,7 +241,7 @@ impl ExprArena {
         
         if let Some(Node {owned, names: ns, ..}) = self.0.get_mut(arg2) {
             *owned = true;
-            ExprArena::merge_names(&mut names, mem::take(ns))
+            Self::merge_names(&mut names, mem::take(ns))
         } else { unreachable!() };
         
         Some(self.0.alloc(Node {owned: false, names, inner: Inner::Binary(op, arg1, arg2)}))
@@ -225,13 +255,13 @@ impl ExprArena {
     
     pub fn get<B>(&self, target: Expr, key: &B) -> Option<Expr>
     where
-        B: Hash + Eq,
+        B: Hash + Eq + std::fmt::Debug,
         String: Borrow<B>,
     {
         if let Some(Node {
-            inner: Inner::Map(_, elems), ..
+            inner: Inner::Map(_, named), ..
         }) = self.0.get(target) {
-            if let Some(&elem_id) = elems.get(key) {
+            if let Some(&elem_id) = named.get(key) {
                 if let Some(&Node {
                     inner: Inner::Cache(body, _), ..
                 }) = self.0.get(elem_id) {

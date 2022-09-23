@@ -1,10 +1,11 @@
 use std::any::Any;
 use core::slice::Iter;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::RemAssign;
 
-use super::super::opers::{Unary, Binary};
+use super::opers::{Unary, Binary};
 use super::{Operable, Object, Objectish, EvalError, EvalResult};
 
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +29,7 @@ fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
 impl Number {
     pub fn simplify(&self) -> Self { match self {
         &Number::Ratio(n, d) => {
-            let g = gcd(n as u64, d);
+            let g = gcd(n.abs() as u64, d);
             Number::Ratio(n / g as i64, d / g)
         },
         &num => num,
@@ -174,5 +175,13 @@ impl Display for Number {
             Number::Real(r) => write!(f, "{}", r),
         }
     }
+}
+
+
+pub fn make_bltns() -> HashMap<String, Object> {
+    HashMap::from([
+        ("pi".to_owned(), Object::new(Number::Real(std::f64::consts::PI))),
+        ("e".to_owned(), Object::new(Number::Real(std::f64::consts::E))),
+    ])
 }
 
