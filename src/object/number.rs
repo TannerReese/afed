@@ -162,7 +162,7 @@ impl Operable<Object> for Number {
    
     // Number does not support calling
     fn arity(&self) -> (usize, usize) { (0, 0) }
-    fn apply_call<'a>(&self, _: Iter<'a, Object>) -> Self::Output {
+    fn apply_call<'a>(&self, _: &mut Iter<'a, Object>) -> Self::Output {
         Err(eval_err!("Cannot call number"))
     }
 }
@@ -179,9 +179,9 @@ impl Display for Number {
 
 
 pub fn make_bltns() -> HashMap<String, Object> {
-    HashMap::from([
-        ("pi".to_owned(), Object::new(Number::Real(std::f64::consts::PI))),
-        ("e".to_owned(), Object::new(Number::Real(std::f64::consts::E))),
-    ])
+    HashMap::from_iter([
+        ("pi", Object::new(Number::Real(std::f64::consts::PI))),
+        ("e", Object::new(Number::Real(std::f64::consts::E))),
+    ].into_iter().map(|(key, val)| (key.to_owned(), val)))
 }
 

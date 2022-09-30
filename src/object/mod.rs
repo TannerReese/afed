@@ -4,6 +4,9 @@ use std::clone::Clone;
 use std::ops::{Deref, DerefMut};
 use std::fmt::{Debug, Display, Formatter, Error};
 
+use std::hash::Hash;
+use std::borrow::Borrow;
+
 use opers::{Unary, Binary};
 
 #[macro_export]
@@ -60,7 +63,7 @@ pub trait Operable<Rhs = Self, U = Unary, B = Binary> {
    
     // Inclusive bounds for number of arguments
     fn arity(&self) -> (usize, usize);
-    fn apply_call<'a>(&self, args: Iter<'a, Rhs>) -> Self::Output;
+    fn apply_call<'a>(&self, args: &mut Iter<'a, Rhs>) -> Self::Output;
 }
 
 pub trait Objectish : Any + Debug + Display + Operable<Object, Output = EvalResult> {
@@ -85,6 +88,29 @@ impl Object {
     pub fn downcast_mut<'a, T: 'static>(&'a mut self) -> Option<&'a mut T> {
         (*self.0).as_any_mut().downcast_mut()
     }
+    
+    
+    
+    pub fn get<B>(&self, key: &B) -> Option<&Object>
+    where
+        B: Hash + Eq + std::fmt::Debug,
+        String: Borrow<B>,
+    { (*self.0).as_any().downcast_ref::<map::Map>().and_then(|m| m.get(key)) }
+    
+    pub fn find<'a, I, B>(&self, path: I) -> Option<&Object>
+    where
+        I: Iterator<Item = &'a B>,
+        B: Hash + Eq + std::fmt::Debug + 'a,
+        String: Borrow<B>,
+    {
+        let mut target = self;
+        for nm in path {
+            if let Some(new_target) = target.get(nm) {
+                target = new_target;
+            } else { return None; }
+        }
+        return Some(target);
+    }
 }
 
 
@@ -99,7 +125,13 @@ impl Operable<Object> for Object {
     }
    
     fn arity(&self) -> (usize, usize) { (*self.0).arity() }
-    fn apply_call<'a>(&self, args: Iter<'a, Object>) -> Self::Output { (*self.0).apply_call(args) }
+    fn apply_call<'a>(&self, args: &mut Iter<'a, Object>) -> Self::Output {
+        let mut res = (*self.0).apply_call(args)?;
+        while args.as_slice().len() > 0 {
+            res = (*res.0).apply_call(args)?;
+        }
+        Ok(res)
+    }
 }
 
 impl Debug for Object {

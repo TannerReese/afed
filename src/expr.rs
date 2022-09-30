@@ -26,6 +26,24 @@ impl Display for Path {
     }
 }
 
+pub type Bltns = HashMap<String, HashMap<String, Object>>;
+
+fn bltn_find<'a, 'b>(bltns: &'a Bltns, path: &'b Path) -> Option<&'a Object> {
+    if path.0.len() > 1 {
+        if let Some(obj) = bltns.get(&path.0[0])
+        .and_then(|pkg| pkg.get(&path.0[1]))
+        .and_then(|obj| obj.find(path.0[2..].iter()))
+        { return Some(obj); }
+    }
+    
+    for pkg in bltns.values() {
+        if let Some(obj) = pkg.get(&path.0[0])
+        .and_then(|obj| obj.find(path.0[1..].iter()))
+        { return Some(obj); }
+    }
+    None
+}
+
 #[derive(Debug, Clone)]
 enum Inner {
     Const(Object),
@@ -61,15 +79,26 @@ impl ExprArena {
         } else { false }
     }
     
+    fn make_const(&mut self, name_id: Name, val: &Object) -> Expr {
+        if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
+            if let Inner::Name(_) = inner {
+                *inner = Inner::Const(val.clone());
+                return name_id;
+            }
+        }
+        panic!("Name ID doesn't refere to name")
+    }
+    
     // Convert Name-type Node into Var-type Node by resolving the name
-    fn make_var(&mut self, name_id: Expr, tgt_id: Expr) -> bool {
+    fn make_var(&mut self, name_id: Name, tgt_id: Expr) -> Expr {
         if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
             if let Inner::Name(name) = inner {
                 let name = mem::replace(name, Path(Vec::new()));
                 *inner = Inner::Var(name, false, tgt_id);
-                true
-            } else { false }
-        } else { false }
+                return name_id;
+            }
+        }
+        panic!("Name ID doesn't refer to name")
     }
     
     // Resolve names, merge remaining names, and set ownership
@@ -80,7 +109,7 @@ impl ExprArena {
             if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
                 if let Some(tgt_id) = map.get(&name.0[0])
                 .and_then(|&id| self.find(id, name.0[1..].iter())) {
-                    if !self.make_var(name_id, tgt_id) { unreachable!() }
+                    self.make_var(name_id, tgt_id);
                     false
                 } else { true }
             } else { panic!("Name ID doesn't refer to name") }
@@ -99,27 +128,26 @@ impl ExprArena {
         }
     }
     
-    pub fn resolve_builtins(&mut self, root: Expr, bltns: HashMap<String, Object>) -> Option<HashMap<String, Object>> {
-        let names = if let Some(Node {names, ..}) = self.0.get_mut(root) {
+    pub fn resolve_builtins(&mut self, root: Expr, bltns: &Bltns) -> bool {
+        let names = if let Some(Node {names: Some(names), ..}) = self.0.get_mut(root) {
             mem::take(names)
-        } else { return Some(bltns) };
+        } else { return false; };
         
-        let bltns = bltns.into_iter().map(|(key, obj)|
-            (key, self.from_obj(obj))
-        ).collect();
+        let unresolved = names.into_iter().filter(|&name_id|
+            if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
+                if let Some(obj) = bltn_find(bltns, name) {
+                    self.make_const(name_id, obj);
+                    false
+                } else { true }
+            } else { panic!("Name ID doesn't refer to name") }
+        ).collect::<Vec<Name>>();
         
-        let mut unresolved = self.resolve_names(&bltns, names);
-        for (_, &obj) in bltns.iter() {
-            if let Some(Node {inner: Inner::Map(_, named), ..}) = self.0.get_mut(obj) {
-                let map = mem::replace(named, HashMap::new());
-                unresolved = self.resolve_names(&map, unresolved);
-                
-                if let Some(Node {inner: Inner::Map(_, named), ..}) = self.0.get_mut(obj) {
-                    *named = map;
-                } else { unreachable!() }
-            }
+        if unresolved.len() > 0 {
+            if let Some(Node {names, ..}) = self.0.get_mut(root) {
+                *names = Some(unresolved);
+            } else { unreachable!() }
         }
-        return None;
+        return true;
     }
     
     
@@ -255,7 +283,7 @@ impl ExprArena {
     
     pub fn get<B>(&self, target: Expr, key: &B) -> Option<Expr>
     where
-        B: Hash + Eq + std::fmt::Debug,
+        B: Hash + Eq,
         String: Borrow<B>,
     {
         if let Some(Node {
@@ -273,8 +301,8 @@ impl ExprArena {
     
     pub fn find<'a, I, B>(&self, mut target: Expr, path: I) -> Option<Expr>
     where
-        I:Iterator<Item = &'a B>,
-        B: Hash + Eq + std::fmt::Debug + 'a,
+        I: Iterator<Item = &'a B>,
+        B: Hash + Eq + 'a,
         String: Borrow<B>,
     {
         for nm in path {

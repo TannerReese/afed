@@ -29,7 +29,7 @@ impl Operable<Object> for Str {
    
     // String does not support calling
     fn arity(&self) -> (usize, usize) { (0, 0) }
-    fn apply_call<'a>(&self, _: Iter<'a, Object>) -> Self::Output {
+    fn apply_call<'a>(&self, _: &mut Iter<'a, Object>) -> Self::Output {
         Err(eval_err!("Cannot call string"))
     }
 }

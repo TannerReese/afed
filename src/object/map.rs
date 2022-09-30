@@ -3,6 +3,9 @@ use core::slice::Iter;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::collections::HashMap;
 
+use std::hash::Hash;
+use std::borrow::Borrow;
+
 use super::opers::{Unary, Binary};
 use super::{Operable, Object, Objectish, EvalError, EvalResult};
 use super::string::Str;
@@ -15,9 +18,11 @@ pub struct Map {
 impl_objectish!{Map}
 
 impl Map {
-    pub fn from_map(named: HashMap<String, Object>) -> Object {
-        Object::new(Map {unnamed: Vec::new(), named})
-    }
+    pub fn get<B>(&self, key: &B) -> Option<&Object>
+    where
+        B: Hash + Eq + std::fmt::Debug,
+        String: Borrow<B>,
+    { self.named.get(key) }
 }
 
 impl Operable<Object> for Map {
@@ -31,14 +36,13 @@ impl Operable<Object> for Map {
     }
    
     fn arity(&self) -> (usize, usize) { (1, 1) }
-    fn apply_call<'a>(&self, mut args: Iter<'a, Object>) -> Self::Output {
+    fn apply_call<'a>(&self, args: &mut Iter<'a, Object>) -> Self::Output {
         let key = args.next().ok_or(eval_err!("No key provided for map call"))?;
         let Str(key) = key.downcast_ref::<Str>()
             .ok_or(eval_err!("Key for map call is not a string"))?;
-        
-        if let Some(obj) = self.named.get(key.as_str()) {
-            obj.apply_call(args)
-        } else { Err(eval_err!("Key {} is not contained in map", &key)) }
+        self.named.get(key.as_str()).map(|obj| obj.clone()).ok_or(
+            eval_err!("Key {} is not contained in map", key)
+        )
     }
 }
 

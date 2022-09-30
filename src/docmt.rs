@@ -10,7 +10,7 @@ use super::object::bool::Bool;
 use super::object::number::Number;
 use super::object::string::Str;
 
-use super::expr::{Expr, ExprArena};
+use super::expr::{Expr, ExprArena, Bltns};
 
 struct Subst {
     start: usize,
@@ -42,7 +42,7 @@ impl Docmt {
         }
     }
     
-    pub fn parse<W>(&mut self, err_out: &mut W, bltns: HashMap<String, Object>) -> Result<(), usize> where W: Write {
+    pub fn parse<W>(&mut self, err_out: &mut W, bltns: &Bltns) -> Result<(), usize> where W: Write {
         if !self.is_parsed {
             let src: String = mem::take(&mut self.src);
             
@@ -61,9 +61,7 @@ impl Docmt {
             self.err_count = prs.err_count;
             
             if let Some(root) = root {
-                if self.arena.resolve_builtins(root, bltns).is_some() {
-                    unreachable!();
-                }
+                self.arena.resolve_builtins(root, bltns);
             }
             
             self.src = src;
