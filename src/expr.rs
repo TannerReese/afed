@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::object::{Object, Objectish, EvalError, EvalResult};
+use super::object::{Operable, Object, Objectish, EvalError, EvalResult};
 use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;
@@ -55,6 +55,7 @@ enum Inner {
     Var(Path, bool, Expr),
     Unary(opers::Unary, Expr),
     Binary(opers::Binary, Expr, Expr),
+    Call(Expr, Vec<Expr>),
 }
 
 #[derive(Debug, Clone)]
@@ -65,37 +66,36 @@ pub struct Node {
 }
 
 impl ExprArena {
-    fn set_cache(&mut self, target: Expr, res: EvalResult) -> bool {
+    fn set_cache(&mut self, target: Expr, res: EvalResult) -> &EvalResult {
         if let Some(Node {inner: Inner::Cache(_, value), ..}) = self.0.get_mut(target) {
             *value = Some(res);
-            true
-        } else { false }
+            if let Some(res) = value { res } else { unreachable!() }
+        } else { panic!("Node ID doesn't refer to Cache node") }
     }
     
-    fn set_not_evaling(&mut self, target: Expr) -> bool {
+    fn set_not_evaling(&mut self, target: Expr) {
         if let Some(Node {inner: Inner::Var(_, evaling, _), ..}) = self.0.get_mut(target) {
             *evaling = false;
-            true
-        } else { false }
+        } else { panic!("Node ID doesn't refer to Var node") }
     }
     
-    fn make_const(&mut self, name_id: Name, val: &Object) -> Expr {
+    fn make_const(&mut self, name_id: Name, val: &Object) {
         if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
             if let Inner::Name(_) = inner {
                 *inner = Inner::Const(val.clone());
-                return name_id;
+                return;
             }
         }
-        panic!("Name ID doesn't refere to name")
+        panic!("Name ID doesn't refer to Name node")
     }
     
     // Convert Name-type Node into Var-type Node by resolving the name
-    fn make_var(&mut self, name_id: Name, tgt_id: Expr) -> Expr {
+    fn make_var(&mut self, name_id: Name, tgt_id: Expr) {
         if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
             if let Inner::Name(name) = inner {
                 let name = mem::replace(name, Path(Vec::new()));
                 *inner = Inner::Var(name, false, tgt_id);
-                return name_id;
+                return;
             }
         }
         panic!("Name ID doesn't refer to name")
@@ -103,9 +103,12 @@ impl ExprArena {
     
     // Resolve names, merge remaining names, and set ownership
     // Returns unresolved names
-    fn resolve_names(&mut self, map: &HashMap<String, Expr>, names: Option<Vec<Name>>) -> Option<Vec<Name>> {
-        let names = if let Some(names) = names { names } else { return None };
-        let names: Vec<Name> = names.into_iter().filter(|&name_id| {
+    fn resolve_names(&mut self, target: Expr, map: &HashMap<String, Expr>) {
+        let names = if let Some(Node {names, ..}) = self.0.get_mut(target) {
+            if let Some(nms) = mem::take(names) { nms } else { return }
+        } else { return };
+        
+        let unresolved = names.into_iter().filter(|&name_id| {
             if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
                 if let Some(tgt_id) = map.get(&name.0[0])
                 .and_then(|&id| self.find(id, name.0[1..].iter())) {
@@ -113,19 +116,26 @@ impl ExprArena {
                     false
                 } else { true }
             } else { panic!("Name ID doesn't refer to name") }
-        }).collect();
+        }).collect::<Vec<Name>>();
         
-        if names.len() == 0 { None } else { Some(names) }
+        if unresolved.len() > 0 {
+            if let Some(Node {names, ..}) = self.0.get_mut(target) {
+                *names = Some(unresolved);
+            } else { unreachable!() }
+        }
     }
     
-    fn merge_names(names1: &mut Option<Vec<Name>>, names2: Option<Vec<Name>>) {
-        if let Some(mut ns2) = names2 {
-            if let Some(ns1) = names1 {
-                ns1.append(&mut ns2);
-            } else {
-                *names1 = Some(ns2);
+    fn set_owned(&mut self, child: Expr, parent_names: &mut Option<Vec<Name>>) {
+        if let Some(Node {owned, names, ..}) = self.0.get_mut(child) {
+            *owned = true;
+            if let Some(mut child_names) = mem::take(names) {
+                if let Some(parent_names) = parent_names {
+                    parent_names.append(&mut child_names);
+                } else {
+                    *parent_names = Some(child_names);
+                }
             }
-        }
+        } else { panic!("Unknown Node ID") }
     }
     
     pub fn resolve_builtins(&mut self, root: Expr, bltns: &Bltns) -> bool {
@@ -155,41 +165,30 @@ impl ExprArena {
     pub fn new() -> ExprArena { ExprArena(Arena::new()) }
     
     pub fn create_array(&mut self, elems: Vec<Expr>) -> Option<Expr> {
-        if elems.iter().any(|&id| self.is_owned(id)) { return None; }
+        if !elems.iter().all(|&id| self.is_ownable(id)) { return None; }
         
-        let mut arr_names: Option<Vec<Name>> = None;
-        for &id in elems.iter() {
-            if let Some(Node {owned, names, ..}) = self.0.get_mut(id) {
-                *owned = true;
-                Self::merge_names(&mut arr_names, mem::take(names));
-            }
-        }
+        let mut names: Option<Vec<Name>> = None;
+        for &id in elems.iter() { self.set_owned(id, &mut names); }
         
-        Some(self.0.alloc(Node {owned: false, names: arr_names, inner: Inner::Array(elems)}))
+        Some(self.0.alloc(Node {owned: false, names, inner: Inner::Array(elems)}))
     }
     
     pub fn create_map(&mut self, unnamed: Vec<Expr>, mut named: HashMap<String, Expr>) -> Option<Expr> {
-        if unnamed.iter().any(|&id| self.is_owned(id)) { return None; }
-        if named.iter().any(|(_, &id)| self.is_owned(id)) { return None; }
+        if !unnamed.iter().all(|&id| self.is_ownable(id)) { return None; }
+        if !named.iter().all(|(_, &id)| self.is_ownable(id)) { return None; }
         
         let mut map_nms: Option<Vec<Name>> = None;
         
         // Merge name list and resolve names for unnamed members
         for &id in unnamed.iter() {
-            if let Some(Node {owned, names: nms, ..}) = self.0.get_mut(id) {
-                *owned = true;
-                let nms = mem::take(nms);
-                Self::merge_names(&mut map_nms, self.resolve_names(&named, nms));
-            } else { panic!("Unknown Expression ID") }
+            self.resolve_names(id, &named);
+            self.set_owned(id, &mut map_nms);
         }
         
         // Merge name list and resolve names for named members
         for (_, &id) in named.iter() {
-            if let Some(Node {owned, names: nms, ..}) = self.0.get_mut(id) {
-                *owned = true;
-                let nms = mem::take(nms);
-                Self::merge_names(&mut map_nms, self.resolve_names(&named, nms));
-            } else { panic!("Unknown Expression ID") }
+            self.resolve_names(id, &named);
+            self.set_owned(id, &mut map_nms);
         }
         
         // Wrap the named in Cache nodes
@@ -205,7 +204,7 @@ impl ExprArena {
             inner: Inner::Map(unnamed, named)
         }))
     }
-    
+       
     pub fn from_obj(&mut self, obj: Object) -> Expr { self.from_obj_raw(obj, false) }
     
     fn from_obj_raw(&mut self, mut obj: Object, owned: bool) -> Expr {
@@ -241,44 +240,54 @@ impl ExprArena {
     
     pub fn create_name(&mut self, name: String) -> Expr {
         let name = Path(name.split('.').map(|s| s.to_owned()).collect());
-        let mut name_ids = Vec::new();
         self.0.alloc_with_id(|id| {
-            name_ids.push(id);
-            Node {owned: false, names: Some(name_ids), inner: Inner::Name(name)}
+            Node {owned: false, names: Some(vec![id]), inner: Inner::Name(name)}
         })
     }
     
     pub fn create_unary(&mut self, op: opers::Unary, arg: Expr) -> Option<Expr> {
-        if self.is_owned(arg) { return None; }
+        if !self.is_ownable(arg) { return None; }
         
-        let names = if let Some(Node {owned, names, ..}) = self.0.get_mut(arg) {
-            *owned = true;
-            mem::take(names)
-        } else { unreachable!() };
+        let mut names: Option<Vec<Name>> = None;
+        self.set_owned(arg, &mut names);
         
-        Some(self.0.alloc(Node {owned: false, names, inner: Inner::Unary(op, arg)}))
+        Some(self.0.alloc(Node {
+            owned: false, names,
+            inner: Inner::Unary(op, arg),
+        }))
     }
     
     pub fn create_binary(&mut self, op: opers::Binary, arg1: Expr, arg2: Expr) -> Option<Expr> {
-        if self.is_owned(arg1) || self.is_owned(arg2) { return None; }
+        if !self.is_ownable(arg1) || !self.is_ownable(arg2) { return None; }
         
-        let mut names = if let Some(Node {owned, names: ns, ..}) = self.0.get_mut(arg1) {
-            *owned = true;
-            mem::take(ns)
-        } else { unreachable!() };
+        let mut names: Option<Vec<Name>> = None;
+        self.set_owned(arg1, &mut names);
+        self.set_owned(arg2, &mut names);
         
-        if let Some(Node {owned, names: ns, ..}) = self.0.get_mut(arg2) {
-            *owned = true;
-            Self::merge_names(&mut names, mem::take(ns))
-        } else { unreachable!() };
+        Some(self.0.alloc(Node {
+            owned: false, names,
+            inner: Inner::Binary(op, arg1, arg2),
+        }))
+    }
+    
+    pub fn create_call(&mut self, func: Expr, args: Vec<Expr>) -> Option<Expr> {
+        if !self.is_ownable(func) { return None; }
+        if !args.iter().all(|&id| self.is_ownable(id)) { return None; }
         
-        Some(self.0.alloc(Node {owned: false, names, inner: Inner::Binary(op, arg1, arg2)}))
+        let mut names: Option<Vec<Name>> = None;
+        self.set_owned(func, &mut names);
+        for &id in args.iter() { self.set_owned(id, &mut names); }
+        
+        Some(self.0.alloc(Node {
+            owned: false, names,
+            inner: Inner::Call(func, args)
+        }))
     }
     
     
     
-    pub fn is_owned(&self, target: Expr) -> bool {
-        self.0.get(target).map_or(true, |expr| expr.owned)
+    pub fn is_ownable(&self, target: Expr) -> bool {
+        self.0.get(target).map_or(false, |expr| !expr.owned)
     }
     
     pub fn get<B>(&self, target: Expr, key: &B) -> Option<Expr>
@@ -313,12 +322,42 @@ impl ExprArena {
         return Some(target);
     }
     
+    fn eval_ref(&mut self, mut target: Expr) -> Result<Option<&Object>, EvalError> {
+        if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
+            Inner::Cache(body, value) => if value.is_none() {
+                let body = *body;
+                let res = self.eval(body);
+                self.set_cache(target, res);
+            },
+            Inner::Var(name, evaling, body) => if *evaling {
+                return Err(eval_err!("Circular dependence from variable {}", name));
+            } else {
+                *evaling = true;
+                let body = *body;
+                self.eval_ref(body)?;
+                self.set_not_evaling(target);
+                target = body;
+            },
+            _ => {},
+        }} else { return Err(eval_err!("Unknown Node ID")); }
+        
+        if let Some(Node {inner, ..}) = self.0.get(target) { match inner {
+            Inner::Const(obj) => Ok(Some(obj)),
+            Inner::Cache(_, value) => match value {
+                None => unreachable!(),
+                Some(Ok(obj)) => Ok(Some(obj)),
+                Some(Err(err)) => Err(err.clone()),
+            },
+            _ => Ok(None),
+        }} else { unreachable!() }
+    }
+    
     pub fn eval(&mut self, target: Expr) -> EvalResult {
         if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
             Inner::Const(obj) => Ok(obj.clone()),
             Inner::Array(elems) => Ok(Object::new(Array({
                 let elems = elems.clone();
-                elems.iter().map(|id| self.eval(*id))
+                elems.into_iter().map(|id| self.eval(id))
                 .collect::<Result<Vec<Object>, EvalError>>()?
             }))),
             Inner::Map(unnamed, named) => {
@@ -335,34 +374,39 @@ impl ExprArena {
                 }))
             },
             
-            Inner::Cache(body, value) => if let Some(res) = value {
-                res.clone()
-            } else {
+            Inner::Cache(body, value) => if let Some(res) = value { res } else {
                 let body = *body;
                 let res = self.eval(body);
-                if !self.set_cache(target, res.clone()) { unreachable!() }
-                res
-            },
-            Inner::Name(_) => Err(eval_err!("Unresolved name")),
+                self.set_cache(target, res)
+            }.clone(),
+            Inner::Name(path) => Err(eval_err!("Unresolved name \"{}\"", path)),
             Inner::Var(name, evaling, body) => if *evaling {
                 Err(eval_err!("Circular dependence from variable {}", name))
             } else {
                 *evaling = true;
                 let body = *body;
                 let res = self.eval(body);
-                if !self.set_not_evaling(target) { unreachable!() } 
+                self.set_not_evaling(target);
                 res
             },
             
-            &mut Inner::Unary(op, arg) => self.eval(arg).and_then(|mut val| val.apply_unary(op)),
+            &mut Inner::Unary(op, arg) => self.eval(arg)?.apply_unary(op),
             &mut Inner::Binary(op, arg1, arg2) => {
-                self.eval(arg1).and_then(|mut val1|
-                    self.eval(arg2).and_then(|val2|
-                        val1.apply_binary(op, val2)
-                    )
-                )
+                self.eval(arg1)?.apply_binary(op, self.eval(arg2)?)
             },
-        }} else { Err(eval_err!("Unknown Thunk ID")) }
+            
+            Inner::Call(func, args) => {
+                let (func, args) = (*func, args.clone());
+                let args = args.into_iter().map(|x| self.eval(x))
+                .collect::<Result<Vec<Object>, EvalError>>()?;
+                
+                if let Some(func_ref) = self.eval_ref(func)? {
+                    func_ref.apply_call(args)
+                } else {
+                    self.eval(func)?.apply_call(args)
+                }
+            },
+        }} else { Err(eval_err!("Unknown Node ID")) }
     }
 }
 

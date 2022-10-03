@@ -1,19 +1,21 @@
 use std::any::Any;
-use core::slice::Iter;
+use std::vec::Vec;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::RemAssign;
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, Objectish, EvalError, EvalResult};
+use super::bltn_func::{BltnFuncSingle, BltnFuncDouble};
+use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
     Ratio(i64, u64),
     Real(f64),
 }
-impl_objectish!{Number}
+impl NamedType for Number { fn type_name() -> &'static str { "number" } }
+impl Objectish for Number { impl_objectish!{} }
 
 fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     let (mut a, mut b) = if a > b { (b, a) } else { (a, b) };
@@ -27,6 +29,8 @@ fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
 }
 
 impl Number {
+    pub fn real(r: f64) -> Object { Object::new(Number::Real(r)) }
+    
     pub fn simplify(&self) -> Self { match self {
         &Number::Ratio(n, d) => {
             let g = gcd(n.abs() as u64, d);
@@ -45,7 +49,7 @@ impl Number {
         _ => None,
     }}
     
-    pub fn pow(self, rhs: Self) -> Self {match (self, rhs) {
+    pub fn pow(self, rhs: Self) -> Self { match (self, rhs) {
         (Number::Ratio(n1, d1), Number::Ratio(n2, 1)) => {
             let (n1, d1, n2) = if n2 < 0 {
                 if n1 < 0 { (-(d1 as i64), -n1 as u64, -n2 as u32) }
@@ -54,6 +58,19 @@ impl Number {
             Number::Ratio(n1.pow(n2), d1.pow(n2))
         },
         (num1, num2) => Number::Real(num1.to_real().powf(num2.to_real())),
+    }}
+    
+    pub fn sqrt(self) -> Option<Self> {
+        let r = self.to_real();
+        if r < 0.0 { None }
+        else { Some(Number::Real(r.sqrt())) }
+    }
+    
+    pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
+        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
+            Number::Ratio(gcd(na * db as i64, nb * da as i64), da * db)
+        }.simplify()),
+        _ => None
     }}
 }
 
@@ -147,8 +164,7 @@ impl Operable<Object> for Number {
     
     fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
         let num1 = *self;
-        let num2 = *other.downcast_ref::<Number>()
-            .ok_or(eval_err!("Number can only be combined with number"))?;
+        let num2 = other.downcast::<Number>()?;
         
         Ok(Object::new(match op {
             Binary::Add => num1 + num2,
@@ -159,12 +175,8 @@ impl Operable<Object> for Number {
             Binary::Pow => num1.pow(num2),
         }))
     }
-   
-    // Number does not support calling
-    fn arity(&self) -> (usize, usize) { (0, 0) }
-    fn apply_call<'a>(&self, _: &mut Iter<'a, Object>) -> Self::Output {
-        Err(eval_err!("Cannot call number"))
-    }
+    
+    call_not_impl!{Self}
 }
 
 impl Display for Number {
@@ -178,10 +190,17 @@ impl Display for Number {
 }
 
 
+
 pub fn make_bltns() -> HashMap<String, Object> {
     HashMap::from_iter([
-        ("pi", Object::new(Number::Real(std::f64::consts::PI))),
-        ("e", Object::new(Number::Real(std::f64::consts::E))),
+        ("pi", Number::real(std::f64::consts::PI)),
+        ("e", Number::real(std::f64::consts::E)),
+        ("sqrt", BltnFuncSingle::new("num.sqrt", |n: Number|
+            n.sqrt().ok_or(eval_err!("Cannot take square root of negative"))
+        )),
+        ("gcd", BltnFuncDouble::new("num.gcd", |a: Number, b: Number|
+            Number::gcd(a, b).ok_or(eval_err!("Cannot take GCD of reals"))
+        )),
     ].into_iter().map(|(key, val)| (key.to_owned(), val)))
 }
 

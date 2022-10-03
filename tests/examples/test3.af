@@ -1,0 +1,26 @@
+# Tests call parsing
+
+# Test array indexing
+my_arr: [1/2, 2, 3, -1],
+my_arr (1-1*my_arr 2/3)+1 = ``,
+my_arr 80 = ``,
+# Test repeated calls
+[2, [0, [8, 1, [42, 3]]]] 1 1 2 0 = `42`,
+
+# Test map indexing
+my_map: {"a": 3/4, "b": -1.2, "xc": 4, "d": "x"},
+[my_map "xc"*3, 1+my_map "a"] = ``,
+my_map "z" = ``,
+
+# Test one-variable builtin functions
+sqrt 3 = ``,
+num.sqrt 5 = ``,
+sqrt (-3) = ``,
+
+# Test two-variable builtin functions
+gcd (-30) 42 = ``,
+num.gcd (14 / 69) (-81 / 92) = ``,
+
+# Test partial currying
+(gcd 75) 60 = ``,
+

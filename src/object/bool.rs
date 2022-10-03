@@ -1,13 +1,14 @@
 use std::any::Any;
-use core::slice::Iter;
+use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, Objectish, EvalError, EvalResult};
+use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
-impl_objectish!{Bool}
+impl NamedType for Bool { fn type_name() -> &'static str { "boolean" }}
+impl Objectish for Bool { impl_objectish!{} }
 
 impl Operable<Object> for Bool {
     type Output = EvalResult;
@@ -21,22 +22,17 @@ impl Operable<Object> for Bool {
     
     fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
         let Bool(mut b) = self;
-        let Bool(b2) = other.downcast_ref::<Bool>()
-            .ok_or(eval_err!("Boolean can only be combined with boolean"))?;
+        let Bool(b2) = other.downcast::<Bool>()?;
         
         match op {
             Binary::Add | Binary::Sub => b ^= b2,
             Binary::Mul => b &= b2,
-            _ => return Err(binary_not_impl!(op, "boolean")),
+            _ => return Err(binary_not_impl!(op, self)),
         }
         Ok(Object::new(Bool(b)))
     }
-   
-    // Boolean does not support calling
-    fn arity(&self) -> (usize, usize) { (0, 0) }
-    fn apply_call<'a>(&self, _: &mut Iter<'a, Object>) -> Self::Output {
-        Err(eval_err!("Cannot call boolean"))
-    }
+    
+    call_not_impl!{Self}
 }
 
 impl Display for Bool {

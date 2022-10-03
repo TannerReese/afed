@@ -89,31 +89,23 @@ impl Docmt {
     }
     
     
-    fn push(&mut self,
-        start: usize, end: usize,
-        lineno: usize, column: usize,
-        target: Expr
-    ) -> bool {
-        if start > end || end > self.len { return false }
+    fn push(&mut self, new: Subst) -> bool {
+        if new.start > new.end || new.end > self.len { return false }
         
         let i = self.substs.iter()
             .enumerate().rev()
-            .filter(|(_, sbs)| sbs.start < start)
+            .filter(|(_, sbs)| sbs.start < new.start)
             .next().map_or(0, |(i, _)| i + 1);
         
         if i > 0 { if let Some(before) = self.substs.get(i - 1) {
-            if before.end > start { return false }
+            if before.end > new.start { return false }
         }}
         
         if let Some(after) = self.substs.get(i) {
-            if end > after.start { return false }
+            if new.end > after.start { return false }
         }
         
-        self.substs.insert(i, Subst {
-            start, end,
-            lineno, column,
-            target, value: None,
-        });
+        self.substs.insert(i, new);
         return true;
     }
 }
@@ -314,6 +306,8 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         let body = self.parse_expr(0)?;
         self.skip();
         if self.parse_char('=') {
+            self.skip();
+            let (lineno, column) = (self.pos.lineno, self.pos.column);
             self.expect('`', "Missing opening grave in substitution expression")?;
             
             let start = self.pos.idx;
@@ -321,11 +315,11 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             let end = self.pos.idx;
             
             self.expect('`', "Missing closing grave in substition expression")?;
-            self.doc.push(
+            self.doc.push(Subst {
                 start, end,
-                self.pos.lineno, self.pos.column,
-                body
-            );
+                lineno, column,
+                target: body, value: None,
+            });
         }
         Ok(body)
     }
@@ -333,9 +327,9 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     fn parse_expr(&mut self, min_prec: usize) -> Result<Expr, ParseError> {
         let mut value = if let Some(op) = self.parse_unary() {
             let prec = std::cmp::max(op.prec(), min_prec);
-            let arg = self.parse_expr(prec)?;
+            let arg = self.parse_expr(prec + 1)?;
             self.doc.arena.create_unary(op, arg).unwrap()
-        } else { self.parse_single()? };
+        } else { self.parse_call()? };
         
         let mut before_oper = self.pos;
         while let Some(op) = self.parse_binary() {
@@ -468,40 +462,51 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                 
                 if !self.parse_char(',') { break; }
             }
+            self.skip();
         }
         
         if !is_root { self.expect('}', "Missing closing brace in map")?; }
         Ok(self.doc.arena.create_map(unnamed, named).unwrap())
     }
     
-    fn parse_single(&mut self) -> Result<Expr, ParseError> {
+    fn parse_call(&mut self) -> Result<Expr, ParseError> {
+        if let Some(val) = self.parse_single()? {
+            let mut args = Vec::new();
+            while let Some(x) = self.parse_single()? { args.push(x); }
+            
+            Ok(if args.len() == 0 { val } else {
+                self.doc.arena.create_call(val, args).unwrap()
+            })
+        } else { Err(self.error("Missing value")) }
+    }
+    
+    fn parse_single(&mut self) -> Result<Option<Expr>, ParseError> {
         self.skip();
-        match self.pos.peek() {
-            None => Err(self.error("Unexpected End of Input")),
-            Some('"') => {
+        Ok(if let Some(c) = self.pos.peek() { Some(match c {
+            '"' => {
                 let s = Str(self.parse_string()?);
-                Ok(self.doc.arena.create_obj(s))
+                self.doc.arena.create_obj(s)
             },
-            Some('(') => {
+            '(' => {
                 self.pos.next();
                 let body = self.parse_equals()?;
                 self.expect(')', "Missing close parenthesis")?;
-                Ok(body)
+                body
             },
-            Some('[') => self.parse_array(),
-            Some('{') => self.parse_map(false),
-            Some(c) => {
-                if c.is_ascii_digit() { self.parse_num() }
+            '[' => self.parse_array()?,
+            '{' => self.parse_map(false)?,
+            _ => {
+                if c.is_ascii_digit() { self.parse_num()? }
                 else if c.is_alphabetic() {
                     let name = self.parse_name()?;
-                    Ok(if let Some(obj) = Self::parse_constant(name.as_str()) {
+                    if let Some(obj) = Self::parse_constant(name.as_str()) {
                         self.doc.arena.from_obj(obj)
                     } else {
                         self.doc.arena.create_name(name)
-                    })
-                } else { Err(self.error("Unknown token at beginning of value")) }
+                    }
+                } else { return Ok(None) }
             },
-        }
+        })} else { None })
     }
     
     fn parse_constant(name: &str) -> Option<Object> {
