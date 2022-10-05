@@ -7,7 +7,12 @@ let b:current_syntax = 1
 " Expression operators
 syn match afedOper /\v[!$%&*+-/<=>?@^~]+/
 syn match afedOper /:/
+syn keyword afedOper if
 hi link afedOper Operator
+
+" Variable name
+syn match afedVar /\v\a\w*/
+hi link afedVar Ignore
 
 " Numeric literals
 syn match afedDigit /\v-?\d+\.?\d*([eE][+-]?\d+)?/

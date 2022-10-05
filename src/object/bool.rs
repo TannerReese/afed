@@ -10,6 +10,10 @@ pub struct Bool(pub bool);
 impl NamedType for Bool { fn type_name() -> &'static str { "boolean" }}
 impl Objectish for Bool { impl_objectish!{} }
 
+impl Bool {
+    pub fn new(b: bool) -> Object { Object::new(Bool(b)) }
+}
+
 impl Operable<Object> for Bool {
     type Output = EvalResult;
     fn apply_unary(&mut self, op: Unary) -> Self::Output {
@@ -21,15 +25,16 @@ impl Operable<Object> for Bool {
     }
     
     fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
-        let Bool(mut b) = self;
+        let &mut Bool(b1) = self;
         let Bool(b2) = other.downcast::<Bool>()?;
         
-        match op {
-            Binary::Add | Binary::Sub => b ^= b2,
-            Binary::Mul => b &= b2,
+        Ok(Bool::new(match op {
+            Binary::And => b1 && b2,
+            Binary::Or => b1 || b2,
+            Binary::Add | Binary::Sub => b1 ^ b2,
+            Binary::Mul => b1 && b2,
             _ => return Err(binary_not_impl!(op, self)),
-        }
-        Ok(Object::new(Bool(b)))
+        }))
     }
     
     call_not_impl!{Self}
@@ -39,5 +44,33 @@ impl Display for Bool {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{}", self.0)
     }
+}
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ternary();
+impl NamedType for Ternary { fn type_name() -> &'static str { "ternary" }}
+impl Objectish for Ternary { impl_objectish!{} }
+
+impl Operable<Object> for Ternary {
+    type Output = EvalResult;
+    fn apply_unary(&mut self, op: Unary) -> Self::Output {
+        Err(unary_not_impl!(op, self))
+    }
+    
+    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
+        Err(binary_not_impl!(op, self))
+    }
+    
+    fn arity(&self) -> usize { 3 }
+    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
+        let Bool(cond) = args.remove(0).downcast()?;
+        Ok(args.remove(if cond { 0 } else { 1 }))
+    }
+}
+
+impl Display for Ternary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> { write!(f, "if") }
 }
 

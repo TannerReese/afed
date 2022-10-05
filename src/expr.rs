@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::object::{Operable, Object, Objectish, EvalError, EvalResult};
+use super::object::{Object, Objectish, EvalError, EvalResult};
 use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;
@@ -26,20 +26,17 @@ impl Display for Path {
     }
 }
 
-pub type Bltns = HashMap<String, HashMap<String, Object>>;
-
-fn bltn_find<'a, 'b>(bltns: &'a Bltns, path: &'b Path) -> Option<&'a Object> {
-    if path.0.len() > 1 {
-        if let Some(obj) = bltns.get(&path.0[0])
-        .and_then(|pkg| pkg.get(&path.0[1]))
-        .and_then(|obj| obj.find(path.0[2..].iter()))
-        { return Some(obj); }
+fn bltn_find<'a, 'b>(bltns: &'a HashMap<String, Object>, path: &'b Path) -> Option<&'a Object> {
+    if let Some(obj) = bltns.get(&path.0[0]) {
+        if let Some(res) = obj.find(path.0[1..].iter()) {
+            return Some(res);
+        }
     }
     
     for pkg in bltns.values() {
-        if let Some(obj) = pkg.get(&path.0[0])
-        .and_then(|obj| obj.find(path.0[1..].iter()))
-        { return Some(obj); }
+        if let Some(obj) = pkg.find(path.0.iter()) {
+            return Some(obj);
+        }
     }
     None
 }
@@ -138,7 +135,7 @@ impl ExprArena {
         } else { panic!("Unknown Node ID") }
     }
     
-    pub fn resolve_builtins(&mut self, root: Expr, bltns: &Bltns) -> bool {
+    pub fn resolve_builtins(&mut self, root: Expr, bltns: &HashMap<String, Object>) -> bool {
         let names = if let Some(Node {names: Some(names), ..}) = self.0.get_mut(root) {
             mem::take(names)
         } else { return false; };

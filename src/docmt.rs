@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use super::object::{Object, EvalError};
 use super::object::opers;
 use super::object::null::Null;
-use super::object::bool::Bool;
+use super::object::bool::{Bool, Ternary};
 use super::object::number::Number;
 use super::object::string::Str;
 
-use super::expr::{Expr, ExprArena, Bltns};
+use super::expr::{Expr, ExprArena};
 
 struct Subst {
     start: usize,
@@ -42,7 +42,7 @@ impl Docmt {
         }
     }
     
-    pub fn parse<W>(&mut self, err_out: &mut W, bltns: &Bltns) -> Result<(), usize> where W: Write {
+    pub fn parse<W>(&mut self, err_out: &mut W, bltns: &HashMap<String, Object>) -> Result<(), usize> where W: Write {
         if !self.is_parsed {
             let src: String = mem::take(&mut self.src);
             
@@ -514,6 +514,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             "null" => Object::new(Null()),
             "true" => Object::new(Bool(true)),
             "false" => Object::new(Bool(false)),
+            "if" => Object::new(Ternary()),
             _ => return None,
         })
     }

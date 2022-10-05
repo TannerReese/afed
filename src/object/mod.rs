@@ -7,6 +7,7 @@ use std::hash::Hash;
 use std::borrow::Borrow;
 
 use opers::{Unary, Binary};
+use self::bool::Bool;
 
 #[macro_export]
 macro_rules! eval_err {
@@ -135,19 +136,48 @@ impl Object {
     }
 }
 
+impl<const N: usize> From<[Object; N]> for Object {
+    fn from(arr: [Object; N]) -> Object {
+        Object::new(array::Array(arr.into()))
+    }
+}
 
-impl Operable<Object> for Object {
-    type Output = EvalResult;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
+impl<const N: usize> From<[(&str, Object); N]> for Object {
+    fn from(arr: [(&str, Object); N]) -> Object {
+        Object::new(map::Map {
+            unnamed: Vec::new(),
+            named: arr.map(|(key, obj)| (key.to_owned(), obj)).into(),
+        })
+    }
+}
+
+
+impl Object {
+    pub fn apply_unary(mut self, op: Unary) -> EvalResult {
         (*self.0).apply_unary(op)
     }
     
-    fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
-        (*self.0).apply_binary(op, other)
-    }
+    pub fn apply_binary(mut self, op: Binary, mut other: Object) -> EvalResult { match op {
+        Binary::Apply => self.apply_call(vec![other]),
+        Binary::Eq => Ok(Bool::new((*self.0).eq(&other))),
+        Binary::Neq => Ok(Bool::new(!(*self.0).eq(&other))),
+        Binary::Leq => (*self.0).apply_binary(Binary::Leq, other),
+        Binary::Geq => (*other.0).apply_binary(Binary::Leq, self),
+        Binary::Lt => if (*self.0).eq(&other) {
+            Ok(Bool::new(false))
+        } else {
+            (*self.0).apply_binary(Binary::Leq, other)
+        },
+        Binary::Gt => if (*self.0).eq(&other) {
+            Ok(Bool::new(false))
+        } else {
+            (*other.0).apply_binary(Binary::Leq, self)
+        },
+        _ => (*self.0).apply_binary(op, other),
+    }}
     
-    fn arity(&self) -> usize { (*self.0).arity() }
-    fn apply_call<'a>(&self, args: Vec<Object>) -> Self::Output {
+    pub fn arity(&self) -> usize { (*self.0).arity() }
+    pub fn apply_call<'a>(&self, args: Vec<Object>) -> EvalResult {
         let arity = (*self.0).arity();
         if args.len() == arity {
             return (*self.0).apply_call(args);

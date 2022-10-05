@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use std::io::{Write, Read, Error, empty, sink, stdin, stdout, stderr};
 use std::process::exit;
 use std::fs::{File, canonicalize};
 use std::path::PathBuf;
 
-#[macro_use] mod object;
-mod expr;
-mod docmt;
+#[macro_use] pub mod object;
+pub mod libs;
+pub mod expr;
+pub mod docmt;
 
 #[derive(Debug, Clone)]
 enum Stream {
@@ -198,9 +198,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut doc = docmt::Docmt::new(prog);
     let mut any_errors = false;
     
-    let bltns = HashMap::from([
-        ("num".to_owned(), object::number::make_bltns()),
-    ]);
+    let bltns = libs::make_bltns();
     
     let mut errout = prms.errors.to_writer();
     if let Err(count) = doc.parse(&mut errout, &bltns) {

@@ -1,12 +1,12 @@
 use std::any::Any;
 use std::vec::Vec;
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::RemAssign;
+use std::cmp::Ordering;
 
 use super::opers::{Unary, Binary};
-use super::bltn_func::{BltnFuncSingle, BltnFuncDouble};
+use super::bool::Bool;
 use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
 
 #[derive(Debug, Clone, Copy)]
@@ -60,6 +60,47 @@ impl Number {
         (num1, num2) => Number::Real(num1.to_real().powf(num2.to_real())),
     }}
     
+    pub fn flrdiv(self, rhs: Self) -> Self { match (self, rhs) {
+        (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
+            if (n1 < 0) == (n2 < 0) || n1 == 0 || n2 == 0 {
+                let n = (n1.abs() as u64 * d2) / (n2.abs() as u64 * d1);
+                Number::Ratio(n as i64, 1)
+            } else {
+                let n = (n1.abs() as u64 * d2 - 1) / (n2.abs() as u64 * d1) + 1;
+                Number::Ratio(-(n as i64), 1)
+            }
+        },
+        (num1, num2) => Number::Real(num1.to_real().div_euclid(num2.to_real())),
+    }}
+    
+    pub fn abs(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(n.abs(), d),
+        Number::Real(r) => Number::Real(r.abs()),
+    }}
+    
+    pub fn signum(self) -> Self { Number::Ratio(match self {
+        Number::Ratio(n, _) => n.signum(),
+        Number::Real(r) => r.signum() as i64
+    }, 1)}
+    
+    pub fn floor(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(if n < 0 {
+            (n + 1) / d as i64 - 1
+        } else {
+            n / d as i64
+        }, 1),
+        Number::Real(r) => Number::Ratio(r.floor() as i64, 1),
+    }}
+    
+    pub fn ceil(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(if n > 0 {
+            (n - 1) / d as i64 + 1
+        } else {
+            n / d as i64
+        }, 1),
+        Number::Real(r) => Number::Ratio(r.ceil() as i64, 1),
+    }}
+    
     pub fn sqrt(self) -> Option<Self> {
         let r = self.to_real();
         if r < 0.0 { None }
@@ -68,9 +109,18 @@ impl Number {
     
     pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
         (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
-            Number::Ratio(gcd(na * db as i64, nb * da as i64), da * db)
+            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+            Number::Ratio(g as i64, da * db)
         }.simplify()),
         _ => None
+    }}
+    
+    pub fn lcm(a: Self, b: Self) -> Option<Self> { match (a, b) {
+        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
+            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+            Number::Ratio(na * nb, g)
+        }.simplify()),
+        _ => None,
     }}
 }
 
@@ -88,6 +138,21 @@ impl PartialEq for Number {
 }
 
 impl Eq for Number {}
+
+impl PartialOrd for Number {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { match (self, other) {
+        (&Number::Ratio(n1, d1), &Number::Ratio(n2, d2)) => {
+            Some((n1 * d2 as i64).cmp(&(n2 * d1 as i64)))
+        },
+        (num1, num2) => num1.to_real().partial_cmp(&num2.to_real()),
+    }}
+}
+
+impl Ord for Number {
+    fn cmp(&self, other: &Self) -> Ordering {
+        PartialOrd::partial_cmp(self, other).unwrap()
+    }
+}
 
 impl Neg for Number {
     type Output = Self;
@@ -167,12 +232,15 @@ impl Operable<Object> for Number {
         let num2 = other.downcast::<Number>()?;
         
         Ok(Object::new(match op {
+            Binary::Leq => return Ok(Bool::new(num1 <= num2)),
             Binary::Add => num1 + num2,
             Binary::Sub => num1 - num2,
             Binary::Mul => num1 * num2,
             Binary::Div => num1 / num2,
             Binary::Mod => num1 % num2,
+            Binary::FlrDiv => num1.flrdiv(num2),
             Binary::Pow => num1.pow(num2),
+            _ => return Err(binary_not_impl!(op, self)),
         }))
     }
     
@@ -187,20 +255,5 @@ impl Display for Number {
             Number::Real(r) => write!(f, "{}", r),
         }
     }
-}
-
-
-
-pub fn make_bltns() -> HashMap<String, Object> {
-    HashMap::from_iter([
-        ("pi", Number::real(std::f64::consts::PI)),
-        ("e", Number::real(std::f64::consts::E)),
-        ("sqrt", BltnFuncSingle::new("num.sqrt", |n: Number|
-            n.sqrt().ok_or(eval_err!("Cannot take square root of negative"))
-        )),
-        ("gcd", BltnFuncDouble::new("num.gcd", |a: Number, b: Number|
-            Number::gcd(a, b).ok_or(eval_err!("Cannot take GCD of reals"))
-        )),
-    ].into_iter().map(|(key, val)| (key.to_owned(), val)))
 }
 

@@ -13,14 +13,21 @@ my_map: {"a": 3/4, "b": -1.2, "xc": 4, "d": "x"},
 my_map "z" = ``,
 
 # Test one-variable builtin functions
-sqrt 3 = ``,
+sq: sqrt,
+sq 3 = ``,
 num.sqrt 5 = ``,
-sqrt (-3) = ``,
+sq (-3) = ``,
+# Test function application operator
+tanh $ asinh $ sin $ pi / 4 = ``,
+exp $ log10 $ log 3 40 = ``,
 
 # Test two-variable builtin functions
 gcd (-30) 42 = ``,
+lcm (-96) 126 = ``,
 num.gcd (14 / 69) (-81 / 92) = ``,
 
 # Test partial currying
 (gcd 75) 60 = ``,
+least: lcm 24 = ``, # Test function printing
+least 100 = ``,
 

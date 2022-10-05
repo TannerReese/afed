@@ -13,14 +13,21 @@ my_map: {"a": 3/4, "b": -1.2, "xc": 4, "d": "x"},
 my_map "z" = `Eval Error: Key z is not contained in map`,
 
 # Test one-variable builtin functions
-sqrt 3 = `1.7320508075688772`,
+sq: sqrt,
+sq 3 = `1.7320508075688772`,
 num.sqrt 5 = `2.23606797749979`,
-sqrt (-3) = `Eval Error: Cannot take square root of negative`,
+sq (-3) = `Eval Error: Cannot take square root of negative`,
+# Test function application operator
+tanh $ asinh $ sin $ pi / 4 = `0.5773502691896256`,
+exp $ log10 $ log 3 40 = `1.6922347808648706`,
 
 # Test two-variable builtin functions
-gcd (-30) 42 = `-6`,
-num.gcd (14 / 69) (-81 / 92) = `-1 / 276`,
+gcd (-30) 42 = `6`,
+lcm (-96) 126 = `-2016`,
+num.gcd (14 / 69) (-81 / 92) = `1 / 276`,
 
 # Test partial currying
 (gcd 75) 60 = `15`,
+least: lcm 24 = `(num.lcm) (24)`, # Test function printing
+least 100 = `600`,
 
