@@ -2,7 +2,7 @@ use std::any::Any;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
+use super::{Operable, Object, NamedType, Objectish, EvalError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Curry {
@@ -33,13 +33,13 @@ impl Curry {
 }
 
 impl Operable<Object> for Curry {
-    type Output = EvalResult;
+    type Output = Object;
     fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        Err(unary_not_impl!(op, self))
+        unary_not_impl!(op, self)
     }
     
     fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        Err(binary_not_impl!(op, self))
+        binary_not_impl!(op, self)
     }
     
     fn arity(&self) -> usize { self.arity }

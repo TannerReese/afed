@@ -3,7 +3,7 @@ use std::io::Write;
 use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 
-use super::object::{Object, EvalError};
+use super::object::Object;
 use super::object::opers;
 use super::object::null::Null;
 use super::object::bool::{Bool, Ternary};
@@ -19,7 +19,7 @@ struct Subst {
     lineno: usize,
     column: usize,
     target: Expr,
-    value: Option<Result<Object, EvalError>>,
+    value: Option<Object>,
 }
 
 pub struct Docmt {
@@ -75,14 +75,15 @@ impl Docmt {
         let mut err_count = 0;
         for Subst {target, value, lineno, column, ..} in substs.iter_mut() {
             if value.is_some() { continue; }
-            *value = Some(self.arena.eval(*target));
-            if let Some(Err(err)) = value {
+            let res = self.arena.eval(*target);
+            if res.is_err() {
                 if let Err(_) = write!(err_out,
                     "line {}, column {} {}\n",
-                    lineno, column, err
+                    lineno, column, res
                 ) { panic!("IO Error while writing eval error"); }
                 err_count += 1;
             }
+            *value = Some(res);
         }
         self.substs = substs;
         if err_count > 0 { Err(err_count) } else { Ok(()) }
@@ -117,8 +118,7 @@ impl Display for Docmt {
             if last >= self.len { break; }
             
             f.write_str(&self.src[last..*start])?;
-            if let Some(Ok(obj)) = value { write!(f, "{}", obj)?; }
-            else if let Some(Err(err)) = value { write!(f, "{}", err)?; }
+            if let Some(obj) = value { write!(f, "{}", obj)?; }
             last = *end;
         }
         

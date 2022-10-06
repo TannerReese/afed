@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 
 use super::opers::{Unary, Binary};
 use super::bool::Bool;
-use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
+use super::{Operable, Object, NamedType, Objectish, EvalError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
@@ -57,20 +57,20 @@ impl Number {
             } else { (n1, d1, n2 as u32) };
             Number::Ratio(n1.pow(n2), d1.pow(n2))
         },
-        (num1, num2) => Number::Real(num1.to_real().powf(num2.to_real())),
+        (num1, num2) => num1.to_real().powf(num2.to_real()).into(),
     }}
     
     pub fn flrdiv(self, rhs: Self) -> Self { match (self, rhs) {
         (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
             if (n1 < 0) == (n2 < 0) || n1 == 0 || n2 == 0 {
                 let n = (n1.abs() as u64 * d2) / (n2.abs() as u64 * d1);
-                Number::Ratio(n as i64, 1)
+                (n as i64).into()
             } else {
                 let n = (n1.abs() as u64 * d2 - 1) / (n2.abs() as u64 * d1) + 1;
-                Number::Ratio(-(n as i64), 1)
+                (-(n as i64)).into()
             }
         },
-        (num1, num2) => Number::Real(num1.to_real().div_euclid(num2.to_real())),
+        (num1, num2) => num1.to_real().div_euclid(num2.to_real()).into(),
     }}
     
     pub fn abs(self) -> Self { match self {
@@ -122,6 +122,14 @@ impl Number {
         }.simplify()),
         _ => None,
     }}
+}
+
+impl From<i64> for Number {
+    fn from(n: i64) -> Number { Number::Ratio(n, 1) }
+}
+
+impl From<f64> for Number {
+    fn from(r: f64) -> Number { Number::Real(r) }
 }
 
 impl PartialEq for Number {
@@ -220,19 +228,19 @@ impl Rem for Number {
 
 
 impl Operable<Object> for Number {
-    type Output = EvalResult;
+    type Output = Object;
     fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        Ok(Object::new(match op {
+        Object::new(match op {
             Unary::Neg => -*self,
-        }))
+        })
     }
     
     fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
         let num1 = *self;
-        let num2 = other.downcast::<Number>()?;
+        let num2 = try_expect!(other);
         
-        Ok(Object::new(match op {
-            Binary::Leq => return Ok(Bool::new(num1 <= num2)),
+        Object::new(match op {
+            Binary::Leq => return Bool::new(num1 <= num2),
             Binary::Add => num1 + num2,
             Binary::Sub => num1 - num2,
             Binary::Mul => num1 * num2,
@@ -240,8 +248,8 @@ impl Operable<Object> for Number {
             Binary::Mod => num1 % num2,
             Binary::FlrDiv => num1.flrdiv(num2),
             Binary::Pow => num1.pow(num2),
-            _ => return Err(binary_not_impl!(op, self)),
-        }))
+            _ => return binary_not_impl!(op, self),
+        })
     }
     
     call_not_impl!{Self}

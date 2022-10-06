@@ -15,7 +15,7 @@ x  : {
 	abs m * signum (1 - m ^ 2) = ``,
 	sin (atan2 67 32) = ``, 
 	
-	factorial 10 / 91 = ``,
+	factorial 4 / 39 = ``,
 	num.choose (sqrt 17) 4 = ``,
 	lcm 21 (gcd 23 69) = ``,
 y: {

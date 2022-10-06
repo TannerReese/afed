@@ -3,7 +3,7 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
+use super::{Operable, Object, NamedType, Objectish, EvalError};
 use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,23 +12,26 @@ impl NamedType for Array { fn type_name() -> &'static str { "array" }}
 impl Objectish for Array { impl_objectish!{} }
 
 impl Operable<Object> for Array {
-    type Output = EvalResult;
+    type Output = Object;
     fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        Err(unary_not_impl!(op, self))
+        unary_not_impl!(op, self)
     }
     
     fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        Err(binary_not_impl!(op, self))
+        binary_not_impl!(op, self)
     }
     
     fn arity(&self) -> usize { 1 }
-    fn apply_call<'a>(&self, args: Vec<Object>) -> Self::Output {
-        let idx = args[0]
-            .downcast_ref::<Number>()
-            .ok_or(eval_err!("Index for array call is not a number"))?
-            .as_index()
-            .ok_or(eval_err!("Index could not be cast to correct integer"))?;
-        self.0.get(idx).map(|obj| obj.clone()).ok_or(eval_err!("Index {} is out of bounds", idx))
+    fn apply_call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
+        let num: Number = try_expect!(args.remove(0));
+        if let Some(idx) = num.as_index() {
+            if let Some(obj) = self.0.get(idx) { obj.clone() }
+            else {
+                eval_err!("Index {} is out of bounds", idx)
+            }
+        } else {
+            eval_err!("Index could not be cast to correct integer")
+        }
     }
 }
 

@@ -7,7 +7,7 @@ use std::hash::Hash;
 use std::borrow::Borrow;
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError, EvalResult};
+use super::{Operable, Object, NamedType, Objectish, EvalError};
 use super::string::Str;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,20 +27,19 @@ impl Map {
 }
 
 impl Operable<Object> for Map {
-    type Output = EvalResult;
+    type Output = Object;
     fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        Err(unary_not_impl!(op, self))
+        unary_not_impl!(op, self)
     }
     
     fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        Err(binary_not_impl!(op, self))
+        binary_not_impl!(op, self)
     }
     
     fn arity(&self) -> usize { 1 }
-    fn apply_call(&self, args: Vec<Object>) -> Self::Output {
-        let Str(key) = args[0].downcast_ref::<Str>()
-            .ok_or(eval_err!("Key for map call is not a string"))?;
-        self.named.get(key.as_str()).map(|obj| obj.clone()).ok_or(
+    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
+        let Str(key) = try_expect!(args.remove(0));
+        self.named.get(key.as_str()).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
     }

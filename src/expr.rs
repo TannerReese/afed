@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::object::{Object, Objectish, EvalError, EvalResult};
+use super::object::{Object, Objectish, EvalError};
 use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;
@@ -47,7 +47,7 @@ enum Inner {
     Array(Vec<Expr>),
     Map(Vec<Expr>, HashMap<String, Expr>),
     
-    Cache(Expr, Option<EvalResult>),
+    Cache(Expr, Option<Object>),
     Name(Path),
     Var(Path, bool, Expr),
     Unary(opers::Unary, Expr),
@@ -63,7 +63,7 @@ pub struct Node {
 }
 
 impl ExprArena {
-    fn set_cache(&mut self, target: Expr, res: EvalResult) -> &EvalResult {
+    fn set_cache(&mut self, target: Expr, res: Object) -> &Object {
         if let Some(Node {inner: Inner::Cache(_, value), ..}) = self.0.get_mut(target) {
             *value = Some(res);
             if let Some(res) = value { res } else { unreachable!() }
@@ -319,56 +319,60 @@ impl ExprArena {
         return Some(target);
     }
     
-    fn eval_ref(&mut self, mut target: Expr) -> Result<Option<&Object>, EvalError> {
+    fn eval_ref(&mut self, mut target: Expr) -> Option<&Object> {
         if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
             Inner::Cache(body, value) => if value.is_none() {
                 let body = *body;
                 let res = self.eval(body);
                 self.set_cache(target, res);
             },
-            Inner::Var(name, evaling, body) => if *evaling {
-                return Err(eval_err!("Circular dependence from variable {}", name));
+            Inner::Var(_, evaling, body) => if *evaling {
+                return None
             } else {
                 *evaling = true;
                 let body = *body;
-                self.eval_ref(body)?;
+                let is_none = self.eval_ref(body).is_none();
                 self.set_not_evaling(target);
+                if is_none { return None; }
                 target = body;
             },
             _ => {},
-        }} else { return Err(eval_err!("Unknown Node ID")); }
+        }} else { return None; }
         
         if let Some(Node {inner, ..}) = self.0.get(target) { match inner {
-            Inner::Const(obj) => Ok(Some(obj)),
-            Inner::Cache(_, value) => match value {
-                None => unreachable!(),
-                Some(Ok(obj)) => Ok(Some(obj)),
-                Some(Err(err)) => Err(err.clone()),
-            },
-            _ => Ok(None),
+            Inner::Const(obj) => Some(obj),
+            Inner::Cache(_, value) => value.as_ref(),
+            _ => None,
         }} else { unreachable!() }
     }
     
-    pub fn eval(&mut self, target: Expr) -> EvalResult {
+    pub fn eval(&mut self, target: Expr) -> Object {
         if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
-            Inner::Const(obj) => Ok(obj.clone()),
-            Inner::Array(elems) => Ok(Object::new(Array({
+            Inner::Const(obj) => obj.clone(),
+            Inner::Array(elems) => {
                 let elems = elems.clone();
-                elems.into_iter().map(|id| self.eval(id))
-                .collect::<Result<Vec<Object>, EvalError>>()?
-            }))),
+                let mut new_elems = Vec::new();
+                for id in elems.into_iter() {
+                    new_elems.push(try_ok!(self.eval(id)))
+                }
+                Object::new(Array(new_elems))
+            },
             Inner::Map(unnamed, named) => {
-                let unnamed = unnamed.clone();
-                let named = named.clone();
+                let old_unnamed = unnamed.clone();
+                let old_named = named.clone();
                 
-                Ok(Object::new(Map {
-                    unnamed: unnamed.into_iter().map(|val|
-                        self.eval(val)
-                    ).collect::<Result<Vec<Object>, EvalError>>()?,
-                    named: named.into_iter().map(|(key, val)| {
-                        self.eval(val).map(|obj| (key, obj))
-                    }).collect::<Result<HashMap<String, Object>, EvalError>>()?,
-                }))
+                let mut unnamed = Vec::new();
+                for id in old_unnamed.into_iter() {
+                    unnamed.push(try_ok!(self.eval(id)));
+                }
+                
+                let mut named = HashMap::new();
+                for (key, id) in old_named.into_iter() {
+                    if let Some(_) = named.insert(key, try_ok!(self.eval(id))) {
+                        unreachable!()
+                    }
+                }
+                Object::new(Map { unnamed, named })
             },
             
             Inner::Cache(body, value) => if let Some(res) = value { res } else {
@@ -376,9 +380,9 @@ impl ExprArena {
                 let res = self.eval(body);
                 self.set_cache(target, res)
             }.clone(),
-            Inner::Name(path) => Err(eval_err!("Unresolved name \"{}\"", path)),
+            Inner::Name(path) => eval_err!("Unresolved name \"{}\"", path),
             Inner::Var(name, evaling, body) => if *evaling {
-                Err(eval_err!("Circular dependence from variable {}", name))
+                eval_err!("Circular dependence from variable {}", name)
             } else {
                 *evaling = true;
                 let body = *body;
@@ -387,23 +391,25 @@ impl ExprArena {
                 res
             },
             
-            &mut Inner::Unary(op, arg) => self.eval(arg)?.apply_unary(op),
+            &mut Inner::Unary(op, arg) => try_ok!(self.eval(arg)).apply_unary(op),
             &mut Inner::Binary(op, arg1, arg2) => {
-                self.eval(arg1)?.apply_binary(op, self.eval(arg2)?)
+                try_ok!(self.eval(arg1)).apply_binary(op, try_ok!(self.eval(arg2)))
             },
             
             Inner::Call(func, args) => {
                 let (func, args) = (*func, args.clone());
-                let args = args.into_iter().map(|x| self.eval(x))
-                .collect::<Result<Vec<Object>, EvalError>>()?;
+                let mut obj_args = Vec::new();
+                for id in args.into_iter() {
+                    obj_args.push(try_ok!(self.eval(id)));
+                }
                 
-                if let Some(func_ref) = self.eval_ref(func)? {
-                    func_ref.apply_call(args)
+                if let Some(func_ref) = self.eval_ref(func) {
+                    func_ref.apply_call(obj_args)
                 } else {
-                    self.eval(func)?.apply_call(args)
+                    try_ok!(self.eval(func)).apply_call(obj_args)
                 }
             },
-        }} else { Err(eval_err!("Unknown Node ID")) }
+        }} else { eval_err!("Unknown Node ID") }
     }
 }
 
