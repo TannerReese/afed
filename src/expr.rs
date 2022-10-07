@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::object::{Object, Objectish, EvalError};
+use super::object::{Operable, Object, Objectish, EvalError};
 use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;

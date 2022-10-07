@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
@@ -12,7 +11,7 @@ pub struct Curry {
 }
 
 impl NamedType for Curry { fn type_name() -> &'static str { "partial evaluation" } }
-impl Objectish for Curry { impl_objectish!{} }
+impl Objectish for Curry {}
 
 impl Curry {
     pub fn new(mut func: Object, mut args: Vec<Object>) -> Object {
@@ -32,14 +31,14 @@ impl Curry {
     }
 }
 
-impl Operable<Object> for Curry {
+impl Operable for Curry {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        binary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { self.arity }

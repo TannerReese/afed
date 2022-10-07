@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
@@ -8,24 +7,22 @@ use super::{Operable, Object, NamedType, Objectish, EvalError};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
 impl NamedType for Bool { fn type_name() -> &'static str { "boolean" }}
-impl Objectish for Bool { impl_objectish!{} }
+impl Objectish for Bool {}
 
 impl Bool {
     pub fn new(b: bool) -> Object { Object::new(Bool(b)) }
 }
 
-impl Operable<Object> for Bool {
+impl Operable for Bool {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        let Bool(mut b) = self;
-        match op {
-            Unary::Neg => b = !b,
-        }
-        Object::new(Bool(b))
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        Object::new(match op {
+            Unary::Neg => Bool(!self.0),
+        })
     }
     
-    fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
-        let &mut Bool(b1) = self;
+    fn apply_binary(self, op: Binary, other: Object) -> Self::Output {
+        let Bool(b1) = self;
         let Bool(b2) = try_expect!(other);
         
         Bool::new(match op {
@@ -33,7 +30,7 @@ impl Operable<Object> for Bool {
             Binary::Or => b1 || b2,
             Binary::Add | Binary::Sub => b1 ^ b2,
             Binary::Mul => b1 && b2,
-            _ => return binary_not_impl!(op, self),
+            _ => return binary_not_impl!(op, Self),
         })
     }
     
@@ -51,16 +48,16 @@ impl Display for Bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ternary();
 impl NamedType for Ternary { fn type_name() -> &'static str { "ternary" }}
-impl Objectish for Ternary { impl_objectish!{} }
+impl Objectish for Ternary {}
 
-impl Operable<Object> for Ternary {
+impl Operable for Ternary {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        binary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { 3 }

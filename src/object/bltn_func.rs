@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::vec::Vec;
 use std::fmt::{Debug, Display, Formatter, Error};
 
@@ -16,23 +15,22 @@ impl<A: 'static> NamedType for BltnFuncSingle<A> {
     fn type_name() -> &'static str { "builtin function" }
 }
 
-impl<A> Objectish for BltnFuncSingle<A> where A: NamedType + Objectish + Clone
-{ impl_objectish!{} }
+impl<A> Objectish for BltnFuncSingle<A> where A: Objectish {}
 
-impl<A> BltnFuncSingle<A> where A: NamedType + Objectish + Clone {
+impl<A> BltnFuncSingle<A> where A: Objectish {
     pub fn new(name: &'static str, ptr: fn(A) -> Object) -> Object {
         Object::new(BltnFuncSingle {name, ptr})
     }
 }
 
-impl<A> Operable<Object> for BltnFuncSingle<A> where A: NamedType + Objectish + Clone {
+impl<A> Operable for BltnFuncSingle<A> where A: Objectish {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { 1 }
@@ -75,34 +73,22 @@ impl<A: 'static, B: 'static> NamedType for BltnFuncDouble<A, B> {
     fn type_name() -> &'static str { "builtin function" }
 }
 
-impl<A, B> Objectish for BltnFuncDouble<A, B>
-where
-    A: NamedType + Objectish + Clone,
-    B: NamedType + Objectish + Clone,
-{ impl_objectish!{} }
+impl<A, B> Objectish for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {}
 
-impl<A, B> BltnFuncDouble<A, B>
-where
-    A: NamedType + Objectish + Clone,
-    B: NamedType + Objectish + Clone,
-{
+impl<A, B> BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
     pub fn new(name: &'static str, ptr: fn(A, B) -> Object) -> Object {
         Object::new(BltnFuncDouble {name, ptr})
     }
 }
 
-impl<A, B> Operable<Object> for BltnFuncDouble<A, B>
-where
-    A: NamedType + Objectish + Clone,
-    B: NamedType + Objectish + Clone,
-{
+impl<A, B> Operable for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { 2 }

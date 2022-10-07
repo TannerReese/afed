@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
 
@@ -9,16 +8,16 @@ use super::number::Number;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);
 impl NamedType for Array { fn type_name() -> &'static str { "array" }}
-impl Objectish for Array { impl_objectish!{} }
+impl Objectish for Array {}
 
-impl Operable<Object> for Array {
+impl Operable for Array {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        binary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { 1 }

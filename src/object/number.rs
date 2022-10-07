@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
@@ -15,7 +14,7 @@ pub enum Number {
     Real(f64),
 }
 impl NamedType for Number { fn type_name() -> &'static str { "number" } }
-impl Objectish for Number { impl_objectish!{} }
+impl Objectish for Number {}
 
 fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     let (mut a, mut b) = if a > b { (b, a) } else { (a, b) };
@@ -227,17 +226,16 @@ impl Rem for Number {
 
 
 
-impl Operable<Object> for Number {
+impl Operable for Number {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
+    fn apply_unary(self, op: Unary) -> Self::Output {
         Object::new(match op {
-            Unary::Neg => -*self,
+            Unary::Neg => -self,
         })
     }
     
-    fn apply_binary(&mut self, op: Binary, other: Object) -> Self::Output {
-        let num1 = *self;
-        let num2 = try_expect!(other);
+    fn apply_binary(self, op: Binary, other: Object) -> Self::Output {
+        let (num1, num2) = (self, try_expect!(other));
         
         Object::new(match op {
             Binary::Leq => return Bool::new(num1 <= num2),
@@ -248,7 +246,7 @@ impl Operable<Object> for Number {
             Binary::Mod => num1 % num2,
             Binary::FlrDiv => num1.flrdiv(num2),
             Binary::Pow => num1.pow(num2),
-            _ => return binary_not_impl!(op, self),
+            _ => return binary_not_impl!(op, Self),
         })
     }
     

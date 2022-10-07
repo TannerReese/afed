@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::collections::HashMap;
@@ -16,24 +15,24 @@ pub struct Map {
     pub named: HashMap<String, Object>,
 }
 impl NamedType for Map { fn type_name() -> &'static str { "map" } }
-impl Objectish for Map { impl_objectish!{} }
+impl Objectish for Map {}
 
 impl Map {
     pub fn get<B>(&self, key: &B) -> Option<&Object>
     where
-        B: Hash + Eq + std::fmt::Debug,
+        B: Hash + Eq,
         String: Borrow<B>,
     { self.named.get(key) }
 }
 
-impl Operable<Object> for Map {
+impl Operable for Map {
     type Output = Object;
-    fn apply_unary(&mut self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, self)
+    fn apply_unary(self, op: Unary) -> Self::Output {
+        unary_not_impl!(op, Self)
     }
     
-    fn apply_binary(&mut self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, self)
+    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
+        binary_not_impl!(op, Self)
     }
     
     fn arity(&self) -> usize { 1 }
