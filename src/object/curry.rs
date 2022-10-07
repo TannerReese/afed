@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, Objectish};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Curry {
@@ -26,26 +26,21 @@ impl Curry {
             func
         } else {
             let arity = func.arity() - args.len();
-            Object::new(Curry {func, arity, args})
+            Curry {func, arity, args}.into()
         }
     }
 }
 
 impl Operable for Curry {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { self.arity }
-    fn apply_call(&self, mut new_args: Vec<Object>) -> Self::Output {
+    fn call(&self, mut new_args: Vec<Object>) -> Self::Output {
         let mut args = self.args.clone();
         args.append(&mut new_args);
-        self.func.apply_call(args)
+        self.func.call(args)
     }
 }
 

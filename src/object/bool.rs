@@ -1,3 +1,4 @@
+use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
@@ -10,27 +11,32 @@ impl NamedType for Bool { fn type_name() -> &'static str { "boolean" }}
 impl Objectish for Bool {}
 
 impl Bool {
-    pub fn new(b: bool) -> Object { Object::new(Bool(b)) }
+    pub fn new(b: bool) -> Object { Bool(b).into() }
 }
 
 impl Operable for Bool {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        Object::new(match op {
-            Unary::Neg => Bool(!self.0),
-        })
-    }
+    fn try_unary(&self, _: Unary) -> bool { true }
+    fn unary(self, op: Unary) -> Self::Output { match op {
+        Unary::Neg => Bool::new(!self.0),
+    }}
     
-    fn apply_binary(self, op: Binary, other: Object) -> Self::Output {
-        let Bool(b1) = self;
-        let Bool(b2) = try_expect!(other);
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::And | Binary::Or | Binary::Add | Binary::Mul => other.is_a::<Bool>(),
+        _ => false,
+    }}
+    
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+        let Bool(mut b1) = self;
+        let Bool(mut b2) = try_cast!(other);
+        if rev { swap(&mut b1, &mut b2); }
         
         Bool::new(match op {
             Binary::And => b1 && b2,
             Binary::Or => b1 || b2,
             Binary::Add | Binary::Sub => b1 ^ b2,
             Binary::Mul => b1 && b2,
-            _ => return binary_not_impl!(op, Self),
+            _ => panic!(),
         })
     }
     
@@ -52,17 +58,12 @@ impl Objectish for Ternary {}
 
 impl Operable for Ternary {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { 3 }
-    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
-        let Bool(cond) = try_expect!(args.remove(0));
+    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+        let Bool(cond) = try_cast!(args.remove(0));
         args.remove(if cond { 0 } else { 1 })
     }
 }

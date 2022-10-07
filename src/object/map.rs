@@ -27,17 +27,12 @@ impl Map {
 
 impl Operable for Map {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { 1 }
-    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
-        let Str(key) = try_expect!(args.remove(0));
+    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+        let Str(key) = try_cast!(args.remove(0));
         self.named.get(key.as_str()).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
@@ -60,6 +55,16 @@ impl Display for Map {
             write!(f, "{}: {}", key, obj)?;
         }
         f.write_char('}')
+    }
+}
+
+
+impl<const N: usize> From<[(&str, Object); N]> for Object {
+    fn from(arr: [(&str, Object); N]) -> Object {
+        Map {
+            unnamed: Vec::new(),
+            named: arr.map(|(key, obj)| (key.to_owned(), obj)).into(),
+        }.into()
     }
 }
 

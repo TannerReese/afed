@@ -1,3 +1,4 @@
+use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
@@ -11,19 +12,23 @@ impl Objectish for Str {}
 
 impl Operable for Str {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
     
-    fn apply_binary(self, op: Binary, other: Object) -> Self::Output {
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::Add => other.is_a::<Str>(),
+        _ => false,
+    }}
+    
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
         let Str(mut s1) = self;
-        let Str(s2) = try_expect!(other);
+        let Str(mut s2) = try_cast!(other);
+        if rev { swap(&mut s1, &mut s2); }
         
         match op {
             Binary::Add => s1.push_str(s2.as_str()),
-            _ => return binary_not_impl!(op, Self),
+            _ => panic!(),
         }
-        Object::new(Str(s1))
+        Str(s1).into()
     }
     
     call_not_impl!{Self}

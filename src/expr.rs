@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
-use super::object::{Operable, Object, Objectish, EvalError};
+use super::object::{Object, Objectish, EvalError};
 use super::object::opers;
 use super::object::array::Array;
 use super::object::map::Map;
@@ -391,9 +391,9 @@ impl ExprArena {
                 res
             },
             
-            &mut Inner::Unary(op, arg) => try_ok!(self.eval(arg)).apply_unary(op),
+            &mut Inner::Unary(op, arg) => try_ok!(self.eval(arg)).unary(op),
             &mut Inner::Binary(op, arg1, arg2) => {
-                try_ok!(self.eval(arg1)).apply_binary(op, try_ok!(self.eval(arg2)))
+                try_ok!(self.eval(arg1)).binary(op, try_ok!(self.eval(arg2)))
             },
             
             Inner::Call(func, args) => {
@@ -404,9 +404,9 @@ impl ExprArena {
                 }
                 
                 if let Some(func_ref) = self.eval_ref(func) {
-                    func_ref.apply_call(obj_args)
+                    func_ref.call(obj_args)
                 } else {
-                    try_ok!(self.eval(func)).apply_call(obj_args)
+                    try_ok!(self.eval(func)).call(obj_args)
                 }
             },
         }} else { eval_err!("Unknown Node ID") }

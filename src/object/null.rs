@@ -11,13 +11,8 @@ impl Objectish for Null {}
 
 impl Operable for Null {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     call_not_impl!{Self}
 }

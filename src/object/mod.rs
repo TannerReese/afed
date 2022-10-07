@@ -2,7 +2,9 @@ use std::any::{Any, TypeId};
 use std::vec::Vec;
 use std::clone::Clone;
 use std::fmt::{Debug, Display, Formatter, Error, Write};
+
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
+use std::iter::Sum;
 
 use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -18,12 +20,12 @@ macro_rules! eval_err {
     ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
 }
 
-macro_rules! try_expect {
-    ($obj:expr) => { match $obj.expect() {
+macro_rules! try_cast {
+    ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
         Err(err) => return err,
     }};
-    ($obj:expr, $type:ty) => { match $obj.expect::<$type>() {
+    ($obj:expr => $type:ty) => { match $obj.cast::<$type>() {
         Ok(val) => val,
         Err(err) => return err,
     }};
@@ -37,27 +39,23 @@ macro_rules! try_ok {
 }
 
 macro_rules! unary_not_impl {
-    ($op:expr , $Self:ty) => {
-        eval_err!(
-            "Unary operator {} not implemented for {}",
-            $op.symbol(), <$Self>::type_name()
-        )
+    () => {
+        fn try_unary(&self, _: Unary) -> bool { false }
+        fn unary(self, _: Unary) -> Object { panic!() }
     };
 }
 
 macro_rules! binary_not_impl {
-    ($op:expr , $Self:ty) => {
-        eval_err!(
-            "Binary operator {} not implemented for {}",
-            $op.symbol(), <$Self>::type_name()
-        )
+    () => {
+        fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
+        fn binary(self, _: bool, _: Binary, _: Object) -> Object { panic!() }
     };
 }
 
 macro_rules! call_not_impl {
     ($type:ty) => {
         fn arity(&self) -> usize { 0 }
-        fn apply_call(&self, _: Vec<Object>) -> Object {
+        fn call(&self, _: Vec<Object>) -> Object {
             eval_err!("Cannot call {}", Self::type_name())
         }
     };
@@ -76,10 +74,12 @@ pub mod bltn_func;
 
 pub trait Operable<Rhs = Object, U = Unary, B = Binary> {
     type Output;
-    fn apply_unary(self, op: U) -> Self::Output;
-    fn apply_binary(self, op: B, other: Rhs) -> Self::Output;
+    fn try_unary(&self, op: U) -> bool;
+    fn unary(self, op: U) -> Self::Output;
+    fn try_binary(&self, rev: bool, op: B, other: &Rhs) -> bool;
+    fn binary(self, rev: bool, op: B, other: Rhs) -> Self::Output;
     fn arity(&self) -> usize;
-    fn apply_call(&self, args: Vec<Rhs>) -> Self::Output;
+    fn call(&self, args: Vec<Rhs>) -> Self::Output;
 }
 
 pub trait NamedType : Any {
@@ -93,8 +93,8 @@ pub trait Objectish :
     + Operable<Output=Object>
 {}
 
-fn objectish_as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
-fn objectish_as_any_mut<T>(x: &mut T) -> &mut dyn Any where T: Objectish { x }
+fn as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
+fn as_any_mut<T>(x: &mut T) -> &mut dyn Any where T: Objectish { x }
 
 trait ObjectishSafe {
     fn as_any(&self) -> &dyn Any;
@@ -106,60 +106,46 @@ trait ObjectishSafe {
     fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     
-    fn apply_unary(&mut self, op: Unary) -> Object;
-    fn apply_binary(&mut self, op: Binary, other: Object) -> Object;
+    fn try_unary(&self, op: Unary) -> bool;
+    fn unary(&mut self, op: Unary) -> Object;
+    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
+    fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object;
     fn arity(&self) -> usize;
-    fn apply_call(&self, args: Vec<Object>) -> Object;
+    fn call(&self, args: Vec<Object>) -> Object;
 }
 
-fn unwrap_obj<T>(obj: Option<T>) -> T {
-    obj.expect("Object doesn't contain anything")
-}
+fn to_obj<T>(obj: &mut Option<T>) -> T { mem::take(obj).unwrap() }
+fn to_ref<T>(obj: &Option<T>) -> &T { obj.as_ref().unwrap() }
+fn to_mut<T>(obj: &mut Option<T>) -> &mut T { obj.as_mut().unwrap() }
 
 impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
-    fn as_any(&self) -> &dyn Any {
-        objectish_as_any(unwrap_obj(self.as_ref()))
-    }
+    fn as_any(&self) -> &dyn Any { as_any(to_ref(self)) }
+    fn as_any_mut(&mut self) -> &mut dyn Any { as_any_mut(to_mut(self)) }
+    fn type_name_dyn(&self) -> &'static str { to_ref(self).type_name_dyn() }
     
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        objectish_as_any_mut(unwrap_obj(self.as_mut()))
-    }
-    
-    fn type_name_dyn(&self) -> &'static str { unwrap_obj(self.as_ref()).type_name_dyn() }
-    
-    fn clone(&self) -> Object {
-        Object::new(unwrap_obj(self.as_ref()).clone())
-    }
-    
+    fn clone(&self) -> Object { Object::new(to_ref(self).clone()) }
     fn eq(&self, other: &Object) -> bool {
         if let Some(other) = other.downcast_ref::<T>() {
-            unwrap_obj(self.as_ref()) == other
+            to_ref(self) == other
         } else { false }
     }
 
-    fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        Display::fmt(unwrap_obj(self.as_ref()), f)
-    }
+    fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
+        { Display::fmt(to_ref(self), f) }
+    fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
+        { Debug::fmt(to_ref(self), f) }
     
-    fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        Debug::fmt(unwrap_obj(self.as_ref()), f)
-    }
+    fn try_unary(&self, op: Unary) -> bool
+        { to_ref(self).try_unary(op) }
+    fn unary(&mut self, op: Unary) -> Object
+        { to_obj(self).unary(op) }
+    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool
+        { to_ref(self).try_binary(rev, op, other) }
+    fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object
+        { to_obj(self).binary(rev, op, other) }
     
-    fn apply_unary(&mut self, op: Unary) -> Object {
-        unwrap_obj(mem::take(self)).apply_unary(op)
-    }
-    
-    fn apply_binary(&mut self, op: Binary, other: Object) -> Object {
-        unwrap_obj(mem::take(self)).apply_binary(op, other)
-    }
-    
-    fn arity(&self) -> usize {
-        unwrap_obj(self.as_ref()).arity()
-    }
-    
-    fn apply_call(&self, args: Vec<Object>) -> Object {
-        unwrap_obj(self.as_ref()).apply_call(args)
-    }
+    fn arity(&self) -> usize { to_ref(self).arity() }
+    fn call(&self, args: Vec<Object>) -> Object { to_ref(self).call(args) }
 }
 
 pub struct Object(Box<dyn ObjectishSafe>);
@@ -169,11 +155,11 @@ impl Object {
         Object(Box::new(Some(obj)))
     }
     
-    pub fn is_err(&self) -> bool {
-        TypeId::of::<EvalError>() == (*self.0).as_any().type_id()
-    }
+    pub fn is_err(&self) -> bool {self.is_a::<EvalError>() }
+    pub fn is_a<T>(&self) -> bool where T: Any
+        { TypeId::of::<T>() == (*self.0).as_any().type_id() }
     
-    pub fn expect<T>(self) -> Result<T, Object> where T: NamedType {
+    pub fn cast<T>(self) -> Result<T, Object> where T: NamedType {
         let given_type = (*self.0).type_name_dyn();
         let box_any = unsafe { Box::from_raw(Box::leak(self.0).as_any_mut()) };
         if let Ok(obj_box) = box_any.downcast() { Ok(*obj_box) }
@@ -182,13 +168,11 @@ impl Object {
         ))}
     }
     
-    pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T> {
-        (*self.0).as_any().downcast_ref()
-    }
+    pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
+        { (*self.0).as_any().downcast_ref() }
     
-    pub fn downcast_mut<'a, T: 'static>(&'a mut self) -> Option<&'a mut T> {
-        (*self.0).as_any_mut().downcast_mut()
-    }
+    pub fn downcast_mut<'a, T: 'static>(&'a mut self) -> Option<&'a mut T>
+        { (*self.0).as_any_mut().downcast_mut() }
     
     
     
@@ -214,49 +198,51 @@ impl Object {
     }
 }
 
-impl<const N: usize> From<[Object; N]> for Object {
-    fn from(arr: [Object; N]) -> Object {
-        Object::new(array::Array(arr.into()))
-    }
-}
-
-impl<const N: usize> From<[(&str, Object); N]> for Object {
-    fn from(arr: [(&str, Object); N]) -> Object {
-        Object::new(map::Map {
-            unnamed: Vec::new(),
-            named: arr.map(|(key, obj)| (key.to_owned(), obj)).into(),
-        })
-    }
+impl<T> From<T> for Object where T: Objectish {
+    fn from(obj: T) -> Self { Object::new(obj) }
 }
 
 
 
-impl Operable for Object {
-    type Output = Object;
-    fn apply_unary(mut self, op: Unary) -> Object {
-        (*self.0).apply_unary(op)
+impl Object {
+    pub fn unary(mut self, op: Unary) -> Object {
+        if (*self.0).try_unary(op) { (*self.0).unary(op) }
+        else { eval_err!(
+            "Unary operator {} not implemented for type {}",
+            op.symbol(), (*self.0).type_name_dyn(),
+        )}
     }
     
-    fn apply_binary(mut self, op: Binary, mut other: Object) -> Object { match op {
-        Binary::Apply => self.apply_call(vec![other]),
-        Binary::Eq => Bool::new((*self.0).eq(&other)),
-        Binary::Neq => Bool::new(!(*self.0).eq(&other)),
-        Binary::Leq => (*self.0).apply_binary(Binary::Leq, other),
-        Binary::Geq => (*other.0).apply_binary(Binary::Leq, self),
-        Binary::Lt => if (*self.0).eq(&other) { Bool::new(false) } else {
-            (*self.0).apply_binary(Binary::Leq, other)
+    fn binary_help(mut self, op: Binary, mut other: Object) -> Object {
+        if (*self.0).try_binary(false, op, &other) { (*self.0).binary(false, op, other) }
+        else if (*other.0).try_binary(true, op, &self) { (*other.0).binary(true, op, self) }
+        else { eval_err!(
+            "Binary operator {} not implemented between types {} and {}",
+            op.symbol(), (*self.0).type_name_dyn(), (*self.0).type_name_dyn(),
+        )}
+    }
+    
+    pub fn binary(self, op: Binary, other: Object) -> Object {
+    match op {
+        Binary::Apply => self.call(vec![other]),
+        Binary::Eq => Bool::new(self == other),
+        Binary::Neq => Bool::new(self != other),
+        Binary::Leq => self.binary_help(Binary::Leq, other),
+        Binary::Geq => other.binary_help(Binary::Leq, self),
+        Binary::Lt => if self == other { Bool::new(false) } else {
+            self.binary_help(Binary::Leq, other)
         },
-        Binary::Gt => if (*self.0).eq(&other) { Bool::new(false) } else {
-            (*other.0).apply_binary(Binary::Leq, self)
+        Binary::Gt => if self == other { Bool::new(false) } else {
+            other.binary_help(Binary::Leq, self)
         },
-        _ => (*self.0).apply_binary(op, other),
+        _ => self.binary_help(op, other),
     }}
     
-    fn arity(&self) -> usize { (*self.0).arity() }
-    fn apply_call<'a>(&self, args: Vec<Object>) -> Object {
+    pub fn arity(&self) -> usize { (*self.0).arity() }
+    pub fn call<'a>(&self, args: Vec<Object>) -> Object {
         let arity = (*self.0).arity();
         if args.len() == arity {
-            return (*self.0).apply_call(args);
+            return (*self.0).call(args);
         } else if args.len() < arity {
             return curry::Curry::new(self.clone(), args);
         }
@@ -264,11 +250,11 @@ impl Operable for Object {
         let mut args = args.into_iter();
         let iter = args.by_ref();
         
-        let mut res = try_ok!((*self.0).apply_call(iter.take(arity).collect()));
+        let mut res = try_ok!((*self.0).call(iter.take(arity).collect()));
         while iter.as_slice().len() > 0 {
             let arity = (*res.0).arity();
             res = if iter.as_slice().len() >= arity {
-                try_ok!((*res.0).apply_call(iter.take(arity).collect()))
+                try_ok!((*res.0).call(iter.take(arity).collect()))
             } else { curry::Curry::new(res.clone(), iter.collect()) };
         }
         res
@@ -284,9 +270,8 @@ impl Debug for Object {
 }
 
 impl Display for Object {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        (*self.0).display_fmt(f)
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
+        { (*self.0).display_fmt(f) }
 }
 
 impl PartialEq for Object {
@@ -302,41 +287,43 @@ impl Clone for Object {
 
 impl Neg for Object {
     type Output = Self;
-    fn neg(self) -> Self::Output { self.apply_unary(Unary::Neg) }
+    fn neg(self) -> Self::Output { self.unary(Unary::Neg) }
 }
 
 impl Add for Object {
     type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        self.apply_binary(Binary::Add, rhs)
-    }
+    fn add(self, rhs: Self) -> Self::Output
+        { self.binary(Binary::Add, rhs) }
 }
 
 impl Sub for Object {
     type Output = Self;
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.apply_binary(Binary::Sub, rhs)
-    }
+    fn sub(self, rhs: Self) -> Self::Output
+        { self.binary(Binary::Sub, rhs) }
 }
 
 impl Mul for Object {
     type Output = Self;
-    fn mul(self, rhs: Self) -> Self::Output {
-        self.apply_binary(Binary::Mul, rhs)
-    }
+    fn mul(self, rhs: Self) -> Self::Output
+        { self.binary(Binary::Mul, rhs) }
 }
 
 impl Div for Object {
     type Output = Self;
-    fn div(self, rhs: Self) -> Self::Output {
-        self.apply_binary(Binary::Div, rhs)
-    }
+    fn div(self, rhs: Self) -> Self::Output
+        { self.binary(Binary::Div, rhs) }
 }
 
 impl Rem for Object {
     type Output = Self;
-    fn rem(self, rhs: Self) -> Self::Output {
-        self.apply_binary(Binary::Mod, rhs)
+    fn rem(self, rhs: Self) -> Self::Output
+        { self.binary(Binary::Mod, rhs) }
+}
+
+impl Sum for Object {
+    fn sum<I>(iter: I) -> Self where I: Iterator<Item = Self> {
+        iter.reduce(|accum, x| accum + x)
+        .expect("Can only sum objects for non-empty interators")
     }
 }
 
@@ -360,18 +347,17 @@ impl EvalError {
 
 impl Operable for EvalError {
     type Output = Object;
-    fn apply_unary(self, _: Unary) -> Self::Output { Object::new(self) }
-    fn apply_binary(self, _: Binary, _: Object) -> Self::Output { Object::new(self) }
+    fn try_unary(&self, _: Unary) -> bool { true }
+    fn unary(self, _: Unary) -> Self::Output { Object::new(self) }
+    fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
+    fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { Object::new(self) }
     
     fn arity(&self) -> usize { 0 }
-    fn apply_call(&self, _: Vec<Object>) -> Object {
-        Object::new(self.clone())
-    }
+    fn call(&self, _: Vec<Object>) -> Object { Object::new(self.clone()) }
 }
 
 impl Display for EvalError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "Eval Error: {}", self.msg)
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
+        { write!(f, "Eval Error: {}", self.msg) }
 }
 

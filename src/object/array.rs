@@ -12,25 +12,15 @@ impl Objectish for Array {}
 
 impl Operable for Array {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        binary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { 1 }
-    fn apply_call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
-        let num: Number = try_expect!(args.remove(0));
-        if let Some(idx) = num.as_index() {
+    fn call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
+        if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
             if let Some(obj) = self.0.get(idx) { obj.clone() }
-            else {
-                eval_err!("Index {} is out of bounds", idx)
-            }
-        } else {
-            eval_err!("Index could not be cast to correct integer")
-        }
+            else { eval_err!("Index {} is out of bounds", idx) }
+        } else { eval_err!("Index could not be cast to correct integer") }
     }
 }
 
@@ -44,6 +34,13 @@ impl Display for Array {
             write!(f, "{}", obj)?;
         }
         f.write_char(']')
+    }
+}
+
+
+impl<const N: usize> From<[Object; N]> for Object {
+    fn from(arr: [Object; N]) -> Object {
+        Array(arr.into()).into()
     }
 }
 

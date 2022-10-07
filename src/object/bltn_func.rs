@@ -2,7 +2,7 @@ use std::vec::Vec;
 use std::fmt::{Debug, Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, Objectish};
 
 
 #[derive(Clone, Copy)]
@@ -19,23 +19,18 @@ impl<A> Objectish for BltnFuncSingle<A> where A: Objectish {}
 
 impl<A> BltnFuncSingle<A> where A: Objectish {
     pub fn new(name: &'static str, ptr: fn(A) -> Object) -> Object {
-        Object::new(BltnFuncSingle {name, ptr})
+        BltnFuncSingle {name, ptr}.into()
     }
 }
 
 impl<A> Operable for BltnFuncSingle<A> where A: Objectish {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { 1 }
-    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
-        (self.ptr)(try_expect!(args.remove(0)))
+    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+        (self.ptr)(try_cast!(args.remove(0)))
     }
 }
 
@@ -77,24 +72,19 @@ impl<A, B> Objectish for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
 
 impl<A, B> BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
     pub fn new(name: &'static str, ptr: fn(A, B) -> Object) -> Object {
-        Object::new(BltnFuncDouble {name, ptr})
+        BltnFuncDouble {name, ptr}.into()
     }
 }
 
 impl<A, B> Operable for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
-    
-    fn apply_binary(self, op: Binary, _: Object) -> Self::Output {
-        unary_not_impl!(op, Self)
-    }
+    unary_not_impl!{}
+    binary_not_impl!{}
     
     fn arity(&self) -> usize { 2 }
-    fn apply_call(&self, mut args: Vec<Object>) -> Self::Output {
-        let x = try_expect!(args.remove(0));
-        let y = try_expect!(args.remove(0));
+    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+        let x = try_cast!(args.remove(0));
+        let y = try_cast!(args.remove(0));
         (self.ptr)(x, y)
     }
 }

@@ -1,3 +1,4 @@
+use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
@@ -22,13 +23,13 @@ fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     
     while a != zero {
         b %= a;
-        std::mem::swap(&mut a, &mut b);
+        swap(&mut a, &mut b);
     }
     return b;
 }
 
 impl Number {
-    pub fn real(r: f64) -> Object { Object::new(Number::Real(r)) }
+    pub fn real(r: f64) -> Object { Number::Real(r).into() }
     
     pub fn simplify(&self) -> Self { match self {
         &Number::Ratio(n, d) => {
@@ -228,16 +229,24 @@ impl Rem for Number {
 
 impl Operable for Number {
     type Output = Object;
-    fn apply_unary(self, op: Unary) -> Self::Output {
-        Object::new(match op {
-            Unary::Neg => -self,
-        })
-    }
+    fn try_unary(&self, _: Unary) -> bool { true }
+    fn unary(self, op: Unary) -> Self::Output { match op {
+        Unary::Neg => (-self).into(),
+    }}
     
-    fn apply_binary(self, op: Binary, other: Object) -> Self::Output {
-        let (num1, num2) = (self, try_expect!(other));
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::Leq |
+        Binary::Add | Binary::Sub |
+        Binary::Mul | Binary::Div | Binary::Mod | Binary::FlrDiv |
+        Binary::Pow => other.is_a::<Number>(),
+        _ => false,
+    }}
+    
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+        let (mut num1, mut num2) = (self, try_cast!(other));
+        if rev { swap(&mut num1, &mut num2); }
         
-        Object::new(match op {
+        match op {
             Binary::Leq => return Bool::new(num1 <= num2),
             Binary::Add => num1 + num2,
             Binary::Sub => num1 - num2,
@@ -246,8 +255,8 @@ impl Operable for Number {
             Binary::Mod => num1 % num2,
             Binary::FlrDiv => num1.flrdiv(num2),
             Binary::Pow => num1.pow(num2),
-            _ => return binary_not_impl!(op, Self),
-        })
+            _ => panic!(),
+        }.into()
     }
     
     call_not_impl!{Self}
