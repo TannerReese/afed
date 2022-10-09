@@ -59,6 +59,12 @@ impl Display for Map {
 }
 
 
+impl From<HashMap<String, Object>> for Object {
+    fn from(map: HashMap<String, Object>) -> Object {
+        Map {unnamed: Vec::new(), named: map}.into()
+    }
+}
+
 impl<const N: usize> From<[(&str, Object); N]> for Object {
     fn from(arr: [(&str, Object); N]) -> Object {
         Map {

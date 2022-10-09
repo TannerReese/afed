@@ -20,6 +20,8 @@ macro_rules! eval_err {
     ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
 }
 
+
+#[macro_export]
 macro_rules! try_cast {
     ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
@@ -31,6 +33,7 @@ macro_rules! try_cast {
     }};
 }
 
+#[macro_export]
 macro_rules! try_ok {
     ($obj:expr) => {{
         let obj = $obj;
@@ -38,6 +41,7 @@ macro_rules! try_ok {
     }};
 }
 
+#[macro_export]
 macro_rules! unary_not_impl {
     () => {
         fn try_unary(&self, _: Unary) -> bool { false }
@@ -45,6 +49,7 @@ macro_rules! unary_not_impl {
     };
 }
 
+#[macro_export]
 macro_rules! binary_not_impl {
     () => {
         fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
@@ -52,6 +57,7 @@ macro_rules! binary_not_impl {
     };
 }
 
+#[macro_export]
 macro_rules! call_not_impl {
     ($type:ty) => {
         fn arity(&self) -> usize { 0 }
@@ -325,6 +331,11 @@ impl Sum for Object {
         iter.reduce(|accum, x| accum + x)
         .expect("Can only sum objects for non-empty interators")
     }
+}
+
+impl Object {
+    pub fn flrdiv(self, rhs: Self) -> Self
+        { self.binary(Binary::FlrDiv, rhs) }
 }
 
 

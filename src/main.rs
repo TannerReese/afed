@@ -3,7 +3,8 @@ use std::process::exit;
 use std::fs::{File, canonicalize};
 use std::path::PathBuf;
 
-#[macro_use] pub mod object;
+#[macro_use]
+pub mod object;
 pub mod libs;
 pub mod expr;
 pub mod docmt;

@@ -1,4 +1,4 @@
-use std::mem;
+use std::mem::{take, replace};
 use std::borrow::Borrow;
 use std::hash::Hash;
 use std::cmp::Eq;
@@ -90,7 +90,7 @@ impl ExprArena {
     fn make_var(&mut self, name_id: Name, tgt_id: Expr) {
         if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
             if let Inner::Name(name) = inner {
-                let name = mem::replace(name, Path(Vec::new()));
+                let name = replace(name, Path(Vec::new()));
                 *inner = Inner::Var(name, false, tgt_id);
                 return;
             }
@@ -102,7 +102,7 @@ impl ExprArena {
     // Returns unresolved names
     fn resolve_names(&mut self, target: Expr, map: &HashMap<String, Expr>) {
         let names = if let Some(Node {names, ..}) = self.0.get_mut(target) {
-            if let Some(nms) = mem::take(names) { nms } else { return }
+            if let Some(nms) = take(names) { nms } else { return }
         } else { return };
         
         let unresolved = names.into_iter().filter(|&name_id| {
@@ -125,7 +125,7 @@ impl ExprArena {
     fn set_owned(&mut self, child: Expr, parent_names: &mut Option<Vec<Name>>) {
         if let Some(Node {owned, names, ..}) = self.0.get_mut(child) {
             *owned = true;
-            if let Some(mut child_names) = mem::take(names) {
+            if let Some(mut child_names) = take(names) {
                 if let Some(parent_names) = parent_names {
                     parent_names.append(&mut child_names);
                 } else {
@@ -137,7 +137,7 @@ impl ExprArena {
     
     pub fn resolve_builtins(&mut self, root: Expr, bltns: &HashMap<String, Object>) -> bool {
         let names = if let Some(Node {names: Some(names), ..}) = self.0.get_mut(root) {
-            mem::take(names)
+            take(names)
         } else { return false; };
         
         let unresolved = names.into_iter().filter(|&name_id|
@@ -206,8 +206,8 @@ impl ExprArena {
     
     fn from_obj_raw(&mut self, mut obj: Object, owned: bool) -> Expr {
         let inner = if let Some(Map {unnamed, named}) = obj.downcast_mut::<Map>() {
-            let unnamed = mem::take(unnamed);
-            let named = mem::take(named);
+            let unnamed = take(unnamed);
+            let named = take(named);
             Inner::Map(
                 unnamed.into_iter().map(|child|
                     self.from_obj_raw(child, true)
@@ -221,7 +221,7 @@ impl ExprArena {
                 }).collect(),
             )
         } else if let Some(Array(elems)) = obj.downcast_mut::<Array>() {
-            let elems = mem::take(elems);
+            let elems = take(elems);
             Inner::Array(elems.into_iter().map(|child|
                 self.from_obj_raw(child, true)
             ).collect())

@@ -29,8 +29,6 @@ fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
 }
 
 impl Number {
-    pub fn real(r: f64) -> Object { Number::Real(r).into() }
-    
     pub fn simplify(&self) -> Self { match self {
         &Number::Ratio(n, d) => {
             let g = gcd(n.abs() as u64, d);
@@ -270,5 +268,13 @@ impl Display for Number {
             Number::Real(r) => write!(f, "{}", r),
         }
     }
+}
+
+impl From<i64> for Object {
+    fn from(n: i64) -> Object { Number::Ratio(n, 1).into() }
+}
+
+impl From<f64> for Object {
+    fn from(r: f64) -> Object { Number::Real(r).into() }
 }
 
