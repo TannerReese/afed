@@ -1,4 +1,4 @@
-Parse Error in line 16, column 20
+Parse Error in line 17, column 20
 	x: true + true = ``,
 	                   ^
 Error: Redefinition of label in map
@@ -6,7 +6,10 @@ Error: Redefinition of label in map
 1 Parse Error encountered
 
 
-line 20, column 22 Eval Error: Circular dependence from variable bar.y
-line 21, column 22 Eval Error: Circular dependence from variable baz.z
-line 22, column 20 Eval Error: Circular dependence from variable foo.x
-3 Eval Errors encountered
+line 21, column 22 Eval Error: Circular dependence from variable bar.y
+line 22, column 22 Eval Error: Circular dependence from variable baz.z
+line 23, column 20 Eval Error: Circular dependence from variable foo.x
+line 27, column 12 Eval Error: Unary operator - not implemented for type string
+line 28, column 13 Eval Error: Binary operator * not implemented between types number and boolean
+line 29, column 20 Eval Error: Binary operator + not implemented between types string and array
+6 Eval Errors encountered

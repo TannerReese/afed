@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::borrow::Borrow;
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 use super::string::Str;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,6 @@ pub struct Map {
     pub named: HashMap<String, Object>,
 }
 impl NamedType for Map { fn type_name() -> &'static str { "map" } }
-impl Objectish for Map {}
 
 impl Map {
     pub fn get<B>(&self, key: &B) -> Option<&Object>
@@ -58,6 +57,19 @@ impl Display for Map {
     }
 }
 
+impl From<Map> for Object {
+    fn from(map: Map) -> Self {
+        if map.unnamed.iter().any(|elm| elm.is_err()) {
+            map.unnamed.into_iter()
+            .filter(|elm| elm.is_err())
+            .next().unwrap()
+        } else if map.named.values().any(|elm| elm.is_err()) {
+            map.named.into_values()
+            .filter(|elm| elm.is_err())
+            .next().unwrap()
+        } else { Object::new(map) }
+    }
+}
 
 impl From<HashMap<String, Object>> for Object {
     fn from(map: HashMap<String, Object>) -> Object {

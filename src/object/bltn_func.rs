@@ -15,15 +15,13 @@ impl<A: 'static> NamedType for BltnFuncSingle<A> {
     fn type_name() -> &'static str { "builtin function" }
 }
 
-impl<A> Objectish for BltnFuncSingle<A> where A: Objectish {}
-
-impl<A> BltnFuncSingle<A> where A: Objectish {
+impl<A: Objectish> BltnFuncSingle<A> {
     pub fn new(name: &'static str, ptr: fn(A) -> Object) -> Object {
         BltnFuncSingle {name, ptr}.into()
     }
 }
 
-impl<A> Operable for BltnFuncSingle<A> where A: Objectish {
+impl<A: Objectish> Operable for BltnFuncSingle<A> {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
@@ -54,6 +52,10 @@ impl<A> PartialEq for BltnFuncSingle<A> {
 
 impl<A> Eq for BltnFuncSingle<A> {}
 
+impl<A: Objectish> From<BltnFuncSingle<A>> for Object {
+    fn from(x: BltnFuncSingle<A>) -> Self { Object::new(x) }
+}
+
 
 
 
@@ -68,15 +70,13 @@ impl<A: 'static, B: 'static> NamedType for BltnFuncDouble<A, B> {
     fn type_name() -> &'static str { "builtin function" }
 }
 
-impl<A, B> Objectish for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {}
-
-impl<A, B> BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
+impl<A: Objectish, B: Objectish> BltnFuncDouble<A, B> {
     pub fn new(name: &'static str, ptr: fn(A, B) -> Object) -> Object {
         BltnFuncDouble {name, ptr}.into()
     }
 }
 
-impl<A, B> Operable for BltnFuncDouble<A, B> where A: Objectish, B: Objectish {
+impl<A: Objectish, B: Objectish> Operable for BltnFuncDouble<A, B> {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
@@ -108,4 +108,8 @@ impl<A, B> PartialEq for BltnFuncDouble<A, B> {
 }
 
 impl<A, B> Eq for BltnFuncDouble<A, B> {}
+
+impl<A: Objectish, B: Objectish> From<BltnFuncDouble<A, B>> for Object {
+    fn from(x: BltnFuncDouble<A, B>) -> Self { Object::new(x) }
+}
 

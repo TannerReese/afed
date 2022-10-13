@@ -2,12 +2,11 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null();
 impl NamedType for Null { fn type_name() -> &'static str { "null" }}
-impl Objectish for Null {}
 
 impl Operable for Null {
     type Output = Object;
@@ -21,5 +20,9 @@ impl Display for Null {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "null")
     }
+}
+
+impl From<Null> for Object {
+    fn from(n: Null) -> Self { Object::new(n) }
 }
 

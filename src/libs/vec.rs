@@ -3,18 +3,21 @@ use std::collections::HashMap;
 use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
-use std::ops::{Neg, Add, Sub, Mul, Div, Rem, Index};
-use std::iter::{zip, Sum};
+use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
+use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
+use std::iter::zip;
+
+use super::num::sqrt;
 
 use crate::object::opers::{Unary, Binary};
-use crate::object::{Operable, Object, Objectish, NamedType, EvalError};
+use crate::object::{Operable, Object, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
 use crate::object::bltn_func::BltnFuncSingle;
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
-        let (adims, bdims) = ($a.dims, $b.dims);
+        let (adims, bdims) = ($a.dims(), $b.dims());
         if adims != bdims { panic!(
             "Vector dimensions {} and {} do not match",
             adims, bdims,
@@ -24,85 +27,8 @@ macro_rules! check_dims {
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Vector<T = Object> {
-    pub dims: usize,
-    comps: Vec<T>,
-}
-
-impl<T> Vector<T> {
-    pub fn new(comps: Vec<T>) -> Vector<T>
-        { Vector {dims: comps.len(), comps}}
-    
-    pub fn mag2(self) -> T where T: Clone + Mul<Output=T> + Sum {
-        self.comps.into_iter().map(|x| x.clone() * x).sum()
-    }
-}
-
-impl<A> FromIterator<A> for Vector<A> {
-    fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = A>
-        { Vector::new(Vec::from_iter(iter)) }
-}
-
-
-impl<A> Neg for Vector<A> where A: Neg {
-    type Output = Vector<A::Output>;
-    fn neg(self) -> Self::Output {
-        self.comps.into_iter().map(|a| -a).collect()
-    }
-}
-
-impl<A, B> Add<Vector<B>> for Vector<A> where A: Add<B> {
-    type Output = Vector<A::Output>;
-    fn add(self, rhs: Vector<B>) -> Self::Output {
-        check_dims!(self, rhs);
-        zip(self.comps, rhs.comps).map(|(a, b)| a + b).collect()
-    }
-}
-
-impl<A, B> Sub<Vector<B>> for Vector<A> where A: Sub<B> {
-    type Output = Vector<A::Output>;
-    fn sub(self, rhs: Vector<B>) -> Self::Output {
-        check_dims!(self, rhs);
-        zip(self.comps, rhs.comps).map(|(a, b)| a - b).collect()
-    }
-}
-
-impl<A> Mul<Vector<A>> for Vector<A> where A: Mul, A::Output: Sum {
-    type Output = A::Output;
-    fn mul(self, rhs: Vector<A>) -> Self::Output {
-        check_dims!(self, rhs);
-        zip(self.comps, rhs.comps).map(|(a, b)| a * b).sum()
-    }
-}
-
-impl<A> Mul<A> for Vector<A> where A: Clone + Mul {
-    type Output = Vector<A::Output>;
-    fn mul(self, rhs: A) -> Self::Output
-        { self.comps.into_iter().map(|a| a * rhs.clone()).collect() }
-}
-
-impl<A, B> Div<B> for Vector<A> where A: Div<B>, B: Clone {
-    type Output = Vector<A::Output>;
-    fn div(self, rhs: B) -> Self::Output
-        { self.comps.into_iter().map(|a| a / rhs.clone()).collect() }
-}
-
-impl<A, B> Rem<B> for Vector<A> where A: Rem<B>, B: Clone {
-    type Output = Vector<A::Output>;
-    fn rem(self, rhs: B) -> Self::Output
-        { self.comps.into_iter().map(|a| a % rhs.clone()).collect() }
-}
-
-impl<A> Index<usize> for Vector<A> {
-    type Output = A;
-    fn index(&self, idx: usize) -> &Self::Output { &self.comps[idx] }
-}
-
-
-
-
-impl<T: 'static> NamedType for Vector<T> { fn type_name() -> &'static str { "vector" }}
-impl Objectish for Vector {}
+pub struct Vector(Vec<Object>);
+impl NamedType for Vector { fn type_name() -> &'static str { "vector" }}
 
 impl Operable for Vector {
     type Output = Object;
@@ -121,9 +47,9 @@ impl Operable for Vector {
     fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
         if other.is_a::<Vector>() {
             let (mut v1, mut v2) = (self, try_cast!(other => Vector));
-            if v1.dims != v2.dims { return eval_err!(
+            if v1.dims() != v2.dims() { return eval_err!(
                 "Vector dimensions {} and {} do not match",
-                v1.dims, v2.dims
+                v1.dims(), v2.dims(),
             )}
             if rev { swap(&mut v1, &mut v2); }
             
@@ -148,17 +74,125 @@ impl Operable for Vector {
     fn arity(&self) -> usize { 1 }
     fn call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
         if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-            if let Some(obj) = self.comps.get(idx) { obj.clone() }
+            if let Some(obj) = self.0.get(idx) { obj.clone() }
             else { eval_err!("Index {} is larger than dimension", idx) }
         } else { eval_err!("Index could not be cast to correct integer") }
     }
 }
 
-impl<T> Display for Vector<T> where T: Display {
+
+
+impl Vector {
+    pub fn check_errs(self) -> Result<Self, Object> {
+        if self.0.iter().any(|c| c.is_err()) {
+            Err(self.0.into_iter()
+            .filter(|c| c.is_err())
+            .next().unwrap())
+        } else { Ok(self) }
+    }
+    
+    pub fn dims(&self) -> usize { self.0.len() }
+    
+    pub fn mag2(self) -> Object
+        { self.0.into_iter().map(|x| x.clone() * x).sum() }
+    pub fn mag(self) -> Object {
+        sqrt(try_cast!(self.mag2() => Number))
+        .map_or(eval_err!(
+            "Cannot take square root of negative"
+        ), &Object::new)
+    }
+    
+    
+    pub fn flrdiv_assign(&mut self, rhs: Object)
+        { self.0.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
+    pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }
+}
+
+
+impl Neg for Vector {
+    type Output = Vector;
+    fn neg(mut self) -> Self::Output {
+        self.0.iter_mut().for_each(|a| a.do_inside(|x| -x));
+        self
+    }
+}
+
+impl AddAssign<Vector> for Vector {
+    fn add_assign(&mut self, rhs: Vector) {
+        check_dims!(self, rhs);
+        zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a += b);
+    }
+}
+
+impl Add<Vector> for Vector {
+    type Output = Vector;
+    fn add(mut self, rhs: Self) -> Self { self += rhs; self }
+}
+
+impl SubAssign<Vector> for Vector {
+    fn sub_assign(&mut self, rhs: Vector) {
+        check_dims!(self, rhs);
+        zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a -= b);
+    }
+}
+
+impl Sub<Vector> for Vector {
+    type Output = Vector;
+    fn sub(mut self, rhs: Self) -> Self { self -= rhs; self }
+}
+
+impl Mul<Vector> for Vector {
+    type Output = Object;
+    fn mul(self, rhs: Vector) -> Self::Output {
+        check_dims!(self, rhs);
+        zip(self.0, rhs.0).map(|(a, b)| a * b).sum()
+    }
+}
+
+impl Mul<Vector> for Object {
+    type Output = Vector;
+    fn mul(self, mut rhs: Vector) -> Self::Output {
+        rhs.0.iter_mut().for_each(|r| r.do_inside(|x| self.clone() * x));
+        rhs
+    }
+}
+
+impl MulAssign<Object> for Vector {
+    fn mul_assign(&mut self, rhs: Object)
+        { self.0.iter_mut().for_each(|x| *x *= rhs.clone()); }
+}
+
+impl Mul<Object> for Vector {
+    type Output = Vector;
+    fn mul(mut self, rhs: Object) -> Self { self *= rhs; self }
+}
+
+impl DivAssign<Object> for Vector {
+    fn div_assign(&mut self, rhs: Object)
+        { self.0.iter_mut().for_each(|x| *x /= rhs.clone()); }
+}
+
+impl Div<Object> for Vector {
+    type Output = Vector;
+    fn div(mut self, rhs: Object) -> Self { self /= rhs; self }
+}
+
+impl RemAssign<Object> for Vector {
+    fn rem_assign(&mut self, rhs: Object)
+        { self.0.iter_mut().for_each(|x| *x %= rhs.clone()); }
+}
+
+impl Rem<Object> for Vector {
+    type Output = Vector;
+    fn rem(mut self, rhs: Object) -> Self::Output { self %= rhs; self }
+}
+
+
+impl Display for Vector {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.write_str("V [")?;
+        f.write_str("V[")?;
         let mut is_first = true;
-        for obj in self.comps.iter() {
+        for obj in self.0.iter() {
             if !is_first { f.write_str(", ")?; }
             is_first = false;
             write!(f, "{}", obj)?;
@@ -167,30 +201,25 @@ impl<T> Display for Vector<T> where T: Display {
     }
 }
 
-impl Mul<Vector> for Object {
-    type Output = Vector;
-    fn mul(self, rhs: Self::Output) -> Self::Output
-        { rhs.comps.into_iter().map(|b| self.clone() * b).collect() }
+impl From<Vector> for Object {
+    fn from(v: Vector) -> Object {
+        if v.0.iter().any(|x| x.is_err()) {
+            v.0.into_iter()
+            .filter(|x| x.is_err())
+            .next().unwrap()
+        } else { Object::new(v) }
+    }
 }
 
-impl Vector {
-    pub fn mag(self) -> Object {
-        let m2 = try_cast!(self.mag2() => Number).to_real();
-        m2.sqrt().into()
-    }
-    
-    pub fn flrdiv(self, other: Object) -> Self
-        { self.comps.into_iter().map(|x| x.flrdiv(other.clone())).collect() }
-}
 
 
 pub fn make_bltns() -> Object {
     let mut vec = HashMap::new();
     def_bltn!(vec.V(comps: Array) =
-        if comps.0.len() > 0 { Vector::new(comps.0).into() }
+        if comps.0.len() > 0 { Vector(comps.0).into() } 
         else { eval_err!("Vector cannot be zero dimensional") }
     );
-    def_bltn!(vec.dims(vec: Vector) = (vec.dims as i64).into());
+    def_bltn!(vec.dims(vec: Vector) = (vec.dims() as i64).into());
     def_bltn!(vec.mag(vec: Vector) = vec.mag());
     vec.into()
 }

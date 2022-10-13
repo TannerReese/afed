@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish};
+use super::{Operable, Object, NamedType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Curry {
@@ -11,23 +11,22 @@ pub struct Curry {
 }
 
 impl NamedType for Curry { fn type_name() -> &'static str { "partial evaluation" } }
-impl Objectish for Curry {}
 
 impl Curry {
-    pub fn new(mut func: Object, mut args: Vec<Object>) -> Object {
+    pub fn new(func: Object, mut args: Vec<Object>) -> Object {
         if func.arity() < args.len() { panic!(
                 "Cannot curry object, {} arguments given, but expected {}",
                 args.len(), func.arity(),
         )}
         
-        if let Some(Curry {arity, args: old_args, ..}) = func.downcast_mut::<Curry>() {
-            *arity -= args.len();
-            old_args.append(&mut args);
-            func
+        if func.is_a::<Curry>() {
+            let mut curry = try_cast!(func => Curry);
+            curry.arity -= args.len();
+            curry.args.append(&mut args);
+            curry
         } else {
-            let arity = func.arity() - args.len();
-            Curry {func, arity, args}.into()
-        }
+            Curry {arity: func.arity() - args.len(), func, args}
+        }.into()
     }
 }
 
@@ -52,5 +51,9 @@ impl Display for Curry {
         }
         Ok(())
     }
+}
+
+impl From<Curry> for Object {
+    fn from(c: Curry) -> Self { Object::new(c) }
 }
 

@@ -204,10 +204,9 @@ impl ExprArena {
        
     pub fn from_obj(&mut self, obj: Object) -> Expr { self.from_obj_raw(obj, false) }
     
-    fn from_obj_raw(&mut self, mut obj: Object, owned: bool) -> Expr {
-        let inner = if let Some(Map {unnamed, named}) = obj.downcast_mut::<Map>() {
-            let unnamed = take(unnamed);
-            let named = take(named);
+    fn from_obj_raw(&mut self, obj: Object, owned: bool) -> Expr {
+        let inner = if obj.is_a::<Map>() {
+            let Map {unnamed, named} = obj.cast::<Map>().unwrap();
             Inner::Map(
                 unnamed.into_iter().map(|child|
                     self.from_obj_raw(child, true)
@@ -220,8 +219,8 @@ impl ExprArena {
                     }))
                 }).collect(),
             )
-        } else if let Some(Array(elems)) = obj.downcast_mut::<Array>() {
-            let elems = take(elems);
+        } else if obj.is_a::<Array>() {
+            let Array(elems) = obj.cast::<Array>().unwrap();
             Inner::Array(elems.into_iter().map(|child|
                 self.from_obj_raw(child, true)
             ).collect())

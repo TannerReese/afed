@@ -2,13 +2,12 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);
 impl NamedType for Array { fn type_name() -> &'static str { "array" }}
-impl Objectish for Array {}
 
 impl Operable for Array {
     type Output = Object;
@@ -37,6 +36,15 @@ impl Display for Array {
     }
 }
 
+impl From<Array> for Object {
+    fn from(arr: Array) -> Self {
+        if arr.0.iter().any(|elm| elm.is_err()) {
+            arr.0.into_iter()
+            .filter(|elm| elm.is_err())
+            .next().unwrap()
+        } else { Object::new(arr) }
+    }
+}
 
 impl<const N: usize> From<[Object; N]> for Object {
     fn from(arr: [Object; N]) -> Object {

@@ -4,6 +4,7 @@ use std::clone::Clone;
 use std::fmt::{Debug, Display, Formatter, Error, Write};
 
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
+use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::Sum;
 
 use std::mem;
@@ -99,6 +100,12 @@ pub trait Objectish :
     + Operable<Output=Object>
 {}
 
+impl<T> Objectish for T where T:
+    Eq + Clone + Any + NamedType
+    + Debug + Display
+    + Operable<Output=Object>
+{}
+
 fn as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
 fn as_any_mut<T>(x: &mut T) -> &mut dyn Any where T: Objectish { x }
 
@@ -162,8 +169,9 @@ impl Object {
     }
     
     pub fn is_err(&self) -> bool {self.is_a::<EvalError>() }
+    pub fn type_id(&self) -> TypeId { (*self.0).as_any().type_id() }
     pub fn is_a<T>(&self) -> bool where T: Any
-        { TypeId::of::<T>() == (*self.0).as_any().type_id() }
+        { TypeId::of::<T>() == self.type_id() }
     
     pub fn cast<T>(self) -> Result<T, Object> where T: NamedType {
         let given_type = (*self.0).type_name_dyn();
@@ -177,9 +185,13 @@ impl Object {
     pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
         { (*self.0).as_any().downcast_ref() }
     
-    pub fn downcast_mut<'a, T: 'static>(&'a mut self) -> Option<&'a mut T>
-        { (*self.0).as_any_mut().downcast_mut() }
     
+    pub fn do_inside(&mut self, func: impl FnOnce(Self) -> Self){
+        let owned = Object(mem::replace(&mut self.0,
+            Box::new(None::<null::Null>)
+        ));
+        self.0 = func(owned).0;
+    }
     
     
     pub fn get<B>(&self, key: &B) -> Option<&Object>
@@ -204,10 +216,6 @@ impl Object {
     }
 }
 
-impl<T> From<T> for Object where T: Objectish {
-    fn from(obj: T) -> Self { Object::new(obj) }
-}
-
 
 
 impl Object {
@@ -224,7 +232,7 @@ impl Object {
         else if (*other.0).try_binary(true, op, &self) { (*other.0).binary(true, op, self) }
         else { eval_err!(
             "Binary operator {} not implemented between types {} and {}",
-            op.symbol(), (*self.0).type_name_dyn(), (*self.0).type_name_dyn(),
+            op.symbol(), (*self.0).type_name_dyn(), (*other.0).type_name_dyn(),
         )}
     }
     
@@ -329,7 +337,7 @@ impl Rem for Object {
 impl Sum for Object {
     fn sum<I>(iter: I) -> Self where I: Iterator<Item = Self> {
         iter.reduce(|accum, x| accum + x)
-        .expect("Can only sum objects for non-empty interators")
+        .unwrap_or(eval_err!("Can only sum objects for non-empty iterators"))
     }
 }
 
@@ -337,6 +345,27 @@ impl Object {
     pub fn flrdiv(self, rhs: Self) -> Self
         { self.binary(Binary::FlrDiv, rhs) }
 }
+
+impl AddAssign for Object {
+    fn add_assign(&mut self, rhs: Self) { self.do_inside(|x| x + rhs) }
+}
+
+impl SubAssign for Object {
+    fn sub_assign(&mut self, rhs: Self) { self.do_inside(|x| x - rhs) }
+}
+
+impl MulAssign for Object {
+    fn mul_assign(&mut self, rhs: Self) { self.do_inside(|x| x * rhs) }
+}
+
+impl DivAssign for Object {
+    fn div_assign(&mut self, rhs: Self) { self.do_inside(|x| x / rhs) }
+}
+
+impl RemAssign for Object {
+    fn rem_assign(&mut self, rhs: Self) { self.do_inside(|x| x % rhs) }
+}
+
 
 
 
@@ -346,7 +375,6 @@ pub struct EvalError {
     pub msg: String,
 }
 impl NamedType for EvalError { fn type_name() -> &'static str { "error" }}
-impl Objectish for EvalError {}
 
 static EVAL_ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl EvalError {

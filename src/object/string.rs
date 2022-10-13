@@ -3,12 +3,11 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Str(pub String);
 impl NamedType for Str { fn type_name() -> &'static str { "string" } }
-impl Objectish for Str {}
 
 impl Operable for Str {
     type Output = Object;
@@ -32,6 +31,10 @@ impl Operable for Str {
     }
     
     call_not_impl!{Self}
+}
+
+impl From<Str> for Object {
+    fn from(s: Str) -> Self { Object::new(s) }
 }
 
 impl Display for Str {

@@ -1,4 +1,5 @@
 # Test for circular dependence error
+# Test for type errors
 
 # x Should parse and evaluate correctly
 x: {
@@ -20,5 +21,10 @@ video: {
 	foo: {x: 5 * bar.y =`Eval Error: Circular dependence from variable bar.y`},
 	bar: {y: baz.z - 6 =`Eval Error: Circular dependence from variable baz.z`},
 	baz: {z: foo.x^2 =`Eval Error: Circular dependence from variable foo.x`}
-}
+},
+
+# Should produce type errors
+-"Hello" = `Eval Error: Unary operator - not implemented for type string`,
+1 * false = `Eval Error: Binary operator * not implemented between types number and boolean`,
+"Hello" + [1, 2] = `Eval Error: Binary operator + not implemented between types string and array`,
 

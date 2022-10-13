@@ -2,12 +2,12 @@ use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
-use std::ops::RemAssign;
+use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::cmp::Ordering;
 
 use super::opers::{Unary, Binary};
 use super::bool::Bool;
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
@@ -15,9 +15,44 @@ pub enum Number {
     Real(f64),
 }
 impl NamedType for Number { fn type_name() -> &'static str { "number" } }
-impl Objectish for Number {}
 
-fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
+impl Operable for Number {
+    type Output = Object;
+    fn try_unary(&self, _: Unary) -> bool { true }
+    fn unary(self, op: Unary) -> Self::Output { match op {
+        Unary::Neg => (-self).into(),
+    }}
+    
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::Leq |
+        Binary::Add | Binary::Sub |
+        Binary::Mul | Binary::Div | Binary::Mod | Binary::FlrDiv |
+        Binary::Pow => other.is_a::<Number>(),
+        _ => false,
+    }}
+    
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+        let (mut num1, mut num2) = (self, try_cast!(other));
+        if rev { swap(&mut num1, &mut num2); }
+        
+        match op {
+            Binary::Leq => return Bool::new(num1 <= num2),
+            Binary::Add => num1 + num2,
+            Binary::Sub => num1 - num2,
+            Binary::Mul => num1 * num2,
+            Binary::Div => num1 / num2,
+            Binary::Mod => num1 % num2,
+            Binary::FlrDiv => num1.flrdiv(num2),
+            Binary::Pow => num1.pow(num2),
+            _ => panic!(),
+        }.into()
+    }
+    
+    call_not_impl!{Self}
+}
+
+
+pub fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     let (mut a, mut b) = if a > b { (b, a) } else { (a, b) };
     let zero = T::default();
     
@@ -70,64 +105,26 @@ impl Number {
         },
         (num1, num2) => num1.to_real().div_euclid(num2.to_real()).into(),
     }}
-    
-    pub fn abs(self) -> Self { match self {
-        Number::Ratio(n, d) => Number::Ratio(n.abs(), d),
-        Number::Real(r) => Number::Real(r.abs()),
-    }}
-    
-    pub fn signum(self) -> Self { Number::Ratio(match self {
-        Number::Ratio(n, _) => n.signum(),
-        Number::Real(r) => r.signum() as i64
-    }, 1)}
-    
-    pub fn floor(self) -> Self { match self {
-        Number::Ratio(n, d) => Number::Ratio(if n < 0 {
-            (n + 1) / d as i64 - 1
-        } else {
-            n / d as i64
-        }, 1),
-        Number::Real(r) => Number::Ratio(r.floor() as i64, 1),
-    }}
-    
-    pub fn ceil(self) -> Self { match self {
-        Number::Ratio(n, d) => Number::Ratio(if n > 0 {
-            (n - 1) / d as i64 + 1
-        } else {
-            n / d as i64
-        }, 1),
-        Number::Real(r) => Number::Ratio(r.ceil() as i64, 1),
-    }}
-    
-    pub fn sqrt(self) -> Option<Self> {
-        let r = self.to_real();
-        if r < 0.0 { None }
-        else { Some(Number::Real(r.sqrt())) }
-    }
-    
-    pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
-        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
-            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
-            Number::Ratio(g as i64, da * db)
-        }.simplify()),
-        _ => None
-    }}
-    
-    pub fn lcm(a: Self, b: Self) -> Option<Self> { match (a, b) {
-        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
-            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
-            Number::Ratio(na * nb, g)
-        }.simplify()),
-        _ => None,
-    }}
 }
 
 impl From<i64> for Number {
-    fn from(n: i64) -> Number { Number::Ratio(n, 1) }
+    fn from(n: i64) -> Self { Number::Ratio(n, 1) }
 }
 
 impl From<f64> for Number {
-    fn from(r: f64) -> Number { Number::Real(r) }
+    fn from(r: f64) -> Self { Number::Real(r) }
+}
+
+impl From<Number> for Object {
+    fn from(n: Number) -> Self { Object::new(n) }
+}
+
+impl From<i64> for Object {
+    fn from(n: i64) -> Self { Number::Ratio(n, 1).into() }
+}
+
+impl From<f64> for Object {
+    fn from(r: f64) -> Self { Number::Real(r).into() }
 }
 
 impl PartialEq for Number {
@@ -223,42 +220,27 @@ impl Rem for Number {
     }}
 }
 
-
-
-impl Operable for Number {
-    type Output = Object;
-    fn try_unary(&self, _: Unary) -> bool { true }
-    fn unary(self, op: Unary) -> Self::Output { match op {
-        Unary::Neg => (-self).into(),
-    }}
-    
-    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Leq |
-        Binary::Add | Binary::Sub |
-        Binary::Mul | Binary::Div | Binary::Mod | Binary::FlrDiv |
-        Binary::Pow => other.is_a::<Number>(),
-        _ => false,
-    }}
-    
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
-        let (mut num1, mut num2) = (self, try_cast!(other));
-        if rev { swap(&mut num1, &mut num2); }
-        
-        match op {
-            Binary::Leq => return Bool::new(num1 <= num2),
-            Binary::Add => num1 + num2,
-            Binary::Sub => num1 - num2,
-            Binary::Mul => num1 * num2,
-            Binary::Div => num1 / num2,
-            Binary::Mod => num1 % num2,
-            Binary::FlrDiv => num1.flrdiv(num2),
-            Binary::Pow => num1.pow(num2),
-            _ => panic!(),
-        }.into()
-    }
-    
-    call_not_impl!{Self}
+impl AddAssign for Number {
+    fn add_assign(&mut self, rhs: Self) { *self = *self + rhs }
 }
+
+impl SubAssign for Number {
+    fn sub_assign(&mut self, rhs: Self) { *self = *self - rhs }
+}
+
+impl MulAssign for Number {
+    fn mul_assign(&mut self, rhs: Self) { *self = *self * rhs }
+}
+
+impl DivAssign for Number {
+    fn div_assign(&mut self, rhs: Self) { *self = *self / rhs }
+}
+
+impl RemAssign for Number {
+    fn rem_assign(&mut self, rhs: Self) { *self = *self % rhs }
+}
+
+
 
 impl Display for Number {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -268,13 +250,5 @@ impl Display for Number {
             Number::Real(r) => write!(f, "{}", r),
         }
     }
-}
-
-impl From<i64> for Object {
-    fn from(n: i64) -> Object { Number::Ratio(n, 1).into() }
-}
-
-impl From<f64> for Object {
-    fn from(r: f64) -> Object { Number::Real(r).into() }
 }
 

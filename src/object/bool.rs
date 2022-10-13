@@ -3,12 +3,11 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish, EvalError};
+use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
 impl NamedType for Bool { fn type_name() -> &'static str { "boolean" }}
-impl Objectish for Bool {}
 
 impl Bool {
     pub fn new(b: bool) -> Object { Bool(b).into() }
@@ -49,12 +48,15 @@ impl Display for Bool {
     }
 }
 
+impl From<Bool> for Object {
+    fn from(b: Bool) -> Object { Object::new(b) }
+}
+
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ternary();
 impl NamedType for Ternary { fn type_name() -> &'static str { "ternary" }}
-impl Objectish for Ternary {}
 
 impl Operable for Ternary {
     type Output = Object;
@@ -70,5 +72,9 @@ impl Operable for Ternary {
 
 impl Display for Ternary {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> { write!(f, "if") }
+}
+
+impl From<Ternary> for Object {
+    fn from(t: Ternary) -> Self { Object::new(t) }
 }
 
