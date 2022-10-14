@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-
 use std::mem::swap;
 use std::vec::Vec;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::zip;
 
 use super::num::sqrt;
+use super::mat::Matrix;
 
 use crate::object::opers::{Unary, Binary};
 use crate::object::{Operable, Object, NamedType, EvalError};
@@ -32,15 +32,16 @@ impl NamedType for Vector { fn type_name() -> &'static str { "vector" }}
 
 impl Operable for Vector {
     type Output = Object;
-    fn try_unary(&self, _: Unary) -> bool { true }
-    fn unary(self, op: Unary) -> Self::Output { match op {
-        Unary::Neg => (-self).into()
+    fn unary(self, op: Unary) -> Option<Self::Output> { match op {
+        Unary::Neg => Some((-self).into())
     }}
    
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Add | Binary::Sub => other.is_a::<Vector>(),
-        Binary::Mul => true,
-        Binary::Div | Binary::Mod | Binary::FlrDiv => !rev,
+        Binary::Mul => !other.is_a::<Matrix>(),
+        Binary::Div | Binary::Mod | Binary::FlrDiv => {
+            !rev && !other.is_a::<Matrix>()
+        },
         _ => false,
     }}
     
@@ -72,10 +73,12 @@ impl Operable for Vector {
     }
     
     fn arity(&self) -> usize { 1 }
-    fn call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
+    fn call(&self, mut args: Vec<Object>) -> Self::Output {
         if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
             if let Some(obj) = self.0.get(idx) { obj.clone() }
-            else { eval_err!("Index {} is larger than dimension", idx) }
+            else { eval_err!(
+                "Index {} is larger or equal to dimension {}", idx, self.dims(),
+            )}
         } else { eval_err!("Index could not be cast to correct integer") }
     }
 }
@@ -110,40 +113,40 @@ impl Vector {
 
 
 impl Neg for Vector {
-    type Output = Vector;
-    fn neg(mut self) -> Self::Output {
+    type Output = Self;
+    fn neg(mut self) -> Self {
         self.0.iter_mut().for_each(|a| a.do_inside(|x| -x));
         self
     }
 }
 
-impl AddAssign<Vector> for Vector {
-    fn add_assign(&mut self, rhs: Vector) {
+impl AddAssign for Vector {
+    fn add_assign(&mut self, rhs: Self) {
         check_dims!(self, rhs);
         zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a += b);
     }
 }
 
-impl Add<Vector> for Vector {
-    type Output = Vector;
+impl Add for Vector {
+    type Output = Self;
     fn add(mut self, rhs: Self) -> Self { self += rhs; self }
 }
 
-impl SubAssign<Vector> for Vector {
-    fn sub_assign(&mut self, rhs: Vector) {
+impl SubAssign for Vector {
+    fn sub_assign(&mut self, rhs: Self) {
         check_dims!(self, rhs);
         zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a -= b);
     }
 }
 
-impl Sub<Vector> for Vector {
-    type Output = Vector;
+impl Sub for Vector {
+    type Output = Self;
     fn sub(mut self, rhs: Self) -> Self { self -= rhs; self }
 }
 
 impl Mul<Vector> for Vector {
     type Output = Object;
-    fn mul(self, rhs: Vector) -> Self::Output {
+    fn mul(self, rhs: Vector) -> Object {
         check_dims!(self, rhs);
         zip(self.0, rhs.0).map(|(a, b)| a * b).sum()
     }
@@ -151,7 +154,7 @@ impl Mul<Vector> for Vector {
 
 impl Mul<Vector> for Object {
     type Output = Vector;
-    fn mul(self, mut rhs: Vector) -> Self::Output {
+    fn mul(self, mut rhs: Vector) -> Vector {
         rhs.0.iter_mut().for_each(|r| r.do_inside(|x| self.clone() * x));
         rhs
     }
@@ -201,8 +204,13 @@ impl Display for Vector {
     }
 }
 
+impl FromIterator<Object> for Vector {
+    fn from_iter<T: IntoIterator<Item = Object>>(iter: T) -> Self
+        { Vector(Vec::from_iter(iter)) }
+}
+
 impl From<Vector> for Object {
-    fn from(v: Vector) -> Object {
+    fn from(v: Vector) -> Self {
         if v.0.iter().any(|x| x.is_err()) {
             v.0.into_iter()
             .filter(|x| x.is_err())

@@ -45,8 +45,7 @@ macro_rules! try_ok {
 #[macro_export]
 macro_rules! unary_not_impl {
     () => {
-        fn try_unary(&self, _: Unary) -> bool { false }
-        fn unary(self, _: Unary) -> Object { panic!() }
+        fn unary(self, _: Unary) -> Option<Self::Output> { None }
     };
 }
 
@@ -54,7 +53,7 @@ macro_rules! unary_not_impl {
 macro_rules! binary_not_impl {
     () => {
         fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
-        fn binary(self, _: bool, _: Binary, _: Object) -> Object { panic!() }
+        fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { panic!() }
     };
 }
 
@@ -62,7 +61,7 @@ macro_rules! binary_not_impl {
 macro_rules! call_not_impl {
     ($type:ty) => {
         fn arity(&self) -> usize { 0 }
-        fn call(&self, _: Vec<Object>) -> Object {
+        fn call(&self, _: Vec<Object>) -> Self::Output {
             eval_err!("Cannot call {}", Self::type_name())
         }
     };
@@ -81,8 +80,7 @@ pub mod bltn_func;
 
 pub trait Operable<Rhs = Object, U = Unary, B = Binary> {
     type Output;
-    fn try_unary(&self, op: U) -> bool;
-    fn unary(self, op: U) -> Self::Output;
+    fn unary(self, op: U) -> Option<Self::Output>;
     fn try_binary(&self, rev: bool, op: B, other: &Rhs) -> bool;
     fn binary(self, rev: bool, op: B, other: Rhs) -> Self::Output;
     fn arity(&self) -> usize;
@@ -91,7 +89,6 @@ pub trait Operable<Rhs = Object, U = Unary, B = Binary> {
 
 pub trait NamedType : Any {
     fn type_name() -> &'static str;
-    fn type_name_dyn(&self) -> &'static str { Self::type_name() }
 }
 
 pub trait Objectish :
@@ -119,8 +116,7 @@ trait ObjectishSafe {
     fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     
-    fn try_unary(&self, op: Unary) -> bool;
-    fn unary(&mut self, op: Unary) -> Object;
+    fn unary(&mut self, op: Unary) -> Option<Object>;
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object;
     fn arity(&self) -> usize;
@@ -134,7 +130,7 @@ fn to_mut<T>(obj: &mut Option<T>) -> &mut T { obj.as_mut().unwrap() }
 impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
     fn as_any(&self) -> &dyn Any { as_any(to_ref(self)) }
     fn as_any_mut(&mut self) -> &mut dyn Any { as_any_mut(to_mut(self)) }
-    fn type_name_dyn(&self) -> &'static str { to_ref(self).type_name_dyn() }
+    fn type_name_dyn(&self) -> &'static str { T::type_name() }
     
     fn clone(&self) -> Object { Object::new(to_ref(self).clone()) }
     fn eq(&self, other: &Object) -> bool {
@@ -148,9 +144,7 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
         { Debug::fmt(to_ref(self), f) }
     
-    fn try_unary(&self, op: Unary) -> bool
-        { to_ref(self).try_unary(op) }
-    fn unary(&mut self, op: Unary) -> Object
+    fn unary(&mut self, op: Unary) -> Option<Object>
         { to_obj(self).unary(op) }
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool
         { to_ref(self).try_binary(rev, op, other) }
@@ -220,7 +214,7 @@ impl Object {
 
 impl Object {
     pub fn unary(mut self, op: Unary) -> Object {
-        if (*self.0).try_unary(op) { (*self.0).unary(op) }
+        if let Some(obj) = (*self.0).unary(op) { obj }
         else { eval_err!(
             "Unary operator {} not implemented for type {}",
             op.symbol(), (*self.0).type_name_dyn(),
@@ -386,8 +380,7 @@ impl EvalError {
 
 impl Operable for EvalError {
     type Output = Object;
-    fn try_unary(&self, _: Unary) -> bool { true }
-    fn unary(self, _: Unary) -> Self::Output { Object::new(self) }
+    fn unary(self, _: Unary) -> Option<Self::Output> { Some(Object::new(self)) }
     fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
     fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { Object::new(self) }
     

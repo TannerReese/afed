@@ -36,7 +36,7 @@ impl Operable for Curry {
     binary_not_impl!{}
     
     fn arity(&self) -> usize { self.arity }
-    fn call(&self, mut new_args: Vec<Object>) -> Self::Output {
+    fn call(&self, mut new_args: Vec<Object>) -> Object {
         let mut args = self.args.clone();
         args.append(&mut new_args);
         self.func.call(args)

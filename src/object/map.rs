@@ -30,7 +30,7 @@ impl Operable for Map {
     binary_not_impl!{}
     
     fn arity(&self) -> usize { 1 }
-    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+    fn call(&self, mut args: Vec<Object>) -> Object {
         let Str(key) = try_cast!(args.remove(0));
         self.named.get(key.as_str()).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)

@@ -15,9 +15,8 @@ impl Bool {
 
 impl Operable for Bool {
     type Output = Object;
-    fn try_unary(&self, _: Unary) -> bool { true }
-    fn unary(self, op: Unary) -> Self::Output { match op {
-        Unary::Neg => Bool::new(!self.0),
+    fn unary(self, op: Unary) -> Option<Object> { match op {
+        Unary::Neg => Some(Bool::new(!self.0)),
     }}
     
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
@@ -25,7 +24,7 @@ impl Operable for Bool {
         _ => false,
     }}
     
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let Bool(mut b1) = self;
         let Bool(mut b2) = try_cast!(other);
         if rev { swap(&mut b1, &mut b2); }

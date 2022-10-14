@@ -18,9 +18,8 @@ impl NamedType for Number { fn type_name() -> &'static str { "number" } }
 
 impl Operable for Number {
     type Output = Object;
-    fn try_unary(&self, _: Unary) -> bool { true }
-    fn unary(self, op: Unary) -> Self::Output { match op {
-        Unary::Neg => (-self).into(),
+    fn unary(self, op: Unary) -> Option<Object> { match op {
+        Unary::Neg => Some((-self).into()),
     }}
     
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
@@ -31,7 +30,7 @@ impl Operable for Number {
         _ => false,
     }}
     
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let (mut num1, mut num2) = (self, try_cast!(other));
         if rev { swap(&mut num1, &mut num2); }
         

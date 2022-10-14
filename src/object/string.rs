@@ -18,7 +18,7 @@ impl Operable for Str {
         _ => false,
     }}
     
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let Str(mut s1) = self;
         let Str(mut s2) = try_cast!(other);
         if rev { swap(&mut s1, &mut s2); }

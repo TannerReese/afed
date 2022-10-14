@@ -15,7 +15,7 @@ impl Operable for Array {
     binary_not_impl!{}
     
     fn arity(&self) -> usize { 1 }
-    fn call<'a>(&self, mut args: Vec<Object>) -> Self::Output {
+    fn call<'a>(&self, mut args: Vec<Object>) -> Object {
         if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
             if let Some(obj) = self.0.get(idx) { obj.clone() }
             else { eval_err!("Index {} is out of bounds", idx) }

@@ -37,9 +37,11 @@ macro_rules! def_bltn {
 
 pub mod num;
 pub mod vec;
+pub mod mat;
 
 pub fn make_bltns() -> HashMap<String, Object> {[
     ("num", num::make_bltns()),
     ("vec", vec::make_bltns()),
+    ("mat", mat::make_bltns()),
 ].map(|(key, obj)| (key.to_owned(), obj)).into()}
 
