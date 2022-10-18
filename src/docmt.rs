@@ -100,6 +100,7 @@ impl Docmt {
             if new.end > after.start { return false }
         }
         
+        self.arena.set_saved(new.target);
         self.substs.insert(i, new);
         return true;
     }

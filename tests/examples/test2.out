@@ -19,8 +19,8 @@ x: true + true = `false`,
 # Should produce circular dependence error
 video: {
 	foo: {x: 5 * bar.y =`Eval Error: Circular dependence from variable bar.y`},
-	bar: {y: baz.z - 6 =`Eval Error: Circular dependence from variable baz.z`},
-	baz: {z: foo.x^2 =`Eval Error: Circular dependence from variable foo.x`}
+	bar: {y: baz.z - 6 =`Eval Error: Circular dependence from variable bar.y`},
+	baz: {z: foo.x^2 =`Eval Error: Circular dependence from variable bar.y`}
 },
 
 # Should produce type errors
