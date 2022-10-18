@@ -10,7 +10,7 @@ use super::object::bool::{Bool, Ternary};
 use super::object::number::Number;
 use super::object::string::Str;
 
-use super::expr::{Expr, ExprArena};
+use super::expr::{ExprId, ExprArena};
 
 struct Subst {
     start: usize,
@@ -18,7 +18,7 @@ struct Subst {
     
     lineno: usize,
     column: usize,
-    target: Expr,
+    target: ExprId,
     value: Option<Object>,
 }
 
@@ -42,19 +42,13 @@ impl Docmt {
         }
     }
     
-    pub fn parse<W>(&mut self, err_out: &mut W, bltns: &HashMap<String, Object>) -> Result<(), usize> where W: Write {
+    pub fn parse<W>(&mut self, err_out: &mut W, bltns: HashMap<String, Object>) -> Result<(), usize>
+    where W: Write {
         if !self.is_parsed {
             let src: String = mem::take(&mut self.src);
             
             let mut prs = Parser {doc: self, pos: Pos::new(&src), err_out, err_count: 0};
-            let root = match prs.parse_map(true) {
-                Ok(root) => Some(root),
-                Err(err) => {
-                    prs.print_err(err);
-                    None
-                },
-            };
-            
+            let root = prs.parse_map(true).map_err(|err| prs.print_err(err)).ok();
             if !prs.pos.is_empty() {
                 prs.print_err(prs.error("Extra unparsed content in document"))
             }
@@ -302,7 +296,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         } else { None }
     }
     
-    fn parse_equals(&mut self) -> Result<Expr, ParseError> {
+    fn parse_equals(&mut self) -> Result<ExprId, ParseError> {
         let body = self.parse_expr(0)?;
         self.skip();
         if self.parse_char('=') {
@@ -324,7 +318,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         Ok(body)
     }
     
-    fn parse_expr(&mut self, min_prec: usize) -> Result<Expr, ParseError> {
+    fn parse_expr(&mut self, min_prec: usize) -> Result<ExprId, ParseError> {
         let mut value = if let Some(op) = self.parse_unary() {
             let prec = std::cmp::max(op.prec(), min_prec);
             let arg = self.parse_expr(prec + 1)?;
@@ -348,7 +342,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     
     
     
-    fn parse_num(&mut self) -> Result<Expr, ParseError> {
+    fn parse_num(&mut self) -> Result<ExprId, ParseError> {
         let numstr = self.pos.ptr;
         let len = self.pos.skip_while(|c| c.is_ascii_digit() || c == '.');
         let numstr = &numstr[..len];
@@ -403,7 +397,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         Ok(s)
     }
     
-    fn parse_array(&mut self) -> Result<Expr, ParseError> {
+    fn parse_array(&mut self) -> Result<ExprId, ParseError> {
         self.expect('[', "Missing opening bracket in array")?;
         
         let mut elems = Vec::new();
@@ -416,7 +410,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         Ok(self.doc.arena.create_array(elems).unwrap())
     }
     
-    fn parse_member(&mut self) -> Result<(Option<String>, Expr), ParseError> {
+    fn parse_member(&mut self) -> Result<(Option<String>, ExprId), ParseError> {
         self.skip();
         let before = self.pos;
         let label = if let Some(c) = self.pos.peek() {
@@ -433,7 +427,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
     }
     
-    fn parse_map(&mut self, is_root: bool) -> Result<Expr, ParseError> {
+    fn parse_map(&mut self, is_root: bool) -> Result<ExprId, ParseError> {
         if !is_root { self.expect('{', "Missing opening brace in map")?; }
         
         let mut unnamed = Vec::new();
@@ -469,7 +463,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         Ok(self.doc.arena.create_map(unnamed, named).unwrap())
     }
     
-    fn parse_call(&mut self) -> Result<Expr, ParseError> {
+    fn parse_call(&mut self) -> Result<ExprId, ParseError> {
         if let Some(val) = self.parse_single()? {
             let mut args = Vec::new();
             while let Some(x) = self.parse_single()? { args.push(x); }
@@ -480,7 +474,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         } else { Err(self.error("Missing value")) }
     }
     
-    fn parse_single(&mut self) -> Result<Option<Expr>, ParseError> {
+    fn parse_single(&mut self) -> Result<Option<ExprId>, ParseError> {
         self.skip();
         Ok(if let Some(c) = self.pos.peek() { Some(match c {
             '"' => {
@@ -502,7 +496,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                     if let Some(obj) = Self::parse_constant(name.as_str()) {
                         self.doc.arena.from_obj(obj)
                     } else {
-                        self.doc.arena.create_name(name)
+                        self.doc.arena.create_var(name)
                     }
                 } else { return Ok(None) }
             },

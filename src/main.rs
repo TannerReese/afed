@@ -202,7 +202,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let bltns = libs::make_bltns();
     
     let mut errout = prms.errors.to_writer();
-    if let Err(count) = doc.parse(&mut errout, &bltns) {
+    if let Err(count) = doc.parse(&mut errout, bltns) {
         any_errors = true;
         if count == 1 {
             write!(&mut errout, "1 Parse Error encountered\n\n\n")?;

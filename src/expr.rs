@@ -2,7 +2,6 @@ use std::mem::{take, replace};
 use std::borrow::Borrow;
 use std::hash::Hash;
 use std::cmp::Eq;
-use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 use id_arena::{Arena, Id};
 
@@ -12,199 +11,125 @@ use super::object::array::Array;
 use super::object::map::Map;
 
 pub struct ExprArena(Arena<Node>);
-pub type Expr = Id<Node>;
-type Name = Expr;
-
-#[derive(Debug, Clone)]
-struct Path(Vec<String>);
-
-impl Display for Path {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{}", self.0[0])?;
-        for part in self.0[1..].iter() { write!(f, ".{}", part)?; }
-        Ok(())
-    }
-}
-
-fn bltn_find<'a, 'b>(bltns: &'a HashMap<String, Object>, path: &'b Path) -> Option<&'a Object> {
-    if let Some(obj) = bltns.get(&path.0[0]) {
-        if let Some(res) = obj.find(path.0[1..].iter()) {
-            return Some(res);
-        }
-    }
-    
-    for pkg in bltns.values() {
-        if let Some(obj) = pkg.find(path.0.iter()) {
-            return Some(obj);
-        }
-    }
-    None
-}
+pub type ExprId = Id<Node>;
+type VarId = ExprId;
 
 #[derive(Debug, Clone)]
 enum Inner {
     Const(Object),
-    Array(Vec<Expr>),
-    Map(Vec<Expr>, HashMap<String, Expr>),
+    Array(Vec<ExprId>),
+    Map(Vec<ExprId>, HashMap<String, ExprId>),
     
-    Cache(Expr, Option<Object>),
-    Name(Path),
-    Var(Path, bool, Expr),
-    Unary(opers::Unary, Expr),
-    Binary(opers::Binary, Expr, Expr),
-    Call(Expr, Vec<Expr>),
+    Cache(ExprId, Option<Object>),
+    Var(Var),
+    Unary(opers::Unary, ExprId),
+    Binary(opers::Binary, ExprId, ExprId),
+    Call(ExprId, Vec<ExprId>),
+}
+
+#[derive(Debug, Clone)]
+struct Var {
+    name: String,
+    evaling: bool,
+    target: Option<ExprId>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Node {
     owned: bool,
-    names: Option<Vec<Name>>,
+    vars: Vec<VarId>,
     inner: Inner,
 }
 
 impl ExprArena {
-    fn set_cache(&mut self, target: Expr, res: Object) -> &Object {
-        if let Some(Node {inner: Inner::Cache(_, value), ..}) = self.0.get_mut(target) {
-            *value = Some(res);
-            if let Some(res) = value { res } else { unreachable!() }
+    fn get_var(&mut self, id: VarId) -> &mut Var {
+        if let Inner::Var(var) = &mut self.0[id].inner { var }
+        else { panic!("Variable ID doesn't refer a variable node") }
+    }
+    
+    fn set_cache(&mut self, target: ExprId, res: Object) -> &Object {
+        if let Inner::Cache(_, result) = &mut self.0[target].inner {
+            *result = Some(res);
+            if let Some(res) = result { res } else { unreachable!() }
         } else { panic!("Node ID doesn't refer to Cache node") }
     }
     
-    fn set_not_evaling(&mut self, target: Expr) {
-        if let Some(Node {inner: Inner::Var(_, evaling, _), ..}) = self.0.get_mut(target) {
-            *evaling = false;
-        } else { panic!("Node ID doesn't refer to Var node") }
-    }
-    
-    fn make_const(&mut self, name_id: Name, val: &Object) {
-        if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
-            if let Inner::Name(_) = inner {
-                *inner = Inner::Const(val.clone());
-                return;
-            }
-        }
-        panic!("Name ID doesn't refer to Name node")
-    }
-    
-    // Convert Name-type Node into Var-type Node by resolving the name
-    fn make_var(&mut self, name_id: Name, tgt_id: Expr) {
-        if let Some(Node {inner, ..}) = self.0.get_mut(name_id) {
-            if let Inner::Name(name) = inner {
-                let name = replace(name, Path(Vec::new()));
-                *inner = Inner::Var(name, false, tgt_id);
-                return;
-            }
-        }
-        panic!("Name ID doesn't refer to name")
-    }
-    
-    // Resolve names, merge remaining names, and set ownership
-    // Returns unresolved names
-    fn resolve_names(&mut self, target: Expr, map: &HashMap<String, Expr>) {
-        let names = if let Some(Node {names, ..}) = self.0.get_mut(target) {
-            if let Some(nms) = take(names) { nms } else { return }
-        } else { return };
+    pub fn resolve<F>(&mut self, target: ExprId, mut resolver: F)
+    where F: FnMut(&mut ExprArena, &str) -> Option<ExprId> {
+        let vars = replace(&mut self.0[target].vars, Vec::with_capacity(0));
         
-        let unresolved = names.into_iter().filter(|&name_id| {
-            if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
-                if let Some(tgt_id) = map.get(&name.0[0])
-                .and_then(|&id| self.find(id, name.0[1..].iter())) {
-                    self.make_var(name_id, tgt_id);
-                    false
-                } else { true }
-            } else { panic!("Name ID doesn't refer to name") }
-        }).collect::<Vec<Name>>();
-        
-        if unresolved.len() > 0 {
-            if let Some(Node {names, ..}) = self.0.get_mut(target) {
-                *names = Some(unresolved);
-            } else { unreachable!() }
-        }
+        let unresolved = vars.into_iter().filter(|&id| {
+            let name = take(&mut self.get_var(id).name);
+            let tgt = resolver(self, &name);
+            
+            let vr = self.get_var(id);
+            vr.name = name;
+            vr.target = tgt;
+            tgt.is_none()
+        }).collect();
+        self.0[target].vars = unresolved;
     }
     
-    fn set_owned(&mut self, child: Expr, parent_names: &mut Option<Vec<Name>>) {
-        if let Some(Node {owned, names, ..}) = self.0.get_mut(child) {
-            *owned = true;
-            if let Some(mut child_names) = take(names) {
-                if let Some(parent_names) = parent_names {
-                    parent_names.append(&mut child_names);
-                } else {
-                    *parent_names = Some(child_names);
-                }
-            }
-        } else { panic!("Unknown Node ID") }
+    pub fn resolve_builtins(&mut self, root: ExprId, bltns: HashMap<String, Object>) {
+        let bltns: HashMap<String, ExprId> = bltns.into_iter()
+            .map(|(key, obj)| (key, self.from_obj(obj))).collect();
+        
+        self.resolve(root, |ar, name| {
+            name.split_once('.').and_then(|(pkg, rest)|
+                bltns.get(pkg).and_then(|&id| ar.find(id, rest.split('.')))
+            ).or_else(|| bltns.values().filter_map(|&pkg_id|
+                ar.find(pkg_id, name.split('.'))
+            ).next())
+        });
     }
     
-    pub fn resolve_builtins(&mut self, root: Expr, bltns: &HashMap<String, Object>) -> bool {
-        let names = if let Some(Node {names: Some(names), ..}) = self.0.get_mut(root) {
-            take(names)
-        } else { return false; };
-        
-        let unresolved = names.into_iter().filter(|&name_id|
-            if let Some(Node {inner: Inner::Name(name), ..}) = self.0.get(name_id) {
-                if let Some(obj) = bltn_find(bltns, name) {
-                    self.make_const(name_id, obj);
-                    false
-                } else { true }
-            } else { panic!("Name ID doesn't refer to name") }
-        ).collect::<Vec<Name>>();
-        
-        if unresolved.len() > 0 {
-            if let Some(Node {names, ..}) = self.0.get_mut(root) {
-                *names = Some(unresolved);
-            } else { unreachable!() }
-        }
-        return true;
+    fn set_owned(&mut self, child: ExprId) -> Vec<VarId> {
+        let node = &mut self.0[child];
+        node.owned = true;
+        replace(&mut node.vars, Vec::with_capacity(0))
     }
     
     
     
     pub fn new() -> ExprArena { ExprArena(Arena::new()) }
     
-    pub fn create_array(&mut self, elems: Vec<Expr>) -> Option<Expr> {
-        if !elems.iter().all(|&id| self.is_ownable(id)) { return None; }
-        
-        let mut names: Option<Vec<Name>> = None;
-        for &id in elems.iter() { self.set_owned(id, &mut names); }
-        
-        Some(self.0.alloc(Node {owned: false, names, inner: Inner::Array(elems)}))
+    pub fn create_array(&mut self, elms: Vec<ExprId>) -> Option<ExprId> {
+        if !elms.iter().all(|&id| self.is_ownable(id)) { return None; }
+        let vars = elms.iter().map(|&id| self.set_owned(id)).flatten().collect();
+        Some(self.0.alloc(Node {owned: false, vars, inner: Inner::Array(elms)}))
     }
     
-    pub fn create_map(&mut self, unnamed: Vec<Expr>, mut named: HashMap<String, Expr>) -> Option<Expr> {
-        if !unnamed.iter().all(|&id| self.is_ownable(id)) { return None; }
-        if !named.iter().all(|(_, &id)| self.is_ownable(id)) { return None; }
+    pub fn create_map(&mut self,
+        unnamed: Vec<ExprId>, mut named: HashMap<String, ExprId>
+    ) -> Option<ExprId> {
+        if !unnamed.iter().chain(named.values()).all(|&id| self.is_ownable(id)) { return None; }
         
-        let mut map_nms: Option<Vec<Name>> = None;
+        let vars = unnamed.iter().chain(named.values()).map(|&id| {
+            self.resolve(id, |ar: &mut ExprArena, path: &str| {
+                let mut comps = path.split('.');
+                comps.next()
+                .and_then(|fst| named.get(fst))
+                .and_then(|&tgt| ar.find(tgt, comps))
+            });
+            self.set_owned(id)
+        }).flatten().collect();
         
-        // Merge name list and resolve names for unnamed members
-        for &id in unnamed.iter() {
-            self.resolve_names(id, &named);
-            self.set_owned(id, &mut map_nms);
-        }
-        
-        // Merge name list and resolve names for named members
-        for (_, &id) in named.iter() {
-            self.resolve_names(id, &named);
-            self.set_owned(id, &mut map_nms);
-        }
-        
-        // Wrap the named in Cache nodes
-        // so their results can be reused
-        for (_, id) in named.iter_mut() {
+        for id in named.values_mut() {
+            let inner = Inner::Cache(*id, None);
             *id = self.0.alloc(Node {
-                owned: true, names: None, inner: Inner::Cache(*id, None)
+                owned: true, vars: Vec::with_capacity(0), inner
             });
         }
         
         Some(self.0.alloc(Node {
-            owned: false, names: map_nms,
+            owned: false, vars,
             inner: Inner::Map(unnamed, named)
         }))
     }
        
-    pub fn from_obj(&mut self, obj: Object) -> Expr { self.from_obj_raw(obj, false) }
+    pub fn from_obj(&mut self, obj: Object) -> ExprId { self.from_obj_raw(obj, false) }
     
-    fn from_obj_raw(&mut self, obj: Object, owned: bool) -> Expr {
+    fn from_obj_raw(&mut self, obj: Object, owned: bool) -> ExprId {
         let inner = if obj.is_a::<Map>() {
             let Map {unnamed, named} = obj.cast::<Map>().unwrap();
             Inner::Map(
@@ -214,7 +139,7 @@ impl ExprArena {
                 named.into_iter().map(|(key, child)| {
                     let id = self.from_obj_raw(child, true);
                     (key, self.0.alloc(Node {
-                        owned: true, names: None,
+                        owned: true, vars: Vec::with_capacity(0),
                         inner: Inner::Cache(id, None)
                     }))
                 }).collect(),
@@ -225,89 +150,84 @@ impl ExprArena {
                 self.from_obj_raw(child, true)
             ).collect())
         } else { Inner::Const(obj) };
-        self.0.alloc(Node {owned, names: None, inner})
+        self.0.alloc(Node {owned, vars: Vec::with_capacity(0), inner})
     }
     
-    pub fn create_obj<T>(&mut self, obj: T) -> Expr where T: Objectish {
+    pub fn create_obj<T>(&mut self, obj: T) -> ExprId where T: Objectish {
         self.from_obj(Object::new(obj))
     }
     
     
     
-    pub fn create_name(&mut self, name: String) -> Expr {
-        let name = Path(name.split('.').map(|s| s.to_owned()).collect());
-        self.0.alloc_with_id(|id| {
-            Node {owned: false, names: Some(vec![id]), inner: Inner::Name(name)}
+    pub fn create_var(&mut self, name: String) -> VarId {
+        self.0.alloc_with_id(|id| Node {
+            owned: false, vars: vec![id],
+            inner: Inner::Var(Var {
+                name, evaling: false, target: None
+            })
         })
     }
     
-    pub fn create_unary(&mut self, op: opers::Unary, arg: Expr) -> Option<Expr> {
+    pub fn create_unary(&mut self, op: opers::Unary, arg: ExprId) -> Option<ExprId> {
         if !self.is_ownable(arg) { return None; }
-        
-        let mut names: Option<Vec<Name>> = None;
-        self.set_owned(arg, &mut names);
+        let vars = self.set_owned(arg);
         
         Some(self.0.alloc(Node {
-            owned: false, names,
+            owned: false, vars,
             inner: Inner::Unary(op, arg),
         }))
     }
     
-    pub fn create_binary(&mut self, op: opers::Binary, arg1: Expr, arg2: Expr) -> Option<Expr> {
+    pub fn create_binary(&mut self, op: opers::Binary, arg1: ExprId, arg2: ExprId) -> Option<ExprId> {
         if !self.is_ownable(arg1) || !self.is_ownable(arg2) { return None; }
-        
-        let mut names: Option<Vec<Name>> = None;
-        self.set_owned(arg1, &mut names);
-        self.set_owned(arg2, &mut names);
+        let mut vars = self.set_owned(arg1);
+        vars.append(&mut self.set_owned(arg2));
         
         Some(self.0.alloc(Node {
-            owned: false, names,
+            owned: false, vars,
             inner: Inner::Binary(op, arg1, arg2),
         }))
     }
     
-    pub fn create_call(&mut self, func: Expr, args: Vec<Expr>) -> Option<Expr> {
+    pub fn create_call(&mut self, func: ExprId, args: Vec<ExprId>) -> Option<ExprId> {
         if !self.is_ownable(func) { return None; }
         if !args.iter().all(|&id| self.is_ownable(id)) { return None; }
-        
-        let mut names: Option<Vec<Name>> = None;
-        self.set_owned(func, &mut names);
-        for &id in args.iter() { self.set_owned(id, &mut names); }
+        let mut vars = self.set_owned(func);
+        vars.extend(args.iter().map(|&id| self.set_owned(id)).flatten());
         
         Some(self.0.alloc(Node {
-            owned: false, names,
+            owned: false, vars,
             inner: Inner::Call(func, args)
         }))
     }
     
     
     
-    pub fn is_ownable(&self, target: Expr) -> bool {
+    pub fn is_ownable(&self, target: ExprId) -> bool {
         self.0.get(target).map_or(false, |expr| !expr.owned)
     }
     
-    pub fn get<B>(&self, target: Expr, key: &B) -> Option<Expr>
+    pub fn get<B>(&self, target: ExprId, key: &B) -> Option<ExprId>
     where
-        B: Hash + Eq,
+        B: Hash + Eq + ?Sized,
         String: Borrow<B>,
     {
-        if let Some(Node {
-            inner: Inner::Map(_, named), ..
-        }) = self.0.get(target) {
-            if let Some(&elem_id) = named.get(key) {
-                if let Some(&Node {
-                    inner: Inner::Cache(body, _), ..
-                }) = self.0.get(elem_id) {
-                    Some(body)
-                } else { None }
-            } else { None }
-        } else { None }
+        self.0.get(target)
+        .and_then(|node|
+            if let Inner::Map(_, named) = &node.inner { Some(named) }
+            else { None }
+        ).and_then(|named| named.get(key))
+        .and_then(|&id| self.0.get(id))
+        .and_then(|node|
+            if let Inner::Cache(body, _) = node.inner { Some(body) }
+            else { None }
+        )
     }
     
-    pub fn find<'a, I, B>(&self, mut target: Expr, path: I) -> Option<Expr>
+    pub fn find<'a, I, B>(&self, mut target: ExprId, path: I) -> Option<ExprId>
     where
         I: Iterator<Item = &'a B>,
-        B: Hash + Eq + 'a,
+        B: Hash + Eq + 'a + ?Sized,
         String: Borrow<B>,
     {
         for nm in path {
@@ -318,49 +238,48 @@ impl ExprArena {
         return Some(target);
     }
     
-    fn eval_ref(&mut self, mut target: Expr) -> Option<&Object> {
-        if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
+    fn eval_ref(&mut self, mut exp: ExprId) -> Option<&Object> {
+        match &mut self.0[exp].inner {
             Inner::Cache(body, value) => if value.is_none() {
                 let body = *body;
                 let res = self.eval(body);
-                self.set_cache(target, res);
+                self.set_cache(exp, res);
             },
-            Inner::Var(_, evaling, body) => if *evaling {
+            Inner::Var(Var {evaling, target, ..}) => if *evaling {
                 return None
-            } else {
+            } else if let Some(target) = *target {
                 *evaling = true;
-                let body = *body;
-                let is_none = self.eval_ref(body).is_none();
-                self.set_not_evaling(target);
+                let is_none = self.eval_ref(target).is_none();
+                self.get_var(exp).evaling = false;
                 if is_none { return None; }
-                target = body;
-            },
+                exp = target;
+            } else { return None },
             _ => {},
-        }} else { return None; }
+        }
         
-        if let Some(Node {inner, ..}) = self.0.get(target) { match inner {
+        match &self.0[exp].inner {
             Inner::Const(obj) => Some(obj),
             Inner::Cache(_, value) => value.as_ref(),
             _ => None,
-        }} else { unreachable!() }
+        }
     }
     
-    pub fn eval(&mut self, target: Expr) -> Object {
-        if let Some(Node {inner, ..}) = self.0.get_mut(target) { match inner {
+    pub fn eval(&mut self, exp: ExprId) -> Object {
+        if let Some(Node {inner, ..}) = self.0.get_mut(exp) { match inner {
             Inner::Const(obj) => obj.clone(),
             Inner::Array(elems) => {
-                let elems = elems.clone();
-                let mut new_elems = Vec::new();
-                for id in elems.into_iter() {
-                    new_elems.push(try_ok!(self.eval(id)))
+                let old_elems = elems.clone();
+                let mut elems = Vec::with_capacity(old_elems.len());
+                for id in old_elems.into_iter() {
+                    elems.push(try_ok!(self.eval(id)))
                 }
-                Object::new(Array(new_elems))
+                Object::new(Array(elems))
             },
             Inner::Map(unnamed, named) => {
                 let old_unnamed = unnamed.clone();
                 let old_named = named.clone();
                 
-                let mut unnamed = Vec::new();
+                let mut unnamed = Vec::with_capacity(old_unnamed.len());
                 for id in old_unnamed.into_iter() {
                     unnamed.push(try_ok!(self.eval(id)));
                 }
@@ -377,18 +296,16 @@ impl ExprArena {
             Inner::Cache(body, value) => if let Some(res) = value { res } else {
                 let body = *body;
                 let res = self.eval(body);
-                self.set_cache(target, res)
+                self.set_cache(exp, res)
             }.clone(),
-            Inner::Name(path) => eval_err!("Unresolved name \"{}\"", path),
-            Inner::Var(name, evaling, body) => if *evaling {
+            Inner::Var(Var {name, evaling, target}) => if *evaling {
                 eval_err!("Circular dependence from variable {}", name)
-            } else {
+            } else if let Some(target) = *target {
                 *evaling = true;
-                let body = *body;
-                let res = self.eval(body);
-                self.set_not_evaling(target);
+                let res = self.eval(target);
+                self.get_var(exp).evaling = false;
                 res
-            },
+            } else { eval_err!("Unresolved name \"{}\"", name) },
             
             &mut Inner::Unary(op, arg) => try_ok!(self.eval(arg)).unary(op),
             &mut Inner::Binary(op, arg1, arg2) => {
@@ -397,7 +314,7 @@ impl ExprArena {
             
             Inner::Call(func, args) => {
                 let (func, args) = (*func, args.clone());
-                let mut obj_args = Vec::new();
+                let mut obj_args = Vec::with_capacity(args.len());
                 for id in args.into_iter() {
                     obj_args.push(try_ok!(self.eval(id)));
                 }

@@ -228,6 +228,7 @@ pub fn make_bltns() -> Object {
         else { eval_err!("Vector cannot be zero dimensional") }
     );
     def_bltn!(vec.dims(vec: Vector) = (vec.dims() as i64).into());
+    def_bltn!(vec.mag2(vec: Vector) = vec.mag2());
     def_bltn!(vec.mag(vec: Vector) = vec.mag());
     vec.into()
 }
