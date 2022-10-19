@@ -7,7 +7,6 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::Sum;
 
-use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use std::hash::Hash;
@@ -110,12 +109,12 @@ trait ObjectishSafe {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn type_name_dyn(&self) -> &'static str;
-    
+
     fn clone(&self) -> Object;
     fn eq(&self, other: &Object) -> bool;
     fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
-    
+
     fn unary(&mut self, op: Unary) -> Option<Object>;
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object;
@@ -123,7 +122,7 @@ trait ObjectishSafe {
     fn call(&self, args: Vec<Object>) -> Object;
 }
 
-fn to_obj<T>(obj: &mut Option<T>) -> T { mem::take(obj).unwrap() }
+fn to_obj<T>(obj: &mut Option<T>) -> T { std::mem::take(obj).unwrap() }
 fn to_ref<T>(obj: &Option<T>) -> &T { obj.as_ref().unwrap() }
 fn to_mut<T>(obj: &mut Option<T>) -> &mut T { obj.as_mut().unwrap() }
 
@@ -131,7 +130,7 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
     fn as_any(&self) -> &dyn Any { as_any(to_ref(self)) }
     fn as_any_mut(&mut self) -> &mut dyn Any { as_any_mut(to_mut(self)) }
     fn type_name_dyn(&self) -> &'static str { T::type_name() }
-    
+
     fn clone(&self) -> Object { Object::new(to_ref(self).clone()) }
     fn eq(&self, other: &Object) -> bool {
         if let Some(other) = other.downcast_ref::<T>() {
@@ -143,14 +142,14 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
         { Display::fmt(to_ref(self), f) }
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
         { Debug::fmt(to_ref(self), f) }
-    
+
     fn unary(&mut self, op: Unary) -> Option<Object>
         { to_obj(self).unary(op) }
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool
         { to_ref(self).try_binary(rev, op, other) }
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object
         { to_obj(self).binary(rev, op, other) }
-    
+
     fn arity(&self) -> usize { to_ref(self).arity() }
     fn call(&self, args: Vec<Object>) -> Object { to_ref(self).call(args) }
 }
@@ -161,12 +160,12 @@ impl Object {
     pub fn new<T>(obj: T) -> Object where T: Objectish {
         Object(Box::new(Some(obj)))
     }
-    
+
     pub fn is_err(&self) -> bool {self.is_a::<EvalError>() }
     pub fn type_id(&self) -> TypeId { (*self.0).as_any().type_id() }
     pub fn is_a<T>(&self) -> bool where T: Any
         { TypeId::of::<T>() == self.type_id() }
-    
+
     pub fn cast<T>(self) -> Result<T, Object> where T: NamedType {
         let given_type = (*self.0).type_name_dyn();
         let box_any = unsafe { Box::from_raw(Box::leak(self.0).as_any_mut()) };
@@ -175,25 +174,25 @@ impl Object {
             "Expected {}, but found {}", T::type_name(), given_type
         ))}
     }
-    
+
     pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
         { (*self.0).as_any().downcast_ref() }
-    
-    
+
+
     pub fn do_inside(&mut self, func: impl FnOnce(Self) -> Self){
-        let owned = Object(mem::replace(&mut self.0,
+        let owned = Object(std::mem::replace(&mut self.0,
             Box::new(None::<null::Null>)
         ));
         self.0 = func(owned).0;
     }
-    
-    
+
+
     pub fn get<B>(&self, key: &B) -> Option<&Object>
     where
         B: Hash + Eq,
         String: Borrow<B>,
     { self.downcast_ref::<map::Map>().and_then(|m| m.get(key)) }
-    
+
     pub fn find<'a, I, B>(&self, path: I) -> Option<&Object>
     where
         I: Iterator<Item = &'a B>,
@@ -220,7 +219,7 @@ impl Object {
             op.symbol(), (*self.0).type_name_dyn(),
         )}
     }
-    
+
     fn binary_help(mut self, op: Binary, mut other: Object) -> Object {
         if (*self.0).try_binary(false, op, &other) { (*self.0).binary(false, op, other) }
         else if (*other.0).try_binary(true, op, &self) { (*other.0).binary(true, op, self) }
@@ -229,7 +228,7 @@ impl Object {
             op.symbol(), (*self.0).type_name_dyn(), (*other.0).type_name_dyn(),
         )}
     }
-    
+
     pub fn binary(self, op: Binary, other: Object) -> Object {
     match op {
         Binary::Apply => self.call(vec![other]),
@@ -245,7 +244,7 @@ impl Object {
         },
         _ => self.binary_help(op, other),
     }}
-    
+
     pub fn arity(&self) -> usize { (*self.0).arity() }
     pub fn call<'a>(&self, args: Vec<Object>) -> Object {
         let arity = (*self.0).arity();
@@ -254,10 +253,10 @@ impl Object {
         } else if args.len() < arity {
             return curry::Curry::new(self.clone(), args);
         }
-        
+
         let mut args = args.into_iter();
         let iter = args.by_ref();
-        
+
         let mut res = try_ok!((*self.0).call(iter.take(arity).collect()));
         while iter.as_slice().len() > 0 {
             let arity = (*res.0).arity();
@@ -383,7 +382,7 @@ impl Operable for EvalError {
     fn unary(self, _: Unary) -> Option<Self::Output> { Some(Object::new(self)) }
     fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
     fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { Object::new(self) }
-    
+
     fn arity(&self) -> usize { 0 }
     fn call(&self, _: Vec<Object>) -> Object { Object::new(self.clone()) }
 }

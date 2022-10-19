@@ -25,7 +25,7 @@ impl<A: Objectish> Operable for BltnFuncSingle<A> {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     fn arity(&self) -> usize { 1 }
     fn call(&self, mut args: Vec<Object>) -> Self::Output {
         (self.ptr)(try_cast!(args.remove(0)))
@@ -80,7 +80,7 @@ impl<A: Objectish, B: Objectish> Operable for BltnFuncDouble<A, B> {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     fn arity(&self) -> usize { 2 }
     fn call(&self, mut args: Vec<Object>) -> Self::Output {
         let x = try_cast!(args.remove(0));

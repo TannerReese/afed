@@ -12,7 +12,7 @@ impl Operable for Null {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     call_not_impl!{Self}
 }
 

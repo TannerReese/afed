@@ -18,7 +18,7 @@ impl Curry {
                 "Cannot curry object, {} arguments given, but expected {}",
                 args.len(), func.arity(),
         )}
-        
+
         if func.is_a::<Curry>() {
             let mut curry = try_cast!(func => Curry);
             curry.arity -= args.len();
@@ -34,7 +34,7 @@ impl Operable for Curry {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     fn arity(&self) -> usize { self.arity }
     fn call(&self, mut new_args: Vec<Object>) -> Object {
         let mut args = self.args.clone();

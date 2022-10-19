@@ -21,7 +21,7 @@ impl Operable for Number {
     fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Neg => Some((-self).into()),
     }}
-    
+
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Leq |
         Binary::Add | Binary::Sub |
@@ -29,11 +29,11 @@ impl Operable for Number {
         Binary::Pow => other.is_a::<Number>(),
         _ => false,
     }}
-    
+
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let (mut num1, mut num2) = (self, try_cast!(other));
         if rev { swap(&mut num1, &mut num2); }
-        
+
         match op {
             Binary::Leq => return Bool::new(num1 <= num2),
             Binary::Add => num1 + num2,
@@ -46,7 +46,7 @@ impl Operable for Number {
             _ => panic!(),
         }.into()
     }
-    
+
     call_not_impl!{Self}
 }
 
@@ -54,7 +54,7 @@ impl Operable for Number {
 pub fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     let (mut a, mut b) = if a > b { (b, a) } else { (a, b) };
     let zero = T::default();
-    
+
     while a != zero {
         b %= a;
         swap(&mut a, &mut b);
@@ -70,17 +70,17 @@ impl Number {
         },
         &num => num,
     }}
-    
+
     pub fn to_real(&self) -> f64 { match self {
         &Number::Ratio(n, d) => n as f64 / d as f64,
         &Number::Real(r) => r,
     }}
-    
+
     pub fn as_index(&self) -> Option<usize> { match self {
         &Number::Ratio(n, 1) => usize::try_from(n).ok(),
         _ => None,
     }}
-    
+
     pub fn pow(self, rhs: Self) -> Self { match (self, rhs) {
         (Number::Ratio(n1, d1), Number::Ratio(n2, 1)) => {
             let (n1, d1, n2) = if n2 < 0 {
@@ -91,7 +91,7 @@ impl Number {
         },
         (num1, num2) => num1.to_real().powf(num2.to_real()).into(),
     }}
-    
+
     pub fn flrdiv(self, rhs: Self) -> Self { match (self, rhs) {
         (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
             if (n1 < 0) == (n2 < 0) || n1 == 0 || n2 == 0 {

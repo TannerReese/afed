@@ -20,13 +20,13 @@ impl Unary {
             Unary::Neg => 50,
         }
     }
-    
+
     pub fn symbol(&self) -> &str {
         match self {
             Unary::Neg => "-",
         }
     }
-    
+
     pub const OPERS: [Self; 1] = [
         Unary::Neg,
     ];
@@ -45,7 +45,7 @@ impl Binary {
             Binary::Pow => 100,
         }
     }
-    
+
     pub fn assoc(&self) -> Assoc {
         match self {
             Binary::Apply => Assoc::Right,
@@ -57,7 +57,7 @@ impl Binary {
             Binary::Pow => Assoc::Right,
         }
     }
-    
+
     pub fn symbol(&self) -> &str {
         match self {
             Binary::Apply => "$",
@@ -78,7 +78,7 @@ impl Binary {
             Binary::Pow => "^",
         }
     }
-    
+
     pub const OPERS: [Self; 16] = [
         Binary::Apply,
         Binary::Or, Binary::And,

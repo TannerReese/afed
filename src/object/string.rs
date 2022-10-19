@@ -12,24 +12,24 @@ impl NamedType for Str { fn type_name() -> &'static str { "string" } }
 impl Operable for Str {
     type Output = Object;
     unary_not_impl!{}
-    
+
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Add => other.is_a::<Str>(),
         _ => false,
     }}
-    
+
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let Str(mut s1) = self;
         let Str(mut s2) = try_cast!(other);
         if rev { swap(&mut s1, &mut s2); }
-        
+
         match op {
             Binary::Add => s1.push_str(s2.as_str()),
             _ => panic!(),
         }
         Str(s1).into()
     }
-    
+
     call_not_impl!{Self}
 }
 

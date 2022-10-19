@@ -7,13 +7,13 @@ use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);
-impl NamedType for Array { fn type_name() -> &'static str { "array" }}
+impl NamedType for Array { fn type_name() -> &'static str { "array" } }
 
 impl Operable for Array {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     fn arity(&self) -> usize { 1 }
     fn call<'a>(&self, mut args: Vec<Object>) -> Object {
         if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {

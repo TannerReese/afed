@@ -28,7 +28,7 @@ impl Operable for Map {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
-    
+
     fn arity(&self) -> usize { 1 }
     fn call(&self, mut args: Vec<Object>) -> Object {
         let Str(key) = try_cast!(args.remove(0));
@@ -47,7 +47,7 @@ impl Display for Map {
             is_first = false;
             write!(f, "{}", obj)?;
         }
-        
+
         for (key, obj) in self.named.iter() {
             if !is_first { f.write_str(", ")?; }
             is_first = false;

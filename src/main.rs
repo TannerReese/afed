@@ -25,7 +25,7 @@ impl Stream {
             else { Stream::Stdout }
         } else { Stream::Path(PathBuf::from(path)) }
     }
-    
+
     fn to_reader(&self) -> Box<dyn Read> {
         match self {
             Stream::Void => Box::new(empty()),
@@ -36,12 +36,12 @@ impl Stream {
                 );
                 exit(1);
             })),
-            
+
             Stream::Stdout => panic!("Cannot read from STDOUT"),
             Stream::Stderr => panic!("Cannot read from STDERR"),
         }
     }
-    
+
     fn to_writer(&self) -> Box<dyn Write> {
         match self {
             Stream::Void => Box::new(sink()),
@@ -53,7 +53,7 @@ impl Stream {
                 );
                 exit(1);
             })),
-            
+
             Stream::Stdin => panic!("Cannot write to STDIN"),
         }
     }
@@ -117,7 +117,7 @@ impl Params {
     fn parse() -> Params {
         let (mut input, mut output, mut errors) = (None, None, None);
         let (mut check, mut no_clobber, mut no_errors) = (false, false, false);
-        
+
         let mut args = std::env::args();
         _ = args.next();
         while let Some(opt) = args.next() {
@@ -140,10 +140,10 @@ impl Params {
                     eprintln!("No output file provided to -o\n{}", USAGE_MSG);
                     exit(1);
                 },
-                
+
                 "-C" | "--check" => { check = true; },
                 "-n" | "--no-clobber" => { no_clobber = true; },
-                
+
                 "-e" | "--errors" => if let Some(_) = errors {
                     eprintln!("Error output already provided\n{}", USAGE_MSG);
                     exit(1);
@@ -154,12 +154,12 @@ impl Params {
                     exit(1);
                 },
                 "-E" | "--no-errors" => { no_errors = true; },
-                
+
                 "-h" | "-?" | "--help" => {
                     println!("{}", HELP_MSG);
                     exit(0);
                 },
-                
+
                 _ => {
                     if let None = input {
                         input = Some(Stream::new(opt, true));
@@ -172,35 +172,35 @@ impl Params {
                 },
             }
         }
-        
+
         let input = input.unwrap_or(Stream::Stdin);
         let output = if check { Stream::Void }
             else if let Some(out) = output { out }
             else if let Stream::Stdin = input { Stream::Stdout }
-            else { input.clone() }; 
+            else { input.clone() };
         let errors = if no_errors { Stream::Void }
             else if let Some(err) = errors { err }
             else { Stream::Stderr };
-        
+
         if no_clobber && input == output {
             eprintln!("Input and output files match, but --no-clobber is on\n{}", USAGE_MSG);
             exit(1);
         }
-        
+
         Params { input, output, errors }
     }
 }
 
 
-fn parse_and_eval(prms: Params) -> Result<(), Error> { 
+fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut prog = String::new();
     prms.input.to_reader().read_to_string(&mut prog)?;
-    
+
     let mut doc = docmt::Docmt::new(prog);
     let mut any_errors = false;
-    
+
     let bltns = libs::make_bltns();
-    
+
     let mut errout = prms.errors.to_writer();
     if let Err(count) = doc.parse(&mut errout, bltns) {
         any_errors = true;
@@ -210,7 +210,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
             write!(&mut errout, "{} Parse Errors encountered\n\n\n", count)?;
         }
     }
-    
+
     if let Err(count) = doc.eval(&mut errout) {
         any_errors = true;
         if count == 1 {
@@ -219,9 +219,9 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
             write!(&mut errout, "{} Eval Errors encountered\n", count)?;
         }
     }
-    
+
     if !any_errors { write!(&mut errout, "No Errors encountered\n")?; }
-    
+
     write!(prms.output.to_writer(), "{}", doc)?;
     Ok(())
 }
