@@ -1,1 +1,3 @@
-No Errors encountered
+line 24, column 32 Eval Error: Depends on non-constant argument x
+line 33, column 27 Eval Error: Depends on non-constant arguments x, y
+2 Eval Errors encountered

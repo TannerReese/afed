@@ -501,6 +501,28 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         } else { Err(self.error("Missing value")) }
     }
 
+    fn parse_lambda(&mut self) -> Result<ExprId, ParseError> {
+        self.expect('\\', "Missing opening slash in lambda")?;
+        let mut args = Vec::new();
+        loop {
+            self.skip();
+            if let Some(c) = self.pos.peek() {
+                if c.is_ascii_alphabetic() {
+                    args.push(self.parse_name()?);
+                } else { break }
+            } else { break }
+        }
+
+        if args.len() == 0 {
+            return Err(self.error("No arguments given for lambda"));
+        } else if !self.parse_char(':') {
+            return Err(self.error("Incorrect terminator for lambda arguments"));
+        }
+
+        let body = self.parse_equals()?;
+        Ok(self.doc.arena.create_func("\\".to_owned(), args, body).unwrap())
+    }
+
     fn parse_single(&mut self) -> Result<Option<ExprId>, ParseError> {
         self.skip();
         Ok(if let Some(c) = self.pos.peek() { Some(match c {
@@ -516,9 +538,10 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             },
             '[' => self.parse_array()?,
             '{' => self.parse_map(false)?,
+            '\\' => self.parse_lambda()?,
             _ => {
                 if c.is_ascii_digit() { self.parse_num()? }
-                else if c.is_alphabetic() {
+                else if c.is_ascii_alphabetic() {
                     let name = self.parse_name()?;
                     if let Some(obj) = Self::parse_constant(name.as_str()) {
                         self.doc.arena.from_obj(obj)

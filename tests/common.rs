@@ -24,26 +24,26 @@ fn parse_test() {
         || "af" != path.extension().expect("Failed to get extension") {
             continue;
         }
-        
+
         println!("Testing {}", path.file_name().unwrap().to_str().unwrap());
-        
+
         let output = Command::new(BINARY_PATH)
             .arg(path.as_os_str()).arg("-")
             .output().expect("Failed to execute process");
         let Output {stdout, stderr, ..} = output;
         let stdout = String::from_utf8(stdout).expect("Failed to parse STDOUT as Unicode");
         let stderr = String::from_utf8(stderr).expect("Failed to parse STDERR as Unicode");
-        
+
         println!("Stdout: \n{}", stdout);
         println!("Stderr: \n{}", stderr);
-        
+
         path.set_extension("out");
         println!("Checking stdout against {}", path.file_name().unwrap().to_str().unwrap());
         let mut expected_stdout = String::new();
         File::open(&path).expect("Failed to open out file")
         .read_to_string(&mut expected_stdout).expect("Failed to read out file");
         line_by_line(&stdout, &expected_stdout);
-        
+
         path.set_extension("err");
         println!("Checking stderr against {}", path.file_name().unwrap().to_str().unwrap());
         let mut expected_stderr = String::new();

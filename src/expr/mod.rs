@@ -283,11 +283,11 @@ impl ExprArena {
         } else { false }
     }
 
-    fn simplify(&self, exp: ExprId) -> bool {
+    fn simplify(&self, args_used: &mut Vec<ArgId>, exp: ExprId) -> bool {
         if self.has_value(exp) { return true }
 
         macro_rules! simplify { ($child:ident) => {{
-            let is_const = self.simplify($child);
+            let is_const = self.simplify(args_used, $child);
             let node = self.get_node($child);
             if let Some(obj) = node.value.take() {
                 if obj.is_err() {
@@ -330,7 +330,7 @@ impl ExprArena {
                 eval_err!("Circular dependence from variable {}", name)
             } else if let Some(target) = *target {
                 evaling.set(true);
-                let cnst = self.simplify(target);
+                let cnst = self.simplify(args_used, target);
                 evaling.set(false);
                 return cnst;
             } else { eval_err!("Unresolved name \"{}\"", name) },
@@ -361,9 +361,13 @@ impl ExprArena {
                 } else { panic!("No value found for function") }
             },
 
-            Inner::Arg(_) => return false,
-            &Inner::Func(_, _, body) => {
-                self.simplify(body);
+            Inner::Arg(_) => { args_used.push(exp); return false },
+            Inner::Func(_, args, body) => {
+                let mut used = Vec::new();
+                self.simplify(&mut used, *body);
+                let cnst = used.iter().all(|id| args.contains(id));
+                if !cnst { return false }
+
                 let mut arena = ExprArena::new();
                 let func = self.clone_into(&mut arena, exp);
                 if let Inner::Func(name, args, body) = &mut arena.0[func].inner {
@@ -379,8 +383,23 @@ impl ExprArena {
     }
 
     pub fn eval(&self, exp: ExprId) -> Object {
-        if self.simplify(exp) { self.take(exp) }
-        else { panic!("Cannot evaluate expression; Depends on non-constant values") }
+        let mut args_used = Vec::new();
+        if self.simplify(&mut args_used, exp) { self.take(exp) }
+        else {
+            let mut argnames = String::new();
+            let mut is_first = true;
+            for &id in args_used.iter() {
+                if !is_first { argnames += ", "; }
+                is_first = false;
+                argnames += self.get_argname(id);
+            }
+
+            eval_err!(
+                "Depends on non-constant argument{} {}",
+                if args_used.len() == 1 { "" } else { "s" },
+                argnames,
+            )
+        }
     }
 }
 

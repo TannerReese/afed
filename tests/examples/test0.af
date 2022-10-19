@@ -4,7 +4,7 @@
 # Tests numeric arithmetic
 
 48 / 32 + (100 / 70)^(6/3) = ``,
-x  : { 
+x  : {
 	2 / 3 - 5/7 = ``,
 	-  1 + 2 * - 3.1 = ``,
 	67 ^ (2 / 3) * 67^-1 - pi = ``,
@@ -13,14 +13,14 @@ x  : {
 	round (gold ^ 20) = `Old Stuff`,
 	m: ceil (floor y.z.r / 3) = ``,
 	abs m * signum (1 - m ^ 2) = ``,
-	sin (atan2 67 32) = ``, 
-	
+	sin (atan2 67 32) = ``,
+
 	factorial 4 / 39 = ``,
 	num.choose (sqrt 17) 4 = ``,
 	lcm 21 (gcd 23 69) = ``,
 y: {
  z
-: 
+:
 {r
 : 78 - 45 / 5 ^
 2}}},

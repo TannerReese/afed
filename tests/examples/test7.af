@@ -18,3 +18,18 @@ r: {
 	t e : "!!" + e + "!!"
 },
 
+# Substitution inside of function body
+{
+	q: 34,
+	bad x : (2 - ok q = ``) * x = ``,
+	ok t : t * 8
+},
+
+# Lambda expressions
+{
+	with5 f: f 5,
+	with5 $ lamb 4 = ``,
+	lamb: \x: \y: x + y,
+	func y: \x: [x * y, 3] = ``
+},
+
