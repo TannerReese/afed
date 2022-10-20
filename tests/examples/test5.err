@@ -1,5 +1,0 @@
-line 8, column 15 Eval Error: Vector dimensions 4 and 3 do not match
-line 9, column 15 Eval Error: Vector dimensions 3 and 4 do not match
-line 10, column 15 Eval Error: Vector dimensions 4 and 3 do not match
-line 11, column 35 Eval Error: Binary operator + not implemented between types boolean and string
-4 Eval Errors encountered

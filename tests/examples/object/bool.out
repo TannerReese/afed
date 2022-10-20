@@ -1,0 +1,29 @@
+# Test boolean arithmetic and operators
+
+# Boolean arithmetic operations
+-true = `false`,
+true + true = `false`,
+true + false = `true`,
+false - true = `true`,
+true * false = `false`,
+true * true = `true`,
+
+# Boolean logical operations
+true || false = `true`,
+false && true = `false`,
+false && false || true = `true`,
+false && false + true = `false`,
+
+# Boolean unimplemented operators
+true % false = `Eval Error: Binary operator % not implemented between types boolean and boolean`,
+false // true = `Eval Error: Binary operator // not implemented between types boolean and boolean`,
+true ^ true = `Eval Error: Binary operator ^ not implemented between types boolean and boolean`,
+
+# Ternary
+if true 3 4 = `3`,
+if false (if true 1 2) (if true 3 4) + 2 = `5`,
+
+# Ternary unimplemented operators
+if + if = `Eval Error: Binary operator + not implemented between types ternary and ternary`,
+if * 3 = `Eval Error: Binary operator * not implemented between types ternary and number`,
+

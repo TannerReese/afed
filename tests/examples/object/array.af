@@ -1,0 +1,15 @@
+# Test array operations
+
+# Indexing
+arr: [1, 2, 3,  ] = ``,
+arr 1 = ``,
+arr 50 = ``,
+
+# Empty array
+[] = ``,
+
+# Array unimplemented operators
+[1, 1] + [2, 3] = ``,
+[0] * [9, 3] = ``,
+[2, 3] % 8 = ``,
+

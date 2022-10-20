@@ -30,14 +30,8 @@ pub fn floor(num: Number) -> Number { match num {
     Number::Real(r) => Number::Ratio(r.floor() as i64, 1),
 }}
 
-pub fn ceil(num: Number) -> Number { match num {
-    Number::Ratio(n, d) => Number::Ratio(if n > 0 {
-        (n - 1) / d as i64 + 1
-    } else {
-        n / d as i64
-    }, 1),
-    Number::Real(r) => Number::Ratio(r.ceil() as i64, 1),
-}}
+pub fn ceil(num: Number) -> Number { -floor(-num) }
+pub fn round(num: Number) -> Number { floor(num + Number::Ratio(1, 2)) }
 
 pub fn sqrt(num: Number) -> Option<Number> {
     let r = num.to_real();
@@ -68,9 +62,10 @@ fn factorial(n: Number) -> Option<Number> {
 }
 
 fn choose(n: Number, k: Number) -> Option<Number> {
+    let one = Number::Ratio(1, 1);
     Some((0..k.as_index()?).map(|i| (i as i64).into())
-    .fold(1.into(), |accum, i|
-        accum * (n - i) / (i + 1.into())
+    .fold(one, |accum, i|
+        accum * (n - i) / (i + one)
     ))
 }
 
@@ -86,7 +81,7 @@ pub fn make_bltns() -> Object {
     def_bltn!(num.real(n: Number) = n.to_real().into());
     def_bltn!(num.floor(n: Number) = floor(n).into());
     def_bltn!(num.ceil(n: Number) = ceil(n).into());
-    real_func!(num.round);
+    def_bltn!(num.round(n: Number) = round(n).into());
     
     def_bltn!(num.sqrt(n: Number) = sqrt(n).map_or(eval_err!(
         "Cannot take square root of negative"

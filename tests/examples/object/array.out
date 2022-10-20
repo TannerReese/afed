@@ -1,0 +1,15 @@
+# Test array operations
+
+# Indexing
+arr: [1, 2, 3,  ] = `[1, 2, 3]`,
+arr 1 = `2`,
+arr 50 = `Eval Error: Index 50 is out of bounds`,
+
+# Empty array
+[] = `[]`,
+
+# Array unimplemented operators
+[1, 1] + [2, 3] = `Eval Error: Binary operator + not implemented between types array and array`,
+[0] * [9, 3] = `Eval Error: Binary operator * not implemented between types array and array`,
+[2, 3] % 8 = `Eval Error: Binary operator % not implemented between types array and number`,
+

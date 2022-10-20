@@ -1,0 +1,46 @@
+# Test num library
+
+# Constants
+pi = ``, num.pi = ``,
+e = ``, num.e = ``,
+gold = ``, num.gold = ``,
+
+# Functions print themselves
+ceil = ``, asinh = ``,
+
+# Piecewise functions
+abs (1 / 2) + num.abs (-4 / 5) = ``,
+abs (-4.38) - num.abs 8.9 = ``,
+num.signum 67.243 + 10 * signum (-5 / 3) = ``,
+real (450 / 23) = ``,
+floor (7843 / 193) - floor (-89.82) = ``,
+ceil 29.8493 * ceil (28 % (17/2)) = ``,
+round 2.354 + round (31 / 2) = ``,
+
+# Real functions
+sqrt (32 / 12) = ``,
+num.sqrt (-1) = ``,
+cbrt (12 / 83) = ``,
+
+# Trig functions
+sin 3.2 = ``, cos 1.1 = ``, tan 4.3 = ``,
+sinh 9.7 = ``, cosh 2.2 = ``, tanh 0.7 = ``,
+asin 0.1651 = ``, acos 0.212 = ``, atan 32.1 = ``,
+asinh (-23.4) = ``, acosh 12.1 = ``, atanh (-0.42) = ``,
+atan2 3.45 (-4.23) = ``,
+
+# Exponentials & Logarithms
+exp 3 = ``,
+exp2 (3/2) = ``,
+ln 25 = ``, log10 9 = ``, log2 8.4 = ``,
+log 7 10 = ``,
+
+# Combinatorial functions
+gcd (69 / 34) (111 / 106) = ``,
+lcm (6 / 91) (52 / 17) = ``,
+
+factorial 12 = ``,
+choose 2.34 7 = ``,
+choose (21 / 19) 3 = ``,
+choose 43 30 = ``,
+

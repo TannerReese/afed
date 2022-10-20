@@ -1,0 +1,17 @@
+# Test parsing errors
+
+# Redefinition error
+{ x: 4, x: 5},
+
+# Circular dependence error
+{
+    foo: {x: 5 * bar.y = ``},
+    bar: {y: baz.z - 2 = ``},
+    baz: {z: 7 / foo.x = ``},
+},
+
+# Extra content in map or array
+{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
+{ "good", second: njd %% & 62 ] , third: "good"} = ``,
+["this", "next"  ( % ^&, "last"] = ``,
+

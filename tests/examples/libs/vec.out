@@ -1,0 +1,32 @@
+# Test vector operations
+
+v1: V[1, 2.5, -3 / 13],
+v2: vec.V[0, -7.234, 57 / 7],
+v3: V[12, 9.35, 23 / 27],
+
+# Linear operations
+-v1 + v2 - v3 = `V[-13, -19.084, 18481 / 2457]`,
+3.4 * v1 + v2 / 10 = `V[3.4, 7.7766, 0.029670329670329676]`,
+v1 - v3 % (5 / 4) = `V[1 / 4, 1.9000000000000004, -380 / 351]`,
+(v3 // 1.2) + (v1 // 0.8) = `V[11, 10, -1]`,
+
+# Dot product
+v1 * (v2 + v3) = `15.214297924297924`,
+V[3/4, 2/3, -8/9] * V[1, -2, 10] = `-341 / 36`,
+v1 - (v1 * v2) * v2 = `V[1, -141.92045043956045, 162.33421507064364]`,
+
+# Vector functions
+mag v1 = `2.7024534108601803`, vec.mag2 v2 = `118.63687844897959`,
+dims v3 = `3`,
+
+# Dimension mismatch errors
+other: [1, 2, 0, 3],
+other + v1 = `Eval Error: Binary operator + not implemented between types array and vector`,
+v2 * other = `Eval Error: Binary operator * not implemented between types number and array`,
+
+# Vector Unimplemented operations
+v1 ^ 2 = `Eval Error: Binary operator ^ not implemented between types vector and number`,
+1.1 ^ v2 = `Eval Error: Binary operator ^ not implemented between types number and vector`,
+3 / v3 = `Eval Error: Binary operator / not implemented between types number and vector`,
+5 % v1 = `Eval Error: Binary operator % not implemented between types number and vector`,
+

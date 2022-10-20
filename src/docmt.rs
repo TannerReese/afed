@@ -110,7 +110,14 @@ impl Display for Docmt {
             if last >= self.len { break; }
 
             f.write_str(&self.src[last..*start])?;
-            if let Some(obj) = value { write!(f, "{}", obj)?; }
+            if let Some(obj) = value {
+                let sub = obj.to_string();
+                let sub = sub.chars().flat_map(|c|
+                    if c == '`' { vec!['\\', '`'] }
+                    else { vec![c] }
+                ).collect::<String>();
+                write!(f, "{}", sub)?;
+            }
             last = *end;
         }
 
@@ -221,7 +228,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
     }
 
-    fn skip_to_comma(&mut self){
+    fn skip_to_comma(&mut self, terminator: char){
         let mut braces = Vec::<char>::new();
         while let Some(c) = self.pos.peek() {
             if c == '(' || c == '[' || c == '{' {
@@ -233,11 +240,12 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                     _ => None,
             } {
                 while let Some(&last) = braces.last() {
-                    if last == c { break; }
                     braces.pop();
+                    if last == c { break; }
                 }
-                if let None = braces.pop() { return }
             } else if c == ',' { return }
+            
+            if braces.len() == 0 && c == terminator { return }
             self.pos.next();
         }
     }
@@ -303,7 +311,11 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             self.expect('`', "Missing opening grave in substitution expression")?;
 
             let start = self.pos.idx;
-            self.pos.skip_while(|c| c != '`');
+            while let Some(c) = self.pos.peek() {
+                if c == '\\' { self.pos.next(); }
+                else if c == '`' { break }
+                self.pos.next();
+            }
             let end = self.pos.idx;
 
             self.expect('`', "Missing closing grave in substition expression")?;
@@ -399,9 +411,17 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         self.expect('[', "Missing opening bracket in array")?;
 
         let mut elems = Vec::new();
-        loop {
-            elems.push(self.parse_equals()?);
-            if !self.parse_char(',') { break; }
+        while !self.pos.is_empty() {
+            self.skip();
+            if let Some(']') = self.pos.peek() { break }
+            let before = self.pos;
+            if let Err(err) = self.parse_member(&mut elems, None) {
+                self.print_err(err);
+                self.pos = before;
+                self.skip_to_comma(']');
+            }
+            if !self.parse_char(',') { break }
+            self.skip();
         }
 
         self.expect(']', "Missing closing bracket in array")?;
@@ -435,13 +455,22 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     }
 
     fn parse_member(&mut self,
-        unnamed: &mut Vec<ExprId>, named: &mut HashMap<String, ExprId>
+        unnamed: &mut Vec<ExprId>, named: Option<&mut HashMap<String, ExprId>>
     ) -> Result<(), ParseError> {
+        let labels = if named.is_some() {
+            self.parse_label()
+        } else { None };
+        let body = self.parse_equals()?;
+        
         self.skip();
-        if let Some(mut labels) = self.parse_label() {
+        if let Some(c) = self.pos.peek() {
+            if c != ',' && c != '}' && c != ']' {
+                return Err(self.error("Extra content in member"))
+            }
+        }
+        
+        if let (Some(named), Some(mut labels)) = (named, labels) {
             let key = labels.remove(0);
-            let body = self.parse_equals()?;
-
             if named.contains_key(&key) {
                 return Err(self.error("Redefinition of label in map"));
             }
@@ -454,9 +483,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                 ).unwrap();
                 named.insert(key, func);
             }
-        } else {
-            unnamed.push(self.parse_equals()?);
-        }
+        } else { unnamed.push(body); }
         Ok(())
     }
 
@@ -466,23 +493,16 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         let mut unnamed = Vec::new();
         let mut named = HashMap::new();
         while !self.pos.is_empty() {
+            self.skip();
+            if let Some('}') = self.pos.peek() { break }
             let before = self.pos;
-            if let Err(err) = self.parse_member(&mut unnamed, &mut named) {
+            if let Err(err) = self.parse_member(&mut unnamed, Some(&mut named)) {
                 self.print_err(err);
                 self.pos = before;
-                self.skip_to_comma();
+                self.skip_to_comma('}');
             }
 
-            self.skip();
-            if !self.parse_char(',') {
-                let before = self.pos.idx;
-                self.skip_to_comma();
-                if self.pos.idx > before {
-                    self.print_err(self.error("Extra content in map member"));
-                }
-
-                if !self.parse_char(',') { break; }
-            }
+            if !self.parse_char(',') { break }
             self.skip();
         }
 

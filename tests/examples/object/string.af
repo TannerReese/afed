@@ -1,0 +1,10 @@
+# Test string operations
+
+"Hello" + "World" = ``,
+"baz" + (foo + "bar") = ``,
+foo: "foo",
+
+# Unimplemented operators
+-"Hello" = ``,
+"a" * "b" = ``,
+

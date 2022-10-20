@@ -1,0 +1,37 @@
+# Test basic parsing capabilities
+
+x   : {
+	# Named map member
+	y_
+	:
+	# Array
+	[1, 2],
+	y_ = `[1, 2]`,
+	# String-keyed member
+	"!!#!!" : 3,
+	# Unnamed map member
+	2,
+
+	# Reference variable in map
+	nested: {x: 4},
+	{ nested.x = `4` }
+},
+
+# Escaping of delimiter and special characters
+"`\\'\n" = `"\`\\\'\n"`,
+# Erasure of substitution
+0 = `0`,
+
+#{
+	Check that multiline comments work
+	Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+	sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+	# Not disrupted by extra comment }# 4 = `4`,
+
+# Test deep references
+a1: {a2: {a3: {a4: {a5: 2}}}},
+a1.a2.a3.a4.a5 = `2`,
+
+# Test substitution in expression
+2 + ((3 + 4 = `7`) - 5 = `2`) = `4`,
+

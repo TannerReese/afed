@@ -1,0 +1,19 @@
+# Test map operations
+
+# Indexing
+mp: {1, 2, x: {"###": "$abc$"}, y: 100, 3, 4},
+mp "x" "###" = ``,
+mp 3 = ``,
+mp "hello" = ``,
+
+# Empty map
+{} = ``,
+
+# Keys cannot be integers
+{3: 4} = ``,
+
+# Map unimplemented operators
+{1, 2, "a": "b"} + {6, "c": "d"} = ``,
+{a: 4} * {b: 6} = ``,
+5 / {r: 3} = ``,
+

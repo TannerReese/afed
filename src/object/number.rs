@@ -110,6 +110,10 @@ impl From<i64> for Number {
     fn from(n: i64) -> Self { Number::Ratio(n, 1) }
 }
 
+impl From<usize> for Number {
+    fn from(n: usize) -> Self { Number::Ratio(n as i64, 1) }
+}
+
 impl From<f64> for Number {
     fn from(r: f64) -> Self { Number::Real(r) }
 }
@@ -120,6 +124,10 @@ impl From<Number> for Object {
 
 impl From<i64> for Object {
     fn from(n: i64) -> Self { Number::Ratio(n, 1).into() }
+}
+
+impl From<usize> for Object {
+    fn from(n: usize) -> Self { Number::Ratio(n as i64, 1).into() }
 }
 
 impl From<f64> for Object {

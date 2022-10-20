@@ -1,0 +1,7 @@
+line 24, column 14 Eval Error: Binary operator + not implemented between types array and vector
+line 25, column 14 Eval Error: Binary operator * not implemented between types number and array
+line 28, column 10 Eval Error: Binary operator ^ not implemented between types vector and number
+line 29, column 12 Eval Error: Binary operator ^ not implemented between types number and vector
+line 30, column 10 Eval Error: Binary operator / not implemented between types number and vector
+line 31, column 10 Eval Error: Binary operator % not implemented between types number and vector
+6 Eval Errors encountered

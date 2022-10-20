@@ -5,8 +5,7 @@ endif
 let b:current_syntax = 1
 
 " Expression operators
-syn match afedOper /\v[!$%&*+-/<=>?@^~]+/
-syn match afedOper /:/
+syn match afedOper /\v[\:!$%&|*+-/<=>?@^~]+/
 syn keyword afedOper if
 hi link afedOper Operator
 

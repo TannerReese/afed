@@ -39,7 +39,7 @@ impl From<Str> for Object {
 
 impl Display for Str {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "\"{}\"", self.0)
+        write!(f, "\"{}\"", self.0.escape_default())
     }
 }
 

@@ -1,0 +1,27 @@
+Parse Error in line 4, column 13
+	{ x: 4, x: 5},
+	            ^
+Error: Redefinition of label in map
+
+Parse Error in line 14, column 27
+	{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
+	                          ^
+Error: Missing value
+
+Parse Error in line 15, column 24
+	{ "good", second: njd %% & 62 ] , third: "good"} = ``,
+	                       ^
+Error: Missing value
+
+Parse Error in line 16, column 20
+	["this", "next"  ( % ^&, "last"] = ``,
+	                   ^
+Error: Missing value
+
+4 Parse Errors encountered
+
+
+line 8, column 26 Eval Error: Circular dependence from variable bar.y
+line 9, column 26 Eval Error: Circular dependence from variable bar.y
+line 10, column 26 Eval Error: Circular dependence from variable bar.y
+3 Eval Errors encountered

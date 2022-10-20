@@ -20,7 +20,8 @@ impl Operable for Bool {
     }}
 
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::And | Binary::Or | Binary::Add | Binary::Mul => other.is_a::<Bool>(),
+        Binary::And | Binary::Or |
+        Binary::Add | Binary::Sub | Binary::Mul => other.is_a::<Bool>(),
         _ => false,
     }}
 

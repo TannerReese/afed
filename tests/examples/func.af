@@ -1,0 +1,42 @@
+# Test user-defined functions and lambda expressions
+
+# Variable capture
+scope: {
+   t: 3.56,
+   f x: x + t,
+},
+scope.f 4 = ``,
+
+# Multiple arguments
+{
+    f f x1 x2 x3 x4 : f + x1 - x2 + x3 - x4,
+    f 1 2 3 4 5 = ``,
+},
+
+# Currying & Lambda expressions
+{
+    g x y: x - y * x^2,
+	f g: \r: g (g r),
+	f (g (1/10)) 2 = ``,
+},
+
+# Application operator
+{
+   if (2 + 2 > 4) 1 $ if (2 + 3 < 3.4) 0 $ (\x: x + x) $ 4 = ``,
+   f t: t^2, f $ f $ f 1.1 = ``,
+},
+
+# Lambda expressions as arguments
+{
+	with5 f: f 5,
+	with5 $ lamb 4.1 = ``,
+    lamb: \x: \y: x + y / x,
+},
+
+# Substitutions inside functions
+{
+	t: 4.56,
+    sub x: (3 * t = ``) + (x = ``),
+	sub 2 = ``,
+},
+

@@ -1,0 +1,10 @@
+# Test string operations
+
+"Hello" + "World" = `"HelloWorld"`,
+"baz" + (foo + "bar") = `"bazfoobar"`,
+foo: "foo",
+
+# Unimplemented operators
+-"Hello" = `Eval Error: Unary operator - not implemented for type string`,
+"a" * "b" = `Eval Error: Binary operator * not implemented between types string and string`,
+

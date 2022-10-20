@@ -368,6 +368,8 @@ impl From<Matrix> for Object {
 pub fn make_bltns() -> Object {
     let mut mat = HashMap::new();
     def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
+    def_bltn!(mat.rows(m: Matrix) = m.rows().into());
+    def_bltn!(mat.columns(m: Matrix) = m.columns().into());
     def_bltn!(mat.trsp(m: Matrix) = { let mut m = m; m.transpose(); m.into() });
     mat.into()
 }

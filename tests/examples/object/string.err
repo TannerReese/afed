@@ -1,0 +1,3 @@
+line 8, column 12 Eval Error: Unary operator - not implemented for type string
+line 9, column 13 Eval Error: Binary operator * not implemented between types string and string
+2 Eval Errors encountered

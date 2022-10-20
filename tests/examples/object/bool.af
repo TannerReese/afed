@@ -1,0 +1,29 @@
+# Test boolean arithmetic and operators
+
+# Boolean arithmetic operations
+-true = ``,
+true + true = ``,
+true + false = ``,
+false - true = ``,
+true * false = ``,
+true * true = ``,
+
+# Boolean logical operations
+true || false = ``,
+false && true = ``,
+false && false || true = ``,
+false && false + true = ``,
+
+# Boolean unimplemented operators
+true % false = ``,
+false // true = ``,
+true ^ true = ``,
+
+# Ternary
+if true 3 4 = ``,
+if false (if true 1 2) (if true 3 4) + 2 = ``,
+
+# Ternary unimplemented operators
+if + if = ``,
+if * 3 = ``,
+
