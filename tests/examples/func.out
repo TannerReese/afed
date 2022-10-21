@@ -28,8 +28,8 @@ scope.f 4 = `7.5600000000000005`,
 
 # Lambda expressions as arguments
 {
-	with5 f: f 5,
-	with5 $ lamb 4.1 = `5.319512195121951`,
+	utils.with5 $ lamb 4.1 = `5.319512195121951`,
+	utils: { with5 f: f 5 },
     lamb: \x: \y: x + y / x,
 },
 
@@ -48,8 +48,14 @@ scope.f 4 = `7.5600000000000005`,
 	f 4 3 = `13 / 3`, # Works afterwards
 },
 
-# No method support
+# Method support
 {
+	num.sqrt.arity = `1`,
+	atan2.arity = `2`,
+	f.arity = `1`,
+	g.arity = `1`,
+	((\x y z: x + y + z) 3).arity = `2`,
+
 	f x: [x, x],
 	g: \y: [y, 2*y],
 	f.hello = `Eval Error: Cannot call method hello on type function`,

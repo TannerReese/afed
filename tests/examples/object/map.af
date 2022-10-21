@@ -6,6 +6,12 @@ mp "x" "###" = ``,
 mp 3 = ``,
 mp "hello" = ``,
 
+# Merge maps
+{1, 2, "a": 3} + {7, "Hell" = ``} = ``,
+new: {1, 2, a: "b"} + {6, "c": "d"},
+new    "a" = ``,
+new  .  c = ``,
+
 # Empty map
 {} = ``,
 
@@ -13,7 +19,6 @@ mp "hello" = ``,
 {3: 4} = ``,
 
 # Map unimplemented operators
-{1, 2, "a": "b"} + {6, "c": "d"} = ``,
 {a: 4} * {b: 6} = ``,
 5 / {r: 3} = ``,
 

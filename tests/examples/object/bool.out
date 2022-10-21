@@ -2,6 +2,7 @@
 
 # Boolean arithmetic operations
 -true = `false`,
+!false = `true`,
 true + true = `false`,
 true + false = `true`,
 false - true = `true`,

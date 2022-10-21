@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Unary { Neg }
+pub enum Unary { Neg, Not }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Binary {
     Apply,
@@ -17,18 +17,20 @@ pub enum Assoc { Left, Right }
 impl Unary {
     pub fn prec(&self) -> Prec {
         match self {
-            Unary::Neg => 50,
+            Unary::Not => 90,
+            Unary::Neg => 90,
         }
     }
 
     pub fn symbol(&self) -> &str {
         match self {
+            Unary::Not => "!",
             Unary::Neg => "-",
         }
     }
 
-    pub const OPERS: [Self; 1] = [
-        Unary::Neg,
+    pub const OPERS: [Self; 2] = [
+        Unary::Not, Unary::Neg,
     ];
 }
 

@@ -28,13 +28,17 @@ impl<A: Objectish> Operable for BltnFuncSingle<A> {
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
+        Some("arity") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
-        if attr.is_some() { panic!() }
-        (self.ptr)(try_cast!(args.remove(0)))
-    }
+    fn call(&self,
+        attr: Option<&str>, mut args: Vec<Object>
+    ) -> Self::Output { match attr {
+        None => (self.ptr)(try_cast!(args.remove(0))),
+        Some("arity") => (1 as i64).into(),
+        _ => panic!(),
+    }}
 }
 
 impl<A> Display for BltnFuncSingle<A> {
@@ -88,15 +92,22 @@ impl<A: Objectish, B: Objectish> Operable for BltnFuncDouble<A, B> {
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(2),
+        Some("arity") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
-        if attr.is_some() { panic!() }
-        let x = try_cast!(args.remove(0));
-        let y = try_cast!(args.remove(0));
-        (self.ptr)(x, y)
-    }
+    fn call(&self,
+        attr: Option<&str>, mut args: Vec<Object>
+    ) -> Self::Output { match attr {
+        None => {
+            let x = try_cast!(args.remove(0));
+            let y = try_cast!(args.remove(0));
+            (self.ptr)(x, y)
+        },
+
+        Some("arity") => (2 as i64).into(),
+        _ => panic!(),
+    }}
 }
 
 impl<A, B> Display for BltnFuncDouble<A, B> {

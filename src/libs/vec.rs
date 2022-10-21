@@ -33,7 +33,8 @@ impl NamedType for Vector { fn type_name() -> &'static str { "vector" }}
 impl Operable for Vector {
     type Output = Object;
     fn unary(self, op: Unary) -> Option<Self::Output> { match op {
-        Unary::Neg => Some((-self).into())
+        Unary::Neg => Some((-self).into()),
+        _ => None,
     }}
    
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
@@ -74,18 +75,31 @@ impl Operable for Vector {
     
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
+        Some("dims") => Some(0),
+        Some("comps") => Some(0),
+        Some("mag") => Some(0),
+        Some("mag2") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
-        if attr.is_some() { panic!() }
-        if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-            if let Some(obj) = self.0.get(idx) { obj.clone() }
-            else { eval_err!(
-                "Index {} is larger or equal to dimension {}", idx, self.dims(),
-            )}
-        } else { eval_err!("Index could not be cast to correct integer") }
-    }
+    fn call(&self,
+        attr: Option<&str>, mut args: Vec<Object>
+    ) -> Self::Output { match attr {
+        None => {
+            if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
+                if let Some(obj) = self.0.get(idx) { obj.clone() }
+                else { eval_err!(
+                    "Index {} is larger or equal to dimension {}", idx, self.dims(),
+                )}
+            } else { eval_err!("Index could not be cast to correct integer") }
+        },
+
+        Some("dims") => self.dims().into(),
+        Some("comps") => self.0.clone().into(),
+        Some("mag") => self.clone().mag(),
+        Some("mag2") => self.clone().mag2(),
+        _ => panic!(),
+    }}
 }
 
 
@@ -232,9 +246,6 @@ pub fn make_bltns() -> Object {
         if comps.0.len() > 0 { Vector(comps.0).into() } 
         else { eval_err!("Vector cannot be zero dimensional") }
     );
-    def_bltn!(vec.dims(vec: Vector) = (vec.dims() as i64).into());
-    def_bltn!(vec.mag2(vec: Vector) = vec.mag2());
-    def_bltn!(vec.mag(vec: Vector) = vec.mag());
     vec.into()
 }
 

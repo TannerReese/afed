@@ -21,9 +21,10 @@ m2 * m3 - m3 * m2 = `M[[21.914285714285715, 17.284285714285716, -34.314285714285
 m1 * V[1, 2] = `V[16 / 5, 1.6, 2 / 13]`,
 V[8, -9, 3] * m2 * m1 = `V[257.7274725274725, -55.559999999999995]`,
 
-# Matrix functions
-rows m1 = `3`, mat.columns m1 = `2`,
-mat.trsp m1 = `M[[2, 4, 2 / 13], [3 / 5, -1.2, 0]]`,
+# Matrix methods
+m1.rows = `3`, m1.cols = `2`,
+m3.row_vecs = `[V[8, 4, -5 / 7], V[12, 67 / 10, 4], V[0, 17, 0]]`, m4.col_vecs = `[V[10, 15 / 13], V[9 / 2, -7 / 8]]`,
+m1.trsp = `M[[2, 4, 2 / 13], [3 / 5, -1.2, 0]]`,
 
 # Dimension mismatch errors
 M[1, 2, 3] = `Eval Error: Expected array, but found number`,

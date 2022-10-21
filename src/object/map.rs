@@ -27,7 +27,19 @@ impl Map {
 impl Operable for Map {
     type Output = Object;
     unary_not_impl!{}
-    binary_not_impl!{}
+
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::Add => other.is_a::<Map>(),
+         _ => false,
+    }}
+
+    fn binary(mut self, _: bool, op: Binary, other: Object) -> Object {
+        if op != Binary::Add { panic!() }
+        let Map {unnamed, named} = try_cast!(other);
+        self.unnamed.extend(unnamed);
+        self.named.extend(named);
+        self.into()
+    }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),

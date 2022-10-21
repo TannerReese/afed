@@ -20,6 +20,7 @@ impl Operable for Number {
     type Output = Object;
     fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Neg => Some((-self).into()),
+        _ => None,
     }}
 
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {

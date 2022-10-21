@@ -6,6 +6,12 @@ mp "x" "###" = `"$abc$"`,
 mp 3 = `Eval Error: Expected string, but found number`,
 mp "hello" = `Eval Error: Key hello is not contained in map`,
 
+# Merge maps
+{1, 2, "a": 3} + {7, "Hell" = `"Hell"`} = `{1, 2, 7, "Hell", a: 3}`,
+new: {1, 2, a: "b"} + {6, "c": "d"},
+new    "a" = `"b"`,
+new  .  c = `"d"`,
+
 # Empty map
 {} = `{}`,
 
@@ -13,7 +19,6 @@ mp "hello" = `Eval Error: Key hello is not contained in map`,
 {3: 4} = `{}`,
 
 # Map unimplemented operators
-{1, 2, "a": "b"} + {6, "c": "d"} = `Eval Error: Binary operator + not implemented between types map and map`,
 {a: 4} * {b: 6} = `Eval Error: Binary operator * not implemented between types map and map`,
 5 / {r: 3} = `Eval Error: Binary operator / not implemented between types number and map`,
 

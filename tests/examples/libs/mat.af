@@ -21,9 +21,10 @@ m2 * m3 - m3 * m2 = ``,
 m1 * V[1, 2] = ``,
 V[8, -9, 3] * m2 * m1 = ``,
 
-# Matrix functions
-rows m1 = ``, mat.columns m1 = ``,
-mat.trsp m1 = ``,
+# Matrix methods
+m1.rows = ``, m1.cols = ``,
+m3.row_vecs = ``, m4.col_vecs = ``,
+m1.trsp = ``,
 
 # Dimension mismatch errors
 M[1, 2, 3] = ``,

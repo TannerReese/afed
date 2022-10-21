@@ -1,6 +1,6 @@
-line 18, column 16 Eval Error: Binary operator % not implemented between types boolean and boolean
-line 19, column 17 Eval Error: Binary operator // not implemented between types boolean and boolean
-line 20, column 15 Eval Error: Binary operator ^ not implemented between types boolean and boolean
-line 27, column 11 Eval Error: Binary operator + not implemented between types ternary and ternary
-line 28, column 10 Eval Error: Binary operator * not implemented between types ternary and number
+line 19, column 16 Eval Error: Binary operator % not implemented between types boolean and boolean
+line 20, column 17 Eval Error: Binary operator // not implemented between types boolean and boolean
+line 21, column 15 Eval Error: Binary operator ^ not implemented between types boolean and boolean
+line 28, column 11 Eval Error: Binary operator + not implemented between types ternary and ternary
+line 29, column 10 Eval Error: Binary operator * not implemented between types ternary and number
 5 Eval Errors encountered

@@ -2,7 +2,17 @@
 
 "Hello" + "World" = `"HelloWorld"`,
 "baz" + (foo + "bar") = `"bazfoobar"`,
+3 * (foo + "baz") = `"foobazfoobazfoobaz"`,
+"Hello, " * 4 = `"Hello, Hello, Hello, Hello, "`,
 foo: "foo",
+
+# String methods
+"This is several chars".len = `21`,
+foo2: foo.lower + " vs. " + foo.upper = `"foo vs. FOO"`,
+foo2 4 = `"v"`,
+
+# Polymorphic application
+["Hello", [1, "a", true]].map \x: x.len = `[5, 3]`,
 
 # Unimplemented operators
 -"Hello" = `Eval Error: Unary operator - not implemented for type string`,

@@ -1,6 +1,6 @@
 line 39, column 32 Eval Error: Depends on non-constant argument x
 line 46, column 10 Eval Error: Binary operator + not implemented between types function and number
 line 47, column 10 Eval Error: Binary operator * not implemented between types number and function
-line 55, column 12 Eval Error: Cannot call method hello on type function
-line 56, column 12 Eval Error: Cannot call method world on type function
+line 61, column 12 Eval Error: Cannot call method hello on type function
+line 62, column 12 Eval Error: Cannot call method world on type function
 5 Eval Errors encountered

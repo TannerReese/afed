@@ -42,6 +42,7 @@ impl Operable for Matrix {
     type Output = Object;
     fn unary(self, op: Unary) -> Option<Self::Output> { match op {
         Unary::Neg => Some((-self).into()),
+        _ => None,
     }}
     
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
@@ -112,22 +113,43 @@ impl Operable for Matrix {
     
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
+        Some("rows") => Some(0),
+        Some("cols") => Some(0),
+        Some("row_vecs") => Some(0),
+        Some("col_vecs") => Some(0),
+        Some("trsp") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
-        if attr.is_some() { panic!() }
-        if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-            if idx >= self.rows() { eval_err!(
-                "Index {} is larger or equal to {} number of rows",
-                idx, self.rows()
-            )} else {
-                let cols = self.columns();
-                self.comps[idx * cols .. (idx + 1) * cols]
-                .iter().cloned().collect::<Vector>().into()
-            }
-        } else { eval_err!("Index could not be cast to correct integer") }
-    }
+    fn call(&self,
+        attr: Option<&str>, mut args: Vec<Object>
+    ) -> Self::Output { match attr {
+        None => {
+            if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
+                if idx >= self.rows() { eval_err!(
+                    "Index {} is larger or equal to {} number of rows",
+                    idx, self.rows()
+                )} else {
+                    let cols = self.columns();
+                    self.comps[idx * cols .. (idx + 1) * cols]
+                    .iter().cloned().collect::<Vector>().into()
+                }
+            } else { eval_err!("Index could not be cast to correct integer") }
+        },
+
+        Some("rows") => self.rows().into(),
+        Some("cols") => self.columns().into(),
+        Some("row_vecs") =>
+            self.clone().into_rows().map(|v| v.into()).collect(),
+        Some("col_vecs") =>
+            self.clone().into_columns().map(|v| v.into()).collect(),
+        Some("trsp") => {
+            let mut m = self.clone();
+            m.transpose();
+            m.into()
+        },
+        _ => panic!(),
+    }}
 }
 
 
@@ -373,9 +395,6 @@ impl From<Matrix> for Object {
 pub fn make_bltns() -> Object {
     let mut mat = HashMap::new();
     def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
-    def_bltn!(mat.rows(m: Matrix) = m.rows().into());
-    def_bltn!(mat.columns(m: Matrix) = m.columns().into());
-    def_bltn!(mat.trsp(m: Matrix) = { let mut m = m; m.transpose(); m.into() });
     mat.into()
 }
 

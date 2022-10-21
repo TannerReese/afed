@@ -15,12 +15,13 @@ v1 * (v2 + v3) = ``,
 V[3/4, 2/3, -8/9] * V[1, -2, 10] = ``,
 v1 - (v1 * v2) * v2 = ``,
 
-# Vector functions
-mag v1 = ``, vec.mag2 v2 = ``,
-dims v3 = ``,
+# Vector methods
+v1.mag = ``, v2.mag2 = ``,
+v3.dims = ``,
+(v2 + v1).comps = ``,
 
 # Dimension mismatch errors
-other: [1, 2, 0, 3],
+other: vec.V[1, 2, 0, 3],
 other + v1 = ``,
 v2 * other = ``,
 

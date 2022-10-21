@@ -5,11 +5,17 @@ arr: [1, 2, 3,  ] = `[1, 2, 3]`,
 arr 1 = `2`,
 arr 50 = `Eval Error: Index 50 is out of bounds`,
 
+# Operations
+arr + ["Hell"] + arr = `[1, 2, 3, "Hell", 1, 2, 3]`,
+3 * ([4] + arr) = `[4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3]`,
+
 # Empty array
 [] = `[]`,
 
 # Array unimplemented operators
-[1, 1] + [2, 3] = `Eval Error: Binary operator + not implemented between types array and array`,
+[1, 1] + "This" = `Eval Error: Binary operator + not implemented between types array and string`,
+-[null] = `Eval Error: Unary operator - not implemented for type array`,
+!["h"] = `Eval Error: Unary operator ! not implemented for type array`,
 [0] * [9, 3] = `Eval Error: Binary operator * not implemented between types array and array`,
 [2, 3] % 8 = `Eval Error: Binary operator % not implemented between types array and number`,
 

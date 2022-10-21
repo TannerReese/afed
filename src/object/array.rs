@@ -13,7 +13,35 @@ impl NamedType for Array { fn type_name() -> &'static str { "array" } }
 impl Operable for Array {
     type Output = Object;
     unary_not_impl!{}
-    binary_not_impl!{}
+
+    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
+        Binary::Add => other.is_a::<Array>(),
+        Binary::Mul => other.is_a::<Number>(),
+        _ => false,
+    }}
+
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
+        let Array(mut arr1) = self;
+
+        match op {
+            Binary::Add => {
+                let Array(mut arr2) = try_cast!(other);
+                if rev { std::mem::swap(&mut arr1, &mut arr2); }
+                arr1.append(&mut arr2);
+            },
+            Binary::Mul => {
+                if let Some(idx) = try_cast!(other => Number).as_index() {
+                    arr1 = std::iter::repeat(arr1)
+                    .take(idx).flatten().collect();
+                } else { return eval_err!(
+                    "Can only multiply array by positive integer"
+                )}
+            },
+            _ => panic!(),
+        }
+        arr1.into()
+    }
+
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
@@ -40,7 +68,7 @@ impl Operable for Array {
             let func = args.remove(0);
             self.0.iter().cloned().map(|elem|
                 func.call(None, vec![elem])
-            ).collect::<Array>().into()
+            ).collect()
         },
         Some("filter") => {
             let pred = args.remove(0);
@@ -77,14 +105,23 @@ impl FromIterator<Object> for Array {
         { Array(Vec::from_iter(iter)) }
 }
 
-impl From<Array> for Object {
-    fn from(arr: Array) -> Self {
-        if arr.0.iter().any(|elm| elm.is_err()) {
-            arr.0.into_iter()
+impl FromIterator<Object> for Object {
+    fn from_iter<T: IntoIterator<Item=Object>>(iter: T) -> Self
+        { Array(Vec::from_iter(iter)).into() }
+}
+
+impl From<Vec<Object>> for Object {
+    fn from(objs: Vec<Object>) -> Self {
+        if objs.iter().any(|elm| elm.is_err()) {
+            objs.into_iter()
             .filter(|elm| elm.is_err())
             .next().unwrap()
-        } else { Object::new(arr) }
+        } else { Object::new(Array(objs)) }
     }
+}
+
+impl From<Array> for Object {
+    fn from(arr: Array) -> Self { arr.0.into() }
 }
 
 impl<const N: usize> From<[Object; N]> for Object {

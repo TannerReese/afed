@@ -47,16 +47,23 @@ impl Operable for Curry {
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.arity),
+        Some("arity") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut new_args: Vec<Object>) -> Object {
-        if attr.is_some() { panic!() }
-        let mut args = self.args.clone();
-        args.append(&mut new_args);
-        let attr = self.attr.as_ref().map(|s| s.as_str());
-        self.func.call(attr, args)
-    }
+    fn call(&self,
+        attr: Option<&str>, mut new_args: Vec<Object>
+    ) -> Object { match attr {
+        None => {
+            let mut args = self.args.clone();
+            args.append(&mut new_args);
+            let attr = self.attr.as_ref().map(|s| s.as_str());
+            self.func.call(attr, args)
+        },
+
+        Some("arity") => self.arity.into(),
+        _ => panic!(),
+    }}
 }
 
 impl Display for Curry {

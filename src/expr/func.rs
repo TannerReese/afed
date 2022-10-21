@@ -35,17 +35,24 @@ impl Operable for Func {
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.args.len()),
+        Some("arity") => Some(0),
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Self::Output {
-        if attr.is_some() { panic!() }
-        self.arena.clear_cache();
-        for (&id, obj) in zip(self.args.iter(), args.into_iter()) {
-            self.arena.set_arg(id, obj);
-        }
-        self.arena.eval(self.body)
-    }
+    fn call(&self,
+        attr: Option<&str>, args: Vec<Object>
+    ) -> Self::Output { match attr {
+        None => {
+            self.arena.clear_cache();
+            for (&id, obj) in zip(self.args.iter(), args.into_iter()) {
+                self.arena.set_arg(id, obj);
+            }
+            self.arena.eval(self.body)
+        },
+
+        Some("arity") => self.args.len().into(),
+        _ => panic!(),
+    }}
 }
 
 impl Display for Func {

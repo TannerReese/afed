@@ -28,8 +28,8 @@ scope.f 4 = ``,
 
 # Lambda expressions as arguments
 {
-	with5 f: f 5,
-	with5 $ lamb 4.1 = ``,
+	utils.with5 $ lamb 4.1 = ``,
+	utils: { with5 f: f 5 },
     lamb: \x: \y: x + y / x,
 },
 
@@ -48,8 +48,14 @@ scope.f 4 = ``,
 	f 4 3 = ``, # Works afterwards
 },
 
-# No method support
+# Method support
 {
+	num.sqrt.arity = ``,
+	atan2.arity = ``,
+	f.arity = ``,
+	g.arity = ``,
+	((\x y z: x + y + z) 3).arity = ``,
+
 	f x: [x, x],
 	g: \y: [y, 2*y],
 	f.hello = ``,
