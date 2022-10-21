@@ -333,7 +333,9 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             let prec = std::cmp::max(op.prec(), min_prec);
             let arg = self.parse_expr(prec + 1)?;
             self.doc.arena.create_unary(op, arg).unwrap()
-        } else { self.parse_call()? };
+        } else if let Some(val) = self.parse_call()? { val } else {
+            return Err(self.error("Missing value"));
+        };
 
         let mut before_oper = self.pos;
         while let Some(op) = self.parse_binary() {
@@ -373,7 +375,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
 
         let name = self.pos.ptr;
         let len = self.pos.skip_while(|c|
-            c.is_alphanumeric() || c == '_' || c == '.'
+            c.is_alphanumeric() || c == '_'
         );
         Ok(name[..len].to_owned())
     }
@@ -510,17 +512,6 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         Ok(self.doc.arena.create_map(unnamed, named).unwrap())
     }
 
-    fn parse_call(&mut self) -> Result<ExprId, ParseError> {
-        if let Some(val) = self.parse_single()? {
-            let mut args = Vec::new();
-            while let Some(x) = self.parse_single()? { args.push(x); }
-
-            Ok(if args.len() == 0 { val } else {
-                self.doc.arena.create_call(val, args).unwrap()
-            })
-        } else { Err(self.error("Missing value")) }
-    }
-
     fn parse_lambda(&mut self) -> Result<ExprId, ParseError> {
         self.expect('\\', "Missing opening slash in lambda")?;
         let mut args = Vec::new();
@@ -539,8 +530,37 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             return Err(self.error("Incorrect terminator for lambda arguments"));
         }
 
-        let body = self.parse_equals()?;
+        let body = self.parse_expr(0)?;
         Ok(self.doc.arena.create_func("\\".to_owned(), args, body).unwrap())
+    }
+
+
+    fn parse_call(&mut self) -> Result<Option<ExprId>, ParseError> {
+        if let Some((val, attrs)) = self.parse_access()? {
+            let mut args = Vec::new();
+            while let Some((a, a_attrs)) = self.parse_access()? {
+                let a = if a_attrs.len() == 0 { a } else {
+                    self.doc.arena.create_access(
+                        a, a_attrs, Vec::with_capacity(0)
+                    ).unwrap()
+                };
+                args.push(a);
+            }
+
+            Ok(Some(if attrs.len() == 0 && args.len() == 0 { val } else {
+                self.doc.arena.create_access(val, attrs, args).unwrap()
+            }))
+        } else { Ok(None) }
+    }
+
+    fn parse_access(&mut self) -> Result<Option<(ExprId, Vec<String>)>, ParseError> {
+        Ok(if let Some(val) = self.parse_single()? {
+            let mut attrs = Vec::new();
+            while self.parse_char('.') {
+                attrs.push(self.parse_name()?);
+            }
+            Some((val, attrs))
+        } else { None })
     }
 
     fn parse_single(&mut self) -> Result<Option<ExprId>, ParseError> {

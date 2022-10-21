@@ -33,8 +33,13 @@ impl Operable for Func {
     unary_not_impl!();
     binary_not_impl!();
 
-    fn arity(&self) -> usize { self.args.len() }
-    fn call(&self, args: Vec<Object>) -> Self::Output {
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(self.args.len()),
+        _ => None,
+    }}
+
+    fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Self::Output {
+        if attr.is_some() { panic!() }
         self.arena.clear_cache();
         for (&id, obj) in zip(self.args.iter(), args.into_iter()) {
             self.arena.set_arg(id, obj);

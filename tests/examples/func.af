@@ -40,3 +40,21 @@ scope.f 4 = ``,
 	sub 2 = ``,
 },
 
+# Function unimplemented operations
+{
+	f x: \y: x + 1 / y,
+	f + 3 = ``,
+	4 * f = ``,
+	f 4 3 = ``, # Works afterwards
+},
+
+# No method support
+{
+	f x: [x, x],
+	g: \y: [y, 2*y],
+	f.hello = ``,
+	g.world = ``,
+	f 2 = ``,
+	g 1 = ``,
+},
+

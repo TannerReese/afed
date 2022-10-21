@@ -34,8 +34,9 @@ to
 	# Not disrupted by extra comment }# 4 = ``,
 
 # Test deep references
-a1: {a2: {a3: {a4: {a5: 2}}}},
+a1: {a2: {a3: {a4: {a5: {a6: 2}}}}},
 a1.a2.a3.a4.a5 = ``,
+((a1).a2.a3.a4).a5.a6 = ``,
 
 # Test substitution in expression
 2 + ((3 + 4 = ``) - 5 = ``) = ``,

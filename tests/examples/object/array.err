@@ -2,4 +2,5 @@ line 6, column 10 Eval Error: Index 50 is out of bounds
 line 12, column 19 Eval Error: Binary operator + not implemented between types array and array
 line 13, column 16 Eval Error: Binary operator * not implemented between types array and array
 line 14, column 14 Eval Error: Binary operator % not implemented between types array and number
-4 Eval Errors encountered
+line 27, column 12 Eval Error: Cannot call method njfd on type array
+5 Eval Errors encountered

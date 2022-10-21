@@ -29,10 +29,16 @@ impl Operable for Map {
     unary_not_impl!{}
     binary_not_impl!{}
 
-    fn arity(&self) -> usize { 1 }
-    fn call(&self, mut args: Vec<Object>) -> Object {
-        let Str(key) = try_cast!(args.remove(0));
-        self.named.get(key.as_str()).map(|obj| obj.clone()).unwrap_or(
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(1),
+        Some(_) => Some(0),
+    }}
+
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
+        let s;
+        let key = if let Some(key) = attr { key }
+        else { s = try_cast!(args.remove(0) => Str); s.0.as_str() };
+        self.named.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
     }

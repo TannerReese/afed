@@ -5,9 +5,9 @@
 
 # Circular dependence error
 {
-    foo: {x: 5 * bar.y = `Eval Error: Circular dependence from variable bar.y`},
-    bar: {y: baz.z - 2 = `Eval Error: Circular dependence from variable bar.y`},
-    baz: {z: 7 / foo.x = `Eval Error: Circular dependence from variable bar.y`},
+    foo: {x: 5 * bar.y = `Eval Error: Circular dependency`},
+    bar: {y: baz.z - 2 = `Eval Error: Circular dependency`},
+    baz: {z: 7 / foo.x = `Eval Error: Circular dependency`},
 },
 
 # Extra content in map or array

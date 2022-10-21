@@ -72,8 +72,13 @@ impl Operable for Vector {
         }.into()}
     }
     
-    fn arity(&self) -> usize { 1 }
-    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(1),
+        _ => None,
+    }}
+
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
+        if attr.is_some() { panic!() }
         if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
             if let Some(obj) = self.0.get(idx) { obj.clone() }
             else { eval_err!(

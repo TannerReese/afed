@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display, Formatter, Error, Write};
 
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
-use std::iter::Sum;
+use std::iter::{Sum, Product};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -59,8 +59,8 @@ macro_rules! binary_not_impl {
 #[macro_export]
 macro_rules! call_not_impl {
     ($type:ty) => {
-        fn arity(&self) -> usize { 0 }
-        fn call(&self, _: Vec<Object>) -> Self::Output {
+        fn arity(&self, _: Option<&str>) -> Option<usize> { None }
+        fn call(&self, _: Option<&str>, _: Vec<Object>) -> Self::Output {
             eval_err!("Cannot call {}", Self::type_name())
         }
     };
@@ -82,8 +82,9 @@ pub trait Operable<Rhs = Object, U = Unary, B = Binary> {
     fn unary(self, op: U) -> Option<Self::Output>;
     fn try_binary(&self, rev: bool, op: B, other: &Rhs) -> bool;
     fn binary(self, rev: bool, op: B, other: Rhs) -> Self::Output;
-    fn arity(&self) -> usize;
-    fn call(&self, args: Vec<Rhs>) -> Self::Output;
+
+    fn arity(&self, attr: Option<&str>) -> Option<usize>;
+    fn call(&self, attr: Option<&str>, args: Vec<Rhs>) -> Self::Output;
 }
 
 pub trait NamedType : Any {
@@ -118,8 +119,9 @@ trait ObjectishSafe {
     fn unary(&mut self, op: Unary) -> Option<Object>;
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object;
-    fn arity(&self) -> usize;
-    fn call(&self, args: Vec<Object>) -> Object;
+
+    fn arity(&self, attr: Option<&str>) -> Option<usize>;
+    fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
 fn to_obj<T>(obj: &mut Option<T>) -> T { std::mem::take(obj).unwrap() }
@@ -150,8 +152,10 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object
         { to_obj(self).binary(rev, op, other) }
 
-    fn arity(&self) -> usize { to_ref(self).arity() }
-    fn call(&self, args: Vec<Object>) -> Object { to_ref(self).call(args) }
+    fn arity(&self, attr: Option<&str>) -> Option<usize>
+        { to_ref(self).arity(attr) }
+    fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object
+        { to_ref(self).call(attr, args) }
 }
 
 pub struct Object(Box<dyn ObjectishSafe>);
@@ -221,9 +225,11 @@ impl Object {
     }
 
     fn binary_help(mut self, op: Binary, mut other: Object) -> Object {
-        if (*self.0).try_binary(false, op, &other) { (*self.0).binary(false, op, other) }
-        else if (*other.0).try_binary(true, op, &self) { (*other.0).binary(true, op, self) }
-        else { eval_err!(
+        if (*self.0).try_binary(false, op, &other) {
+            (*self.0).binary(false, op, other)
+        } else if (*other.0).try_binary(true, op, &self) {
+            (*other.0).binary(true, op, self)
+        } else { eval_err!(
             "Binary operator {} not implemented between types {} and {}",
             op.symbol(), (*self.0).type_name_dyn(), (*other.0).type_name_dyn(),
         )}
@@ -231,7 +237,7 @@ impl Object {
 
     pub fn binary(self, op: Binary, other: Object) -> Object {
     match op {
-        Binary::Apply => self.call(vec![other]),
+        Binary::Apply => self.call(None, vec![other]),
         Binary::Eq => Bool::new(self == other),
         Binary::Neq => Bool::new(self != other),
         Binary::Leq => self.binary_help(Binary::Leq, other),
@@ -245,26 +251,64 @@ impl Object {
         _ => self.binary_help(op, other),
     }}
 
-    pub fn arity(&self) -> usize { (*self.0).arity() }
-    pub fn call<'a>(&self, args: Vec<Object>) -> Object {
-        let arity = (*self.0).arity();
+    pub fn arity(&self, attr: Option<&str>) -> Option<usize>
+        { (*self.0).arity(attr) }
+
+    pub fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object {
+        let arity: usize;
+        if let Some(x) = (*self.0).arity(attr) {
+            arity = x;
+        } else if let Some(method) = attr { return eval_err!(
+            "Cannot call method {} on type {}", method, (*self.0).type_name_dyn()
+        )} else { return eval_err!(
+            "Cannot call type {}", (*self.0).type_name_dyn(),
+        )}
+
         if args.len() == arity {
-            return (*self.0).call(args);
+            return (*self.0).call(attr, args);
         } else if args.len() < arity {
-            return curry::Curry::new(self.clone(), args);
+            let attr = attr.map(|s| s.to_owned());
+            return curry::Curry::new(self.clone(), attr, args);
         }
 
         let mut args = args.into_iter();
         let iter = args.by_ref();
 
-        let mut res = try_ok!((*self.0).call(iter.take(arity).collect()));
+        let mut res = try_ok!((*self.0).call(attr, iter.take(arity).collect()));
         while iter.as_slice().len() > 0 {
-            let arity = (*res.0).arity();
+            let arity;
+            if let Some(x) = (*res.0).arity(None) {
+                arity = x;
+            } else { return eval_err!(
+                "Cannot call type {}", (*res.0).type_name_dyn(),
+            )}
+
             res = if iter.as_slice().len() >= arity {
-                try_ok!((*res.0).call(iter.take(arity).collect()))
-            } else { curry::Curry::new(res.clone(), iter.collect()) };
+                (*res.0).call(None, iter.take(arity).collect())
+            } else { curry::Curry::new(res.clone(), None, iter.collect()) };
         }
         res
+    }
+
+    fn get_attr(&self, attr: &str) -> Object {
+        if let Some(arity) = self.arity(Some(attr)) {
+            if arity > 0 { eval_err!(
+                "Method {} has arity {}, but wasn't given any arguments",
+                attr, arity,
+            )} else { self.call(Some(attr), Vec::with_capacity(0)) }
+        } else { eval_err!(
+            "Object of type {} has no method {}",
+            (*self.0).type_name_dyn(), attr,
+        )}
+    }
+
+    pub fn call_path(&self, mut path: Vec<&str>, args: Vec<Object>) -> Object {
+        let last = path.pop();
+        if path.len() > 0 {
+            let mut obj = try_ok!(self.get_attr(path.remove(0)));
+            for key in path.into_iter() { obj = try_ok!(obj.get_attr(key)); }
+            obj.call(last, args)
+        } else { self.call(last, args) }
     }
 }
 
@@ -328,9 +372,26 @@ impl Rem for Object {
 }
 
 impl Sum for Object {
-    fn sum<I>(iter: I) -> Self where I: Iterator<Item = Self> {
-        iter.reduce(|accum, x| accum + x)
-        .unwrap_or(eval_err!("Can only sum objects for non-empty iterators"))
+    fn sum<I>(mut iter: I) -> Self where I: Iterator<Item = Self> {
+        let mut total = if let Some(x) = iter.next() { x }
+        else { return eval_err!(
+            "Can only sum objects for non-empty iterators"
+        )};
+
+        for x in iter { total = try_ok!(total + x); }
+        total
+    }
+}
+
+impl Product for Object {
+    fn product<I>(mut iter: I) -> Self where I: Iterator<Item = Self> {
+        let mut total = if let Some(x) = iter.next() { x }
+        else { return eval_err!(
+            "Can only take product of objects for non-empty iterators"
+        )};
+
+        for x in iter { total = try_ok!(total * x); }
+        total
     }
 }
 
@@ -383,8 +444,10 @@ impl Operable for EvalError {
     fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
     fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { Object::new(self) }
 
-    fn arity(&self) -> usize { 0 }
-    fn call(&self, _: Vec<Object>) -> Object { Object::new(self.clone()) }
+    fn arity(&self, _: Option<&str>) -> Option<usize> { Some(0) }
+    fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
+        Object::new(self.clone())
+    }
 }
 
 impl Display for EvalError {

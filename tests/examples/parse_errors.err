@@ -21,7 +21,7 @@ Error: Missing value
 4 Parse Errors encountered
 
 
-line 8, column 26 Eval Error: Circular dependence from variable bar.y
-line 9, column 26 Eval Error: Circular dependence from variable bar.y
-line 10, column 26 Eval Error: Circular dependence from variable bar.y
+line 8, column 26 Eval Error: Circular dependency
+line 9, column 26 Eval Error: Circular dependency
+line 10, column 26 Eval Error: Circular dependency
 3 Eval Errors encountered

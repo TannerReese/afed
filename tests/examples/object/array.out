@@ -13,3 +13,16 @@ arr 50 = `Eval Error: Index 50 is out of bounds`,
 [0] * [9, 3] = `Eval Error: Binary operator * not implemented between types array and array`,
 [2, 3] % 8 = `Eval Error: Binary operator % not implemented between types array and number`,
 
+# Array methods
+arr2.len = `6`,
+arr2: [8, -1, 2, 0, -7, 3],
+arr2.sum = `5`,
+
+pos: arr2.filter \x: x > 0 = `[8, 2, 3]`,
+not_zero x: x != 0,
+(arr2.filter not_zero).prod = `336`,
+pos.map num.sqrt = `[2.8284271247461903, 1.4142135623730951, 1.7320508075688772]`,
+
+# Not a method
+arr.njfd = `Eval Error: Cannot call method njfd on type array`,
+

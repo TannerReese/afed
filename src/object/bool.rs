@@ -63,8 +63,13 @@ impl Operable for Ternary {
     unary_not_impl!{}
     binary_not_impl!{}
 
-    fn arity(&self) -> usize { 3 }
-    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(3),
+        _ => None,
+    }}
+
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
+        if attr.is_some() { panic!() }
         let Bool(cond) = try_cast!(args.remove(0));
         args.remove(if cond { 0 } else { 1 })
     }

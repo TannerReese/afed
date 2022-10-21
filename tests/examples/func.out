@@ -40,3 +40,21 @@ scope.f 4 = `7.5600000000000005`,
 	sub 2 = `15.68`,
 },
 
+# Function unimplemented operations
+{
+	f x: \y: x + 1 / y,
+	f + 3 = `Eval Error: Binary operator + not implemented between types function and number`,
+	4 * f = `Eval Error: Binary operator * not implemented between types number and function`,
+	f 4 3 = `13 / 3`, # Works afterwards
+},
+
+# No method support
+{
+	f x: [x, x],
+	g: \y: [y, 2*y],
+	f.hello = `Eval Error: Cannot call method hello on type function`,
+	g.world = `Eval Error: Cannot call method world on type function`,
+	f 2 = `[2, 2]`,
+	g 1 = `[1, 2]`,
+},
+

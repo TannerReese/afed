@@ -26,8 +26,13 @@ impl<A: Objectish> Operable for BltnFuncSingle<A> {
     unary_not_impl!{}
     binary_not_impl!{}
 
-    fn arity(&self) -> usize { 1 }
-    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(1),
+        _ => None,
+    }}
+
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
+        if attr.is_some() { panic!() }
         (self.ptr)(try_cast!(args.remove(0)))
     }
 }
@@ -81,8 +86,13 @@ impl<A: Objectish, B: Objectish> Operable for BltnFuncDouble<A, B> {
     unary_not_impl!{}
     binary_not_impl!{}
 
-    fn arity(&self) -> usize { 2 }
-    fn call(&self, mut args: Vec<Object>) -> Self::Output {
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        None => Some(2),
+        _ => None,
+    }}
+
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
+        if attr.is_some() { panic!() }
         let x = try_cast!(args.remove(0));
         let y = try_cast!(args.remove(0));
         (self.ptr)(x, y)
