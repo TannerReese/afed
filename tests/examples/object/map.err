@@ -1,13 +1,13 @@
-Parse Error in line 19, column 3
+Parse Error in line 18, column 3
 	{3: 4} = ``,
 	  ^
-Error: Extra content in member
+Error: Ill formed map member
 
 1 Parse Error encountered
 
 
 line 6, column 8 Eval Error: Expected string, but found number
 line 7, column 14 Eval Error: Key hello is not contained in map
-line 22, column 19 Eval Error: Binary operator * not implemented between types map and map
-line 23, column 14 Eval Error: Binary operator / not implemented between types number and map
+line 21, column 19 Eval Error: Binary operator * not implemented between types map and map
+line 22, column 14 Eval Error: Binary operator / not implemented between types number and map
 4 Eval Errors encountered

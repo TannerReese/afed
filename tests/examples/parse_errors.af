@@ -15,3 +15,18 @@
 { "good", second: njd %% & 62 ] , third: "good"} = ``,
 ["this", "next"  ( % ^&, "last"] = ``,
 
+# Redefinition with internal definition
+{
+    x: 4 = ``,
+    4 * (x: 3) = ``,
+    (y: 2) * 5 = ``,
+    y: 12 = ``,
+},
+
+# Circular definition with internal definition
+{
+    6 - (x: (4 * y.h) - 3) = ``,
+    y: {h: (1 - 44 / z)},
+    4 * (z: x - 2) - 3 = ``,
+},
+

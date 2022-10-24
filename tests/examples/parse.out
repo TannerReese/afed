@@ -36,3 +36,11 @@ a1.a2.a3.a4.a5 = `{a6: 2}`,
 # Test substitution in expression
 2 + ((3 + 4 = `7`) - 5 = `2`) = `4`,
 
+# Test variable definition in expressions
+{
+    2 - 6 * (x: 4 - 3 * 7 = `-17`) / t.y = `55 / 2`,
+    3 * x + (t: {z: 1 - x, y: 4}).z = `-33`,
+    (g t: (s: f 4 5) + t) 10 * s = `1281 / 16`,
+    7 * (f x y: x + y / x) (f 3 4) (f 5 1) = `581 / 15`,
+},
+

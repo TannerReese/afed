@@ -7,7 +7,6 @@ mp 3 = ``,
 mp "hello" = ``,
 
 # Merge maps
-{1, 2, "a": 3} + {7, "Hell" = ``} = ``,
 new: {1, 2, a: "b"} + {6, "c": "d"},
 new    "a" = ``,
 new  .  c = ``,

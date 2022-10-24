@@ -1,7 +1,7 @@
 Parse Error in line 4, column 13
 	{ x: 4, x: 5},
 	            ^
-Error: Redefinition of label in map
+Error: Redefinition of label 'x' in map
 
 Parse Error in line 14, column 27
 	{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
@@ -18,10 +18,22 @@ Parse Error in line 16, column 20
 	                   ^
 Error: Missing value
 
-4 Parse Errors encountered
+Parse Error in line 21, column 20
+	    4 * (x: 3) = ``,
+	                   ^
+Error: Redefinition of label 'x' in map
+
+Parse Error in line 23, column 15
+	    y: 12 = ``,
+	              ^
+Error: Redefinition of label 'y' in map
+
+6 Parse Errors encountered
 
 
 line 8, column 26 Eval Error: Circular dependency
 line 9, column 26 Eval Error: Circular dependency
 line 10, column 26 Eval Error: Circular dependency
-3 Eval Errors encountered
+line 28, column 30 Eval Error: Circular dependency
+line 30, column 26 Eval Error: Circular dependency
+5 Eval Errors encountered

@@ -31,6 +31,10 @@ pub struct Docmt {
     substs: Vec<Subst>,
 }
 
+macro_rules! parse_err {
+    ($self:ident, $($arg:tt)*) => { $self.error(format!($($arg)*)) };
+}
+
 impl Docmt {
     pub fn new(src: String) -> Docmt {
         Docmt {
@@ -49,7 +53,7 @@ impl Docmt {
             let mut prs = Parser {doc: self, pos: Pos::new(&src), err_out, err_count: 0};
             let root = prs.parse_map(true).map_err(|err| prs.print_err(err)).ok();
             if !prs.pos.is_empty() {
-                prs.print_err(prs.error("Extra unparsed content in document"))
+                prs.print_err(parse_err!(prs, "Extra unparsed content in document"))
             }
             self.err_count = prs.err_count;
 
@@ -253,16 +257,16 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
     fn expect(&mut self, c: char, err_msg: &str) -> Result<(), ParseError> {
         self.skip();
         if self.pos.peek() != Some(c) {
-            Err(self.error(err_msg))
+            Err(parse_err!(self, "{}", err_msg))
         } else {
             self.pos.next();
             Ok(())
         }
     }
 
-    fn error(&self, msg: &str) -> ParseError {
+    fn error(&self, msg: String) -> ParseError {
         ParseError {
-            msg: msg.to_owned(),
+            msg,
             line: self.pos.line_begin
                 .lines().next()
                 .unwrap_or("").to_owned(),
@@ -271,7 +275,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
     }
 
-    fn print_err(&mut self, err: ParseError){
+    fn print_err(&mut self, err: ParseError) {
         if let Err(_) = write!(self.err_out, "{}\n", err) {
             panic!("IO Error while writing parse error");
         }
@@ -332,9 +336,9 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         let mut value = if let Some(op) = self.parse_unary() {
             let prec = std::cmp::max(op.prec(), min_prec);
             let arg = self.parse_expr(prec + 1)?;
-            self.doc.arena.create_unary(op, arg).unwrap()
+            self.doc.arena.create_unary(op, arg)
         } else if let Some(val) = self.parse_call()? { val } else {
-            return Err(self.error("Missing value"));
+            return Err(parse_err!(self, "Missing value"));
         };
 
         let mut before_oper = self.pos;
@@ -345,7 +349,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
 
             let arg = self.parse_expr(prec)?;
             self.skip();
-            value = self.doc.arena.create_binary(op, value, arg).unwrap();
+            value = self.doc.arena.create_binary(op, value, arg);
             before_oper = self.pos;
         }
         self.pos = before_oper;
@@ -363,14 +367,14 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             Number::Ratio(i, 1)
         } else if let Ok(f) = numstr.parse::<f64>() {
             Number::Real(f)
-        } else { return Err(self.error("Invalid number")); };
+        } else { return Err(parse_err!(self, "Invalid number '{}'", numstr)); };
         Ok(self.doc.arena.create_obj(num))
     }
 
     fn parse_name(&mut self) -> Result<String, ParseError> {
         self.skip();
         if !self.pos.peek().map_or(false, |c| c.is_alphabetic()) {
-            return Err(self.error("Name must begin with a alphabetic character"));
+            return Err(parse_err!(self, "Name must begin with a alphabetic character"));
         }
 
         let name = self.pos.ptr;
@@ -417,20 +421,24 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             self.skip();
             if let Some(']') = self.pos.peek() { break }
             let before = self.pos;
-            if let Err(err) = self.parse_member(&mut elems, None) {
-                self.print_err(err);
-                self.pos = before;
-                self.skip_to_comma(']');
+            match self.parse_defn() {
+                Ok(id) => elems.push(id),
+                Err(err) => {
+                    self.print_err(err);
+                    self.pos = before;
+                    self.skip_to_comma(']');
+                },
             }
+
             if !self.parse_char(',') { break }
             self.skip();
         }
 
         self.expect(']', "Missing closing bracket in array")?;
-        Ok(self.doc.arena.create_array(elems).unwrap())
+        Ok(self.doc.arena.create_array(elems))
     }
 
-    fn parse_label(&mut self) -> Option<Vec<String>> {
+    fn parse_labels(&mut self) -> Option<Vec<String>> {
         let before = self.pos;
         let mut labels = Vec::new();
         loop {
@@ -456,60 +464,66 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
     }
 
-    fn parse_member(&mut self,
-        unnamed: &mut Vec<ExprId>, named: Option<&mut HashMap<String, ExprId>>
-    ) -> Result<(), ParseError> {
-        let labels = if named.is_some() {
-            self.parse_label()
-        } else { None };
-        let body = self.parse_equals()?;
-        
-        self.skip();
-        if let Some(c) = self.pos.peek() {
-            if c != ',' && c != '}' && c != ']' {
-                return Err(self.error("Extra content in member"))
-            }
-        }
-        
-        if let (Some(named), Some(mut labels)) = (named, labels) {
+    fn parse_defn(&mut self) -> Result<ExprId, ParseError> {
+        let labels = self.parse_labels();
+        let mut body = self.parse_equals()?;
+        if let Some(mut labels) = labels {
             let key = labels.remove(0);
-            if named.contains_key(&key) {
-                return Err(self.error("Redefinition of label in map"));
+            if labels.len() > 0 {
+                body = self.doc.arena.create_func(
+                    Some(key.clone()), labels, body
+                );
             }
-
-            if labels.len() == 0 {
-                named.insert(key, body);
-            } else {
-                let func = self.doc.arena.create_func(
-                    key.clone(), labels, body
-                ).unwrap();
-                named.insert(key, func);
-            }
-        } else { unnamed.push(body); }
-        Ok(())
+            Ok(self.doc.arena.create_defn(key, body))
+        } else { Ok(body) }
     }
 
     fn parse_map(&mut self, is_root: bool) -> Result<ExprId, ParseError> {
         if !is_root { self.expect('{', "Missing opening brace in map")?; }
 
-        let mut unnamed = Vec::new();
-        let mut named = HashMap::new();
+        let mut keys = Vec::new();
+        let mut elems = Vec::new();
         while !self.pos.is_empty() {
             self.skip();
             if let Some('}') = self.pos.peek() { break }
+
             let before = self.pos;
-            if let Err(err) = self.parse_member(&mut unnamed, Some(&mut named)) {
-                self.print_err(err);
+            let mut has_err = false;
+            match self.parse_defn() {
+                Ok(id) => {
+                    for defn in self.doc.arena.get_defns(id).into_iter() {
+                        if keys.contains(&defn) {
+                            self.print_err(parse_err!(self,
+                                "Redefinition of label '{}' in map", defn
+                            ));
+                            has_err = true;
+                        } else { keys.push(defn); }
+                    }
+                    if !has_err { elems.push(id); }
+                },
+                Err(err) => {
+                    has_err = true;
+                    self.print_err(err);
+                },
+            }
+
+            self.skip();
+            let c = self.pos.peek();
+            if !has_err && c != Some(',') && c != Some('}') {
+                self.print_err(parse_err!(self, "Ill formed map member"));
+                has_err = true;
+            }
+
+            if has_err {
                 self.pos = before;
                 self.skip_to_comma('}');
             }
-
             if !self.parse_char(',') { break }
             self.skip();
         }
 
         if !is_root { self.expect('}', "Missing closing brace in map")?; }
-        Ok(self.doc.arena.create_map(unnamed, named).unwrap())
+        Ok(self.doc.arena.create_map(elems))
     }
 
     fn parse_lambda(&mut self) -> Result<ExprId, ParseError> {
@@ -525,13 +539,17 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         }
 
         if args.len() == 0 {
-            return Err(self.error("No arguments given for lambda"));
-        } else if !self.parse_char(':') {
-            return Err(self.error("Incorrect terminator for lambda arguments"));
-        }
+            return Err(parse_err!(self, "No arguments given for lambda"));
+        } else if let Some(c) = self.pos.peek() {
+            if c == ':' { self.pos.next(); } else { return Err(parse_err!(self,
+                "Incorrect terminator {} for lambda arguments", c
+            ));}
+        } else { return Err(parse_err!(self,
+            "Incorrect terminator for lambda arguments"
+        ));}
 
         let body = self.parse_expr(0)?;
-        Ok(self.doc.arena.create_func("\\".to_owned(), args, body).unwrap())
+        Ok(self.doc.arena.create_func(None, args, body))
     }
 
 
@@ -542,13 +560,13 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
                 let a = if a_attrs.len() == 0 { a } else {
                     self.doc.arena.create_access(
                         a, a_attrs, Vec::with_capacity(0)
-                    ).unwrap()
+                    )
                 };
                 args.push(a);
             }
 
             Ok(Some(if attrs.len() == 0 && args.len() == 0 { val } else {
-                self.doc.arena.create_access(val, attrs, args).unwrap()
+                self.doc.arena.create_access(val, attrs, args)
             }))
         } else { Ok(None) }
     }
@@ -572,7 +590,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             },
             '(' => {
                 self.pos.next();
-                let body = self.parse_equals()?;
+                let body = self.parse_defn()?;
                 self.expect(')', "Missing close parenthesis")?;
                 body
             },

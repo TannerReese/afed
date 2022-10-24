@@ -11,7 +11,22 @@
 },
 
 # Extra content in map or array
-{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = `{1, "zing zing", this is: "correct"}`,
-{ "good", second: njd %% & 62 ] , third: "good"} = `{"good", third: "good"}`,
+{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = `{this is: "correct"}`,
+{ "good", second: njd %% & 62 ] , third: "good"} = `{third: "good"}`,
 ["this", "next"  ( % ^&, "last"] = `["this", "last"]`,
+
+# Redefinition with internal definition
+{
+    x: 4 = `4`,
+    4 * (x: 3) = `12`,
+    (y: 2) * 5 = `10`,
+    y: 12 = `12`,
+},
+
+# Circular definition with internal definition
+{
+    6 - (x: (4 * y.h) - 3) = `Eval Error: Circular dependency`,
+    y: {h: (1 - 44 / z)},
+    4 * (z: x - 2) - 3 = `Eval Error: Circular dependency`,
+},
 

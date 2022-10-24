@@ -41,3 +41,11 @@ a1.a2.a3.a4.a5 = ``,
 # Test substitution in expression
 2 + ((3 + 4 = ``) - 5 = ``) = ``,
 
+# Test variable definition in expressions
+{
+    2 - 6 * (x: 4 - 3 * 7 = ``) / t.y = ``,
+    3 * x + (t: {z: 1 - x, y: 4}).z = ``,
+    (g t: (s: f 4 5) + t) 10 * s = ``,
+    7 * (f x y: x + y / x) (f 3 4) (f 5 1) = ``,
+},
+

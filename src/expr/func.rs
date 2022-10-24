@@ -11,7 +11,7 @@ use super::{ExprId, ArgId, ExprArena};
 
 #[derive(Debug, Clone)]
 pub struct Func {
-    name: String,
+    name: Option<String>,
     id: usize,
     args: Vec<ArgId>,
     body: ExprId,
@@ -22,7 +22,9 @@ impl NamedType for Func { fn type_name() -> &'static str{ "function" } }
 
 static FUNC_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Func {
-    pub fn new(name: String, args: Vec<ArgId>, body: ExprId, arena: ExprArena) -> Object {
+    pub fn new(
+        name: Option<String>, args: Vec<ArgId>, body: ExprId, arena: ExprArena
+    ) -> Object {
         let id = FUNC_COUNTER.fetch_add(1, Ordering::Relaxed);
         Object::new(Func {name, id, args, body, arena})
     }
@@ -57,9 +59,13 @@ impl Operable for Func {
 
 impl Display for Func {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "Func<name='{}', id={}, arity={}>",
-            self.name, self.id, self.args.len(),
-        )
+        if let Some(name) = &self.name {
+            write!(f, "Func<name='{}', id={}, arity={}>",
+                name, self.id, self.args.len(),
+            )
+        } else { write!(f, "Lambda<id={}, arity={}>",
+            self.id, self.args.len(),
+        )}
     }
 }
 
