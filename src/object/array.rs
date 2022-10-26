@@ -48,6 +48,9 @@ impl Operable for Array {
         Some("len") => Some(0),
         Some("map") => Some(1),
         Some("filter") => Some(1),
+        Some("all") => Some(1),
+        Some("any") => Some(1),
+        Some("has") => Some(1),
         Some("sum") => Some(0),
         Some("prod") => Some(0),
         _ => None,
@@ -67,23 +70,55 @@ impl Operable for Array {
         Some("map") => {
             let func = args.remove(0);
             self.0.iter().cloned().map(|elem|
-                func.call(None, vec![elem])
+                obj_call!(func(elem))
             ).collect()
         },
         Some("filter") => {
             let pred = args.remove(0);
             let mut new_arr = Vec::with_capacity(self.0.len());
             for elem in self.0.iter() {
-                let res = pred.call(None, vec![elem.clone()]);
-                if try_cast!(res => Bool).0 { new_arr.push(elem.clone()); }
+                if obj_call!(pred(elem.clone()) => Bool).0 {
+                    new_arr.push(elem.clone());
+                }
             }
             Array(new_arr).into()
+        },
+
+        Some("all") => self.all(args.remove(0)),
+        Some("any") => self.any(args.remove(0)),
+        Some("has") => {
+            let target = args.remove(0);
+            self.0.contains(&target).into()
         },
 
         Some("sum") => self.0.iter().cloned().sum(),
         Some("prod") => self.0.iter().cloned().product(),
         _ => panic!(),
     }}
+}
+
+impl Array {
+    fn all(&self, pred: Object) -> Object {
+        let mut is_all = true;
+        for elem in self.0.iter() {
+            if !obj_call!(pred(elem.clone()) => Bool).0 {
+                is_all = false;
+                break;
+            }
+        }
+        is_all.into()
+    }
+
+    fn any(&self, pred: Object) -> Object {
+        let mut is_any = false;
+        for elem in self.0.iter() {
+            if obj_call!(pred(elem.clone()) => Bool).0 {
+                is_any = true;
+                break;
+            }
+        }
+        is_any.into()
+    }
 }
 
 impl Display for Array {

@@ -13,7 +13,7 @@ use crate::object::opers::{Unary, Binary};
 use crate::object::{Operable, Object, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
-use crate::object::bltn_func::BltnFuncSingle;
+use crate::object::bltn_func::BltnFunc;
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -395,6 +395,11 @@ impl From<Matrix> for Object {
 pub fn make_bltns() -> Object {
     let mut mat = HashMap::new();
     def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
+    def_getter!(mat.rows);
+    def_getter!(mat.cols);
+    def_getter!(mat.row_vecs);
+    def_getter!(mat.col_vecs);
+    def_getter!(mat.trsp);
     mat.into()
 }
 

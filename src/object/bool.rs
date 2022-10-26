@@ -52,6 +52,10 @@ impl From<Bool> for Object {
     fn from(b: Bool) -> Object { Object::new(b) }
 }
 
+impl From<bool> for Object {
+    fn from(b: bool) -> Object { Object::new(Bool(b)) }
+}
+
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

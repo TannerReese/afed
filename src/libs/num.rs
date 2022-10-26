@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::object::{Object, EvalError};
 use crate::object::number::Number;
-use crate::object::bltn_func::{BltnFuncSingle, BltnFuncDouble};
+use crate::object::bltn_func::BltnFunc;
 
 macro_rules! real_func {
     ($pkg:ident.$name:ident) => {

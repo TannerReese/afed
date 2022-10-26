@@ -13,7 +13,7 @@ use crate::object::opers::{Unary, Binary};
 use crate::object::{Operable, Object, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
-use crate::object::bltn_func::BltnFuncSingle;
+use crate::object::bltn_func::BltnFunc;
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -36,7 +36,7 @@ impl Operable for Vector {
         Unary::Neg => Some((-self).into()),
         _ => None,
     }}
-   
+
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Add | Binary::Sub => other.is_a::<Vector>(),
         Binary::Mul => !other.is_a::<Matrix>(),
@@ -45,7 +45,7 @@ impl Operable for Vector {
         },
         _ => false,
     }}
-    
+
     fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
         if other.is_a::<Vector>() {
             let (mut v1, mut v2) = (self, try_cast!(other => Vector));
@@ -54,7 +54,7 @@ impl Operable for Vector {
                 v1.dims(), v2.dims(),
             )}
             if rev { swap(&mut v1, &mut v2); }
-            
+
             match op {
                 Binary::Add => (v1 + v2).into(),
                 Binary::Sub => (v1 - v2).into(),
@@ -72,7 +72,7 @@ impl Operable for Vector {
             _ => panic!(),
         }.into()}
     }
-    
+
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
         Some("dims") => Some(0),
@@ -112,9 +112,9 @@ impl Vector {
             .next().unwrap())
         } else { Ok(self) }
     }
-    
+
     pub fn dims(&self) -> usize { self.0.len() }
-    
+
     pub fn mag2(self) -> Object
         { self.0.into_iter().map(|x| x.clone() * x).sum() }
     pub fn mag(self) -> Object {
@@ -123,8 +123,8 @@ impl Vector {
             "Cannot take square root of negative"
         ), &Object::new)
     }
-    
-    
+
+
     pub fn flrdiv_assign(&mut self, rhs: Object)
         { self.0.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
     pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }
@@ -246,6 +246,10 @@ pub fn make_bltns() -> Object {
         if comps.0.len() > 0 { Vector(comps.0).into() } 
         else { eval_err!("Vector cannot be zero dimensional") }
     );
+    def_getter!(vec.dims);
+    def_getter!(vec.comps);
+    def_getter!(vec.mag);
+    def_getter!(vec.mag2);
     vec.into()
 }
 

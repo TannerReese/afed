@@ -1,0 +1,25 @@
+# Test arr builtin functions
+
+range (5 / 7) 6 = ``,
+range 3.4 8.9 = ``,
+
+range_step 89 83.2 (-1) = ``,
+
+map fst $ iter [0, 1] 8 \pr: [pr 1, pr 0 + pr 1] = ``,
+map arr.snd $ iter_while [1, 1] (\pr: pr 1 < 200) \pr: [1 + pr 0, pr 0 * pr 1] = ``,
+
+# Test getters
+len (a: [1, -2, 3, 9.3]) = ``,
+sum a = ``,
+prod a = ``,
+arr.map (num.sqrt) [1, 2, 3, 4, 4/5] = ``,
+filter (\x: x > 0) [1, 2, -9, 3, -8.4, -2 /13, 3/4] = ``,
+
+any (\x: len x > 3) $ (b: [[1, 2], [2, 3], [7, 8.4, -3]]) = ``,
+all (\x: sum x > 0) b = ``,
+arr.has [2, 3] b = ``,
+
+# Compound operation
+filter (\x: x > 0) $ map (\x: 7*x - x^2 / 2) $ arr.range 3 97
+= ``,
+

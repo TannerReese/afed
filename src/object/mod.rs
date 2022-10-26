@@ -15,13 +15,11 @@ use std::borrow::Borrow;
 use opers::{Unary, Binary};
 use self::bool::Bool;
 
-#[macro_export]
 macro_rules! eval_err {
     ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
 }
 
 
-#[macro_export]
 macro_rules! try_cast {
     ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
@@ -33,7 +31,6 @@ macro_rules! try_cast {
     }};
 }
 
-#[macro_export]
 macro_rules! try_ok {
     ($obj:expr) => {{
         let obj = $obj;
@@ -41,14 +38,27 @@ macro_rules! try_ok {
     }};
 }
 
-#[macro_export]
+macro_rules! obj_call {
+    ($obj:ident ($($arg:expr),*)) => {
+        try_cast!($obj.call(None, vec![$($arg,)*]))
+    };
+    ($obj:ident ($($arg:expr),*) => $tp:ty) => {
+        try_cast!($obj.call(None, vec![$($arg,)*]) => $tp)
+    };
+    ($obj:ident.$method:ident ($($arg:expr),*)) => {
+        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
+    };
+    ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) => {
+        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
+    };
+}
+
 macro_rules! unary_not_impl {
     () => {
         fn unary(self, _: Unary) -> Option<Self::Output> { None }
     };
 }
 
-#[macro_export]
 macro_rules! binary_not_impl {
     () => {
         fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
@@ -56,7 +66,6 @@ macro_rules! binary_not_impl {
     };
 }
 
-#[macro_export]
 macro_rules! call_not_impl {
     ($type:ty) => {
         fn arity(&self, _: Option<&str>) -> Option<usize> { None }
@@ -170,14 +179,7 @@ impl Object {
     pub fn is_a<T>(&self) -> bool where T: Any
         { TypeId::of::<T>() == self.type_id() }
 
-    pub fn cast<T>(self) -> Result<T, Object> where T: NamedType {
-        let given_type = (*self.0).type_name_dyn();
-        let box_any = unsafe { Box::from_raw(Box::leak(self.0).as_any_mut()) };
-        if let Ok(obj_box) = box_any.downcast() { Ok(*obj_box) }
-        else { Err(eval_err!(
-            "Expected {}, but found {}", T::type_name(), given_type
-        ))}
-    }
+    pub fn cast<T>(self) -> Result<T, Object> where T: CastObject { T::cast(self) }
 
     pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
         { (*self.0).as_any().downcast_ref() }
@@ -213,6 +215,24 @@ impl Object {
     }
 }
 
+pub trait CastObject: Sized {
+    fn cast(obj: Object) -> Result<Self, Object>;
+}
+
+impl<T> CastObject for T where T: NamedType + Sized {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        let given_type = (*obj.0).type_name_dyn();
+        let box_any = unsafe { Box::from_raw(Box::leak(obj.0).as_any_mut()) };
+        if let Ok(obj_box) = box_any.downcast() { Ok(*obj_box) }
+        else { Err(eval_err!(
+            "Expected {}, but found {}", T::type_name(), given_type
+        ))}
+    }
+}
+
+impl CastObject for Object {
+    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj) }
+}
 
 
 impl Object {

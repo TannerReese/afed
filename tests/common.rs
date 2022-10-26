@@ -67,6 +67,7 @@ test_file!{object_array, "object/array.af"}
 test_file!{object_map, "object/map.af"}
 
 test_file!{libs_num, "libs/num.af"}
+test_file!{libs_arr, "libs/arr.af"}
 test_file!{libs_vec, "libs/vec.af"}
 test_file!{libs_mat, "libs/mat.af"}
 

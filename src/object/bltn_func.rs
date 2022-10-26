@@ -2,135 +2,67 @@ use std::vec::Vec;
 use std::fmt::{Debug, Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, Objectish};
-
+use super::{Operable, Object, NamedType};
 
 #[derive(Clone, Copy)]
-pub struct BltnFuncSingle<A> {
+pub struct BltnFunc<const N: usize> {
     pub name: &'static str,
-    ptr: fn(A) -> Object,
+    ptr: fn([Object; N]) -> Object,
 }
 
-impl<A: 'static> NamedType for BltnFuncSingle<A> {
+impl<const N: usize> NamedType for BltnFunc<N> {
     fn type_name() -> &'static str { "builtin function" }
 }
 
-impl<A: Objectish> BltnFuncSingle<A> {
-    pub fn new(name: &'static str, ptr: fn(A) -> Object) -> Object {
-        BltnFuncSingle {name, ptr}.into()
-    }
+impl<const N: usize> BltnFunc<N> {
+    pub fn new(
+        name: &'static str, ptr: fn([Object; N]) -> Object
+    ) -> Object { BltnFunc {name, ptr}.into() }
 }
 
-impl<A: Objectish> Operable for BltnFuncSingle<A> {
+impl<const N: usize> Operable for BltnFunc<N> {
     type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(1),
+        None => Some(N),
         Some("arity") => Some(0),
         _ => None,
     }}
 
     fn call(&self,
-        attr: Option<&str>, mut args: Vec<Object>
+        attr: Option<&str>, args: Vec<Object>
     ) -> Self::Output { match attr {
-        None => (self.ptr)(try_cast!(args.remove(0))),
-        Some("arity") => (1 as i64).into(),
+        None => (self.ptr)(args.try_into().expect(
+            "Incorrect number of arguments given"
+        )),
+        Some("arity") => (N as i64).into(),
         _ => panic!(),
     }}
 }
 
-impl<A> Display for BltnFuncSingle<A> {
+impl<const N: usize> Display for BltnFunc<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{}", self.name)
     }
 }
 
-impl<A> Debug for BltnFuncSingle<A> {
+impl<const N: usize> Debug for BltnFunc<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "BltnFuncSingle {{ name: {}, ptr: {} }}",
-            self.name, self.ptr as usize
+        write!(f, "BltnFunc {{ name: {}, arity: {}, ptr: {} }}",
+            self.name, N, self.ptr as usize
         )
     }
 }
 
-impl<A> PartialEq for BltnFuncSingle<A> {
+impl<const N: usize> PartialEq for BltnFunc<N> {
     fn eq(&self, other: &Self) -> bool { self.name == other.name }
 }
 
-impl<A> Eq for BltnFuncSingle<A> {}
+impl<const N: usize> Eq for BltnFunc<N> {}
 
-impl<A: Objectish> From<BltnFuncSingle<A>> for Object {
-    fn from(x: BltnFuncSingle<A>) -> Self { Object::new(x) }
-}
-
-
-
-
-
-#[derive(Clone, Copy)]
-pub struct BltnFuncDouble<A, B> {
-    pub name: &'static str,
-    ptr: fn(A, B) -> Object,
-}
-
-impl<A: 'static, B: 'static> NamedType for BltnFuncDouble<A, B> {
-    fn type_name() -> &'static str { "builtin function" }
-}
-
-impl<A: Objectish, B: Objectish> BltnFuncDouble<A, B> {
-    pub fn new(name: &'static str, ptr: fn(A, B) -> Object) -> Object {
-        BltnFuncDouble {name, ptr}.into()
-    }
-}
-
-impl<A: Objectish, B: Objectish> Operable for BltnFuncDouble<A, B> {
-    type Output = Object;
-    unary_not_impl!{}
-    binary_not_impl!{}
-
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(2),
-        Some("arity") => Some(0),
-        _ => None,
-    }}
-
-    fn call(&self,
-        attr: Option<&str>, mut args: Vec<Object>
-    ) -> Self::Output { match attr {
-        None => {
-            let x = try_cast!(args.remove(0));
-            let y = try_cast!(args.remove(0));
-            (self.ptr)(x, y)
-        },
-
-        Some("arity") => (2 as i64).into(),
-        _ => panic!(),
-    }}
-}
-
-impl<A, B> Display for BltnFuncDouble<A, B> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{}", self.name)
-    }
-}
-
-impl<A, B> Debug for BltnFuncDouble<A, B> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "BltnFuncDouble {{ name: {}, ptr: {} }}",
-            self.name, self.ptr as usize
-        )
-    }
-}
-
-impl<A, B> PartialEq for BltnFuncDouble<A, B> {
-    fn eq(&self, other: &Self) -> bool { self.name == other.name }
-}
-
-impl<A, B> Eq for BltnFuncDouble<A, B> {}
-
-impl<A: Objectish, B: Objectish> From<BltnFuncDouble<A, B>> for Object {
-    fn from(x: BltnFuncDouble<A, B>) -> Self { Object::new(x) }
+impl<const N: usize> From<BltnFunc<N>> for Object {
+    fn from(x: BltnFunc<N>) -> Self { Object::new(x) }
 }
 

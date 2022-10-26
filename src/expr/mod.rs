@@ -494,17 +494,18 @@ impl ExprArena {
                 arena.create_binary(op, arg1, arg2)
             },
 
-            Inner::Access(exp, path, args) => {
-                let exp = self.clone_into(arena, *exp);
+            Inner::Access(target, path, args) => {
+                let mut path = path.iter();
+                let target = self.access(*target, &mut path);
+                let target = self.clone_into(arena, target);
+
                 let args = args.iter().map(|&id|
                     self.clone_into(arena, id)
                 ).collect();
-                arena.create_access(exp, path.clone(), args)
+                arena.create_access(target, path.cloned().collect(), args)
             },
 
-            Inner::Arg(name) => arena.create_node(Vec::with_capacity(0),
-                Inner::Arg(name.clone())
-            ),
+            Inner::Arg(name) => arena.create_var(name.clone()),
             Inner::Func(name, args, body) => {
                 let body = self.clone_into(arena, *body);
                 let args = args.iter().map(|&id|

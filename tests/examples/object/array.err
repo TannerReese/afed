@@ -4,5 +4,5 @@ line 17, column 11 Eval Error: Unary operator - not implemented for type array
 line 18, column 10 Eval Error: Unary operator ! not implemented for type array
 line 19, column 16 Eval Error: Binary operator * not implemented between types array and array
 line 20, column 14 Eval Error: Binary operator % not implemented between types array and number
-line 33, column 12 Eval Error: Cannot call method njfd on type array
+line 37, column 12 Eval Error: Cannot call method njfd on type array
 7 Eval Errors encountered
