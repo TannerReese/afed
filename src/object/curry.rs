@@ -1,7 +1,6 @@
 use std::fmt::{Display, Formatter, Error};
 
-use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType};
+use super::{Operable, Unary, Binary, Object, NamedType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Curry {
@@ -41,7 +40,6 @@ impl Curry {
 }
 
 impl Operable for Curry {
-    type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
 

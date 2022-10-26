@@ -6,11 +6,9 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::zip;
 
-use super::num::sqrt;
 use super::mat::Matrix;
 
-use crate::object::opers::{Unary, Binary};
-use crate::object::{Operable, Object, NamedType, EvalError};
+use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
 use crate::object::bltn_func::BltnFunc;
@@ -31,8 +29,7 @@ pub struct Vector(Vec<Object>);
 impl NamedType for Vector { fn type_name() -> &'static str { "vector" }}
 
 impl Operable for Vector {
-    type Output = Object;
-    fn unary(self, op: Unary) -> Option<Self::Output> { match op {
+    fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Neg => Some((-self).into()),
         _ => None,
     }}
@@ -46,7 +43,7 @@ impl Operable for Vector {
         _ => false,
     }}
 
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Self::Output {
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         if other.is_a::<Vector>() {
             let (mut v1, mut v2) = (self, try_cast!(other => Vector));
             if v1.dims() != v2.dims() { return eval_err!(
@@ -84,7 +81,7 @@ impl Operable for Vector {
 
     fn call(&self,
         attr: Option<&str>, mut args: Vec<Object>
-    ) -> Self::Output { match attr {
+    ) -> Object { match attr {
         None => {
             if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
                 if let Some(obj) = self.0.get(idx) { obj.clone() }
@@ -118,10 +115,7 @@ impl Vector {
     pub fn mag2(self) -> Object
         { self.0.into_iter().map(|x| x.clone() * x).sum() }
     pub fn mag(self) -> Object {
-        sqrt(try_cast!(self.mag2() => Number))
-        .map_or(eval_err!(
-            "Cannot take square root of negative"
-        ), &Object::new)
+        obj_call!((self.mag2()).sqrt())
     }
 
 

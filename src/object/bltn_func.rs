@@ -21,7 +21,6 @@ impl<const N: usize> BltnFunc<N> {
 }
 
 impl<const N: usize> Operable for BltnFunc<N> {
-    type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
 
@@ -33,7 +32,7 @@ impl<const N: usize> Operable for BltnFunc<N> {
 
     fn call(&self,
         attr: Option<&str>, args: Vec<Object>
-    ) -> Self::Output { match attr {
+    ) -> Object { match attr {
         None => (self.ptr)(args.try_into().expect(
             "Incorrect number of arguments given"
         )),

@@ -22,7 +22,6 @@ impl Map {
 }
 
 impl Operable for Map {
-    type Output = Object;
     unary_not_impl!{}
 
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
@@ -59,7 +58,16 @@ impl Display for Map {
         for (key, obj) in self.0.iter() {
             if !is_first { f.write_str(", ")?; }
             is_first = false;
-            write!(f, "{}: {}", key, obj)?;
+
+            let mut chars = key.chars();
+            if let Some(c) = chars.next() {
+                if c.is_ascii_alphabetic()
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    write!(f, "{}: {}", key, obj)?;
+                    continue;
+                }
+            }
+            write!(f, "\"{}\": {}", key, obj)?;
         }
         f.write_char('}')
     }

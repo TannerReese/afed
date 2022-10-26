@@ -2,8 +2,7 @@ use std::io::Write;
 use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
 
-use super::object::Object;
-use super::object::opers;
+use super::object::{Object, Unary, Binary, Assoc};
 use super::object::null::Null;
 use super::object::bool::{Bool, Ternary};
 use super::object::number::Number;
@@ -297,17 +296,17 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         } else { false }
     }
 
-    fn parse_unary(&mut self) -> Option<opers::Unary> {
+    fn parse_unary(&mut self) -> Option<Unary> {
         self.skip();
-        if let Ok(op) = self.pos.ptr.parse::<opers::Unary>() {
+        if let Ok(op) = self.pos.ptr.parse::<Unary>() {
             self.pos.shift(op.symbol().len());
             Some(op)
         } else { None }
     }
 
-    fn parse_binary(&mut self) -> Option<opers::Binary> {
+    fn parse_binary(&mut self) -> Option<Binary> {
         self.skip();
-        if let Ok(op) = self.pos.ptr.parse::<opers::Binary>() {
+        if let Ok(op) = self.pos.ptr.parse::<Binary>() {
             self.pos.shift(op.symbol().len());
             Some(op)
         } else { None }
@@ -352,7 +351,7 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
         while let Some(op) = self.parse_binary() {
             let mut prec = op.prec();
             if prec < min_prec { break }
-            if op.assoc() == opers::Assoc::Left { prec += 1; }
+            if op.assoc() == Assoc::Left { prec += 1; }
 
             let arg = self.parse_expr(prec)?;
             self.skip();

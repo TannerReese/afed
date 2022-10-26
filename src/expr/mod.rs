@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Error};
 use id_arena::{Arena, Id};
 
-use super::object::{Object, Objectish, EvalError};
-use super::object::opers;
+use super::object::{Object, Unary, Binary, Objectish, EvalError};
 use super::object::array::Array;
 use super::object::map::Map;
 
@@ -27,8 +26,8 @@ enum Inner {
     Map(HashMap<String, ExprId>),
 
     Var(String, bool, Option<ExprId>),
-    Unary(opers::Unary, ExprId),
-    Binary(opers::Binary, ExprId, ExprId),
+    Unary(Unary, ExprId),
+    Binary(Binary, ExprId, ExprId),
     Access(ExprId, Vec<String>, Vec<ExprId>),
     Arg(String),
     Func(Option<String>, Vec<ArgId>, ExprId),
@@ -201,13 +200,13 @@ impl ExprArena {
         })
     }
 
-    pub fn create_unary(&mut self, op: opers::Unary, arg: ExprId) -> ExprId {
+    pub fn create_unary(&mut self, op: Unary, arg: ExprId) -> ExprId {
         let vars = self.take_vars(arg);
         self.create_node(vars, Inner::Unary(op, arg))
     }
 
     pub fn create_binary(&mut self,
-        op: opers::Binary, arg1: ExprId, arg2: ExprId
+        op: Binary, arg1: ExprId, arg2: ExprId
     ) -> ExprId {
         let mut vars = self.take_vars(arg1);
         vars.append(&mut self.take_vars(arg2));

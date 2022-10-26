@@ -11,7 +11,6 @@ pub struct Str(pub String);
 impl NamedType for Str { fn type_name() -> &'static str { "string" } }
 
 impl Operable for Str {
-    type Output = Object;
     unary_not_impl!{}
 
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {

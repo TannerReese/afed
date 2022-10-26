@@ -9,11 +9,10 @@ pub struct Null();
 impl NamedType for Null { fn type_name() -> &'static str { "null" }}
 
 impl Operable for Null {
-    type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
 
-    call_not_impl!{Self}
+    call_not_impl!{}
 }
 
 impl Display for Null {

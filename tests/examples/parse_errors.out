@@ -11,7 +11,7 @@
 },
 
 # Extra content in map or array
-{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = `{this is: "correct"}`,
+{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = `{"this is": "correct"}`,
 { "good", second: njd %% & 62 ] , third: "good"} = `{third: "good"}`,
 ["this", "next"  ( % ^&, "last"] = `["this", "last"]`,
 

@@ -9,8 +9,7 @@ use std::iter::zip;
 
 use super::vec::Vector;
 
-use crate::object::opers::{Unary, Binary};
-use crate::object::{Operable, Object, NamedType, EvalError};
+use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
 use crate::object::bltn_func::BltnFunc;
@@ -39,8 +38,7 @@ pub struct IntoVectors {
 
 
 impl Operable for Matrix {
-    type Output = Object;
-    fn unary(self, op: Unary) -> Option<Self::Output> { match op {
+    fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Neg => Some((-self).into()),
         _ => None,
     }}
@@ -123,7 +121,7 @@ impl Operable for Matrix {
 
     fn call(&self,
         attr: Option<&str>, mut args: Vec<Object>
-    ) -> Self::Output { match attr {
+    ) -> Object { match attr {
         None => {
             if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
                 if idx >= self.rows() { eval_err!(

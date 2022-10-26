@@ -4,8 +4,7 @@ use std::iter::zip;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::object::{
-    Object, Operable, NamedType,
-    opers::{Unary, Binary}
+    Object, Unary, Binary, Operable, NamedType,
 };
 use super::{ExprId, ArgId, ExprArena};
 
@@ -31,7 +30,6 @@ impl Func {
 }
 
 impl Operable for Func {
-    type Output = Object;
     unary_not_impl!();
     binary_not_impl!();
 
@@ -43,7 +41,7 @@ impl Operable for Func {
 
     fn call(&self,
         attr: Option<&str>, args: Vec<Object>
-    ) -> Self::Output { match attr {
+    ) -> Object { match attr {
         None => {
             self.arena.clear_cache();
             for (&id, obj) in zip(self.args.iter(), args.into_iter()) {

@@ -11,7 +11,6 @@ pub struct Array(pub Vec<Object>);
 impl NamedType for Array { fn type_name() -> &'static str { "array" } }
 
 impl Operable for Array {
-    type Output = Object;
     unary_not_impl!{}
 
     fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {

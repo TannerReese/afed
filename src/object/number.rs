@@ -5,9 +5,8 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::cmp::Ordering;
 
-use super::opers::{Unary, Binary};
+use super::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use super::bool::Bool;
-use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
@@ -17,7 +16,6 @@ pub enum Number {
 impl NamedType for Number { fn type_name() -> &'static str { "number" } }
 
 impl Operable for Number {
-    type Output = Object;
     fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Neg => Some((-self).into()),
         _ => None,
@@ -48,7 +46,103 @@ impl Operable for Number {
         }.into()
     }
 
-    call_not_impl!{Self}
+    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        Some("abs") | Some("signum") => Some(0),
+        Some("real") => Some(0),
+        Some("floor") | Some("ceil") | Some("round") => Some(0),
+
+        Some("sqrt") | Some("cbrt") => Some(0),
+
+        Some("sin")   | Some("cos")   | Some("tan")   => Some(0),
+        Some("asin")  | Some("acos")  | Some("atan")  => Some(0),
+        Some("sinh")  | Some("cosh")  | Some("tanh")  => Some(0),
+        Some("asinh") | Some("acosh") | Some("atanh") => Some(0),
+        Some("atan2") => Some(1),
+
+        Some("exp") | Some("exp2") => Some(0),
+        Some("ln") | Some("log10") | Some("log2") => Some(0),
+        Some("log") => Some(1),
+
+        Some("gcd") => Some(1),
+        Some("lcm") => Some(1),
+        Some("factorial") => Some(0),
+        Some("choose") => Some(1),
+        _ => None,
+    }}
+
+    fn call<'a>(&self,
+        attr: Option<&str>, mut args: Vec<Object>
+    ) -> Object { match attr {
+        Some("abs") => self.abs().into(),
+        Some("signum") => self.signum().into(),
+        Some("real") => self.to_real().into(),
+        Some("floor") => self.floor().into(),
+        Some("ceil") => self.ceil().into(),
+        Some("round") => self.round().into(),
+
+        Some("sqrt") => {
+            let r = self.to_real();
+            if r < 0.0 { eval_err!("Cannot take square root of negative") }
+            else { r.sqrt().into() }
+        },
+        Some("cbrt") => self.to_real().cbrt().into(),
+
+        Some("sin") => self.to_real().sin().into(),
+        Some("cos") => self.to_real().cos().into(),
+        Some("tan") => self.to_real().tan().into(),
+        Some("asin") => self.to_real().asin().into(),
+        Some("acos") => self.to_real().acos().into(),
+        Some("atan") => self.to_real().atan().into(),
+        Some("atan2") => {
+            let other = try_cast!(args.remove(0) => Number);
+            self.to_real().atan2(other.to_real()).into()
+        },
+
+        Some("sinh") => self.to_real().sinh().into(),
+        Some("cosh") => self.to_real().cosh().into(),
+        Some("tanh") => self.to_real().tanh().into(),
+        Some("asinh") => self.to_real().asinh().into(),
+        Some("acosh") => self.to_real().acosh().into(),
+        Some("atanh") => self.to_real().atanh().into(),
+
+        Some("exp") => self.to_real().exp().into(),
+        Some("exp2") => self.to_real().exp2().into(),
+        Some("ln") => self.to_real().ln().into(),
+        Some("log10") => self.to_real().log10().into(),
+        Some("log2") => self.to_real().log2().into(),
+        Some("log") => {
+            let other = try_cast!(args.remove(0) => Number);
+            other.to_real().log(self.to_real()).into()
+        },
+
+        Some("gcd") => {
+            let other = try_cast!(args.remove(0) => Number);
+            Number::gcd(*self, other).map_or(
+                eval_err!("Cannot take GCD of reals"),
+                &Object::new,
+            )
+        },
+        Some("lcm") => {
+            let other = try_cast!(args.remove(0) => Number);
+            Number::lcm(*self, other).map_or(
+                eval_err!("Cannot take LCM of reals"),
+                &Object::new,
+            )
+        },
+        Some("factorial") => self.factorial().map_or(
+            eval_err!("Can only take factorial of positive integer"),
+            &Object::new,
+        ),
+        Some("choose") => {
+            let other = try_cast!(args.remove(0) => Number);
+            Number::choose(*self, other).map_or(
+                eval_err!("Second argument to choose must be a positive integer"),
+                &Object::new,
+            )
+        },
+
+        _ => panic!(),
+    }}
 }
 
 
@@ -105,7 +199,64 @@ impl Number {
         },
         (num1, num2) => num1.to_real().div_euclid(num2.to_real()).into(),
     }}
+
+
+    pub fn abs(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(n.abs(), d),
+        Number::Real(r) => Number::Real(r.abs()),
+    }}
+
+    pub fn signum(self) -> Self { Number::Ratio(match self {
+        Number::Ratio(n, _) => n.signum(),
+        Number::Real(r) => r.signum() as i64
+    }, 1)}
+
+    pub fn floor(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(if n < 0 {
+            (n + 1) / d as i64 - 1
+        } else {
+            n / d as i64
+        }, 1),
+        Number::Real(r) => Number::Ratio(r.floor() as i64, 1),
+    }}
+
+    pub fn ceil(self) -> Self { -(-self).floor() }
+    pub fn round(self) -> Self { (self + Number::Ratio(1, 2)).floor() }
 }
+
+
+
+impl Number {
+    pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
+        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
+            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+            Number::Ratio(g as i64, da * db)
+        }.simplify()),
+        _ => None
+    }}
+
+    pub fn lcm(a: Self, b: Self) -> Option<Self> { match (a, b) {
+        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
+            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+            Number::Ratio(na * nb, g)
+        }.simplify()),
+        _ => None,
+    }}
+
+    pub fn factorial(self) -> Option<Self> {
+        Some(((1..self.as_index()? + 1).product::<usize>() as i64).into())
+    }
+
+    pub fn choose(n: Number, k: Number) -> Option<Self> {
+        let one = Number::Ratio(1, 1);
+        Some((0..k.as_index()?).map(|i| (i as i64).into())
+        .fold(one, |accum, i|
+            accum * (n - i) / (i + one)
+        ))
+    }
+}
+
+
 
 impl From<i64> for Number {
     fn from(n: i64) -> Self { Number::Ratio(n, 1) }

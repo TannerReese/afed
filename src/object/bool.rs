@@ -14,7 +14,6 @@ impl Bool {
 }
 
 impl Operable for Bool {
-    type Output = Object;
     fn unary(self, op: Unary) -> Option<Object> { match op {
         Unary::Not | Unary::Neg => Some(Bool::new(!self.0)),
     }}
@@ -39,7 +38,7 @@ impl Operable for Bool {
         })
     }
 
-    call_not_impl!{Self}
+    call_not_impl!{}
 }
 
 impl Display for Bool {
@@ -63,7 +62,6 @@ pub struct Ternary();
 impl NamedType for Ternary { fn type_name() -> &'static str { "ternary" } }
 
 impl Operable for Ternary {
-    type Output = Object;
     unary_not_impl!{}
     binary_not_impl!{}
 
@@ -72,7 +70,7 @@ impl Operable for Ternary {
         _ => None,
     }}
 
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Self::Output {
+    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         if attr.is_some() { panic!() }
         let Bool(cond) = try_cast!(args.remove(0));
         args.remove(if cond { 0 } else { 1 })

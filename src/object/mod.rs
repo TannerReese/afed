@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::hash::Hash;
 use std::borrow::Borrow;
 
-use opers::{Unary, Binary};
+pub use opers::{Unary, Binary, Assoc};
 use self::bool::Bool;
 
 macro_rules! eval_err {
@@ -45,8 +45,14 @@ macro_rules! obj_call {
     ($obj:ident ($($arg:expr),*) => $tp:ty) => {
         try_cast!($obj.call(None, vec![$($arg,)*]) => $tp)
     };
+    (($obj:expr).$method:ident ($($arg:expr),*)) => {
+        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]))
+    };
     ($obj:ident.$method:ident ($($arg:expr),*)) => {
-        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
+        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]))
+    };
+    (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) => {
+        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
     };
     ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) => {
         try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
@@ -55,27 +61,27 @@ macro_rules! obj_call {
 
 macro_rules! unary_not_impl {
     () => {
-        fn unary(self, _: Unary) -> Option<Self::Output> { None }
+        fn unary(self, _: Unary) -> Option<Object> { None }
     };
 }
 
 macro_rules! binary_not_impl {
     () => {
         fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
-        fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { panic!() }
+        fn binary(self, _: bool, _: Binary, _: Object) -> Object { panic!() }
     };
 }
 
 macro_rules! call_not_impl {
-    ($type:ty) => {
+    () => {
         fn arity(&self, _: Option<&str>) -> Option<usize> { None }
-        fn call(&self, _: Option<&str>, _: Vec<Object>) -> Self::Output {
+        fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
             eval_err!("Cannot call {}", Self::type_name())
         }
     };
 }
 
-pub mod opers;
+mod opers;
 pub mod null;
 pub mod bool;
 pub mod number;
@@ -86,14 +92,13 @@ pub mod curry;
 pub mod bltn_func;
 
 
-pub trait Operable<Rhs = Object, U = Unary, B = Binary> {
-    type Output;
-    fn unary(self, op: U) -> Option<Self::Output>;
-    fn try_binary(&self, rev: bool, op: B, other: &Rhs) -> bool;
-    fn binary(self, rev: bool, op: B, other: Rhs) -> Self::Output;
+pub trait Operable {
+    fn unary(self, op: Unary) -> Option<Object>;
+    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
+    fn binary(self, rev: bool, op: Binary, other: Object) -> Object;
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>;
-    fn call(&self, attr: Option<&str>, args: Vec<Rhs>) -> Self::Output;
+    fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
 pub trait NamedType : Any {
@@ -102,14 +107,12 @@ pub trait NamedType : Any {
 
 pub trait Objectish :
     Eq + Clone + Any + NamedType
-    + Debug + Display
-    + Operable<Output=Object>
+    + Debug + Display + Operable
 {}
 
 impl<T> Objectish for T where T:
     Eq + Clone + Any + NamedType
-    + Debug + Display
-    + Operable<Output=Object>
+    + Debug + Display + Operable
 {}
 
 fn as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
@@ -459,10 +462,9 @@ impl EvalError {
 }
 
 impl Operable for EvalError {
-    type Output = Object;
-    fn unary(self, _: Unary) -> Option<Self::Output> { Some(Object::new(self)) }
+    fn unary(self, _: Unary) -> Option<Object> { Some(Object::new(self)) }
     fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
-    fn binary(self, _: bool, _: Binary, _: Object) -> Self::Output { Object::new(self) }
+    fn binary(self, _: bool, _: Binary, _: Object) -> Object { Object::new(self) }
 
     fn arity(&self, _: Option<&str>) -> Option<usize> { Some(0) }
     fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
