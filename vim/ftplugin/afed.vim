@@ -11,9 +11,18 @@ function! AfedEval()
 	call setpos('.', curs)
 endfunction
 
+function! AfedClear()
+	let curs = getcurpos()
+	:%! afed -E -d -
+	call setpos('.', curs)
+endfunction
+
 " Shortcut to evaluate document
-nnoremap <buffer> ,e :call AfedEval()<CR>
+nnoremap <buffer> ,, :call AfedEval()<CR>
 
 " Check for errors in document
-nnoremap <buffer> ,r :w ! afed -C -<CR>
+nnoremap <buffer> ,. :w ! afed -C -<CR>
+
+" Clear all substitution expressions
+nnoremap <buffer> ,l :call AfedClear()<CR>
 

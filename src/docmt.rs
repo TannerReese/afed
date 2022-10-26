@@ -27,6 +27,7 @@ pub struct Docmt {
 
     arena: ExprArena,
     is_parsed: bool,
+    pub only_clear: bool,
     err_count: usize,
     substs: Vec<Subst>,
 }
@@ -40,7 +41,8 @@ impl Docmt {
         Docmt {
             len: src.len(), src,
             arena: ExprArena::new(),
-            is_parsed: false, err_count: 0,
+            is_parsed: false, only_clear: false,
+            err_count: 0,
             substs: Vec::new()
         }
     }
@@ -112,8 +114,13 @@ impl Display for Docmt {
         let mut last = 0;
         for Subst {start, end, value, ..} in self.substs.iter() {
             if last >= self.len { break; }
-
             f.write_str(&self.src[last..*start])?;
+
+            if self.only_clear {
+                last = *end;
+                continue;
+            }
+
             if let Some(obj) = value {
                 let sub = obj.to_string();
                 let sub = sub.chars().flat_map(|c|

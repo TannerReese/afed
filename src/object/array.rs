@@ -46,6 +46,8 @@ impl Operable for Array {
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
         Some("len") => Some(0),
+        Some("fst") => Some(0),
+        Some("snd") => Some(0),
         Some("map") => Some(1),
         Some("filter") => Some(1),
         Some("all") => Some(1),
@@ -67,6 +69,13 @@ impl Operable for Array {
         },
 
         Some("len") => self.0.len().into(),
+        Some("fst") => self.0.get(0).cloned().unwrap_or(
+            eval_err!("Array doesn't have a first element")
+        ),
+        Some("snd") => self.0.get(1).cloned().unwrap_or(
+            eval_err!("Array doesn't have a second element")
+        ),
+
         Some("map") => {
             let func = args.remove(0);
             self.0.iter().cloned().map(|elem|

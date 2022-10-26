@@ -77,6 +77,7 @@ impl PartialEq for Stream {
 
 
 struct Params {
+    clear: bool,
     input: Stream,
     output: Stream,
     errors: Stream,
@@ -95,6 +96,7 @@ const HELP_MSG: &str = concat!(
 	"  -i, --input INPUT       Input file to evaluate\n",
 	"  -o, --output OUTPUT     Output file to store result to\n",
 	"  -C, --check             Don't output file only check for errors\n",
+    "  -d, --clear             Clear the content of every substitution (eg. = ``)\n",
 	"  -n, --no-clobber        Make sure INFILE is not used as the output\n",
 	"  -e, --errors ERRORS     File to send errors to. Defaults to STDERR\n",
 	"  -E, --no-errors         Don't print any error messages\n",
@@ -109,6 +111,8 @@ const HELP_MSG: &str = concat!(
     "  afed -i file.af\n",
     "  # Read and Eval file.af, but don't output result\n",
     "  afed file.af -C\n",
+    "  # Parse and clear all \"= ``\" expressions\n",
+    "  afed file.af -d\n",
     "  # Read and Eval file.af and output to output.af\n",
     "  afed file.af -o output.af\n",
 );
@@ -116,10 +120,14 @@ const HELP_MSG: &str = concat!(
 impl Params {
     fn parse() -> Params {
         let (mut input, mut output, mut errors) = (None, None, None);
-        let (mut check, mut no_clobber, mut no_errors) = (false, false, false);
+        let (
+            mut check, mut clear,
+            mut no_clobber, mut no_errors,
+        ) = (false, false, false, false);
 
         let mut args = std::env::args();
         _ = args.next();
+
         while let Some(opt) = args.next() {
             match opt.as_str() {
                 "-i" | "--input" => if let Some(_) = input {
@@ -142,6 +150,7 @@ impl Params {
                 },
 
                 "-C" | "--check" => { check = true; },
+                "-d" | "--clear" => { clear = true; },
                 "-n" | "--no-clobber" => { no_clobber = true; },
 
                 "-e" | "--errors" => if let Some(_) = errors {
@@ -187,7 +196,7 @@ impl Params {
             exit(1);
         }
 
-        Params { input, output, errors }
+        Params { clear, input, output, errors }
     }
 }
 
@@ -197,6 +206,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     prms.input.to_reader().read_to_string(&mut prog)?;
 
     let mut doc = docmt::Docmt::new(prog);
+    doc.only_clear = prms.clear;
     let mut any_errors = false;
 
     let bltns = libs::make_bltns();
