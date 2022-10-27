@@ -40,16 +40,16 @@ macro_rules! try_ok {
 
 macro_rules! obj_call {
     ($obj:ident ($($arg:expr),*)) => {
-        try_cast!($obj.call(None, vec![$($arg,)*]))
+        $obj.call(None, vec![$($arg,)*])
     };
     ($obj:ident ($($arg:expr),*) => $tp:ty) => {
         try_cast!($obj.call(None, vec![$($arg,)*]) => $tp)
     };
     (($obj:expr).$method:ident ($($arg:expr),*)) => {
-        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]))
+        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
     };
     ($obj:ident.$method:ident ($($arg:expr),*)) => {
-        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]))
+        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
     };
     (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) => {
         try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
@@ -89,7 +89,6 @@ pub mod string;
 pub mod array;
 pub mod map;
 pub mod curry;
-pub mod bltn_func;
 
 
 pub trait Operable {

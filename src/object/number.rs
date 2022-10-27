@@ -47,6 +47,7 @@ impl Operable for Number {
     }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        Some("has_inv") | Some("inv") => Some(0),
         Some("abs") | Some("signum") => Some(0),
         Some("real") => Some(0),
         Some("floor") | Some("ceil") | Some("round") => Some(0),
@@ -73,6 +74,9 @@ impl Operable for Number {
     fn call<'a>(&self,
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
+        Some("has_inv") => (*self != Number::Ratio(0, 1)).into(),
+        Some("inv") => (Number::Ratio(1, 1) / *self).into(),
+
         Some("abs") => self.abs().into(),
         Some("signum") => self.signum().into(),
         Some("real") => self.to_real().into(),
@@ -262,6 +266,10 @@ impl From<i64> for Number {
     fn from(n: i64) -> Self { Number::Ratio(n, 1) }
 }
 
+impl From<i32> for Number {
+    fn from(n: i32) -> Self { Number::Ratio(n as i64, 1) }
+}
+
 impl From<usize> for Number {
     fn from(n: usize) -> Self { Number::Ratio(n as i64, 1) }
 }
@@ -276,6 +284,10 @@ impl From<Number> for Object {
 
 impl From<i64> for Object {
     fn from(n: i64) -> Self { Number::Ratio(n, 1).into() }
+}
+
+impl From<i32> for Object {
+    fn from(n: i32) -> Self { Number::Ratio(n as i64, 1).into() }
 }
 
 impl From<usize> for Object {

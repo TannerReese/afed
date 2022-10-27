@@ -6,12 +6,12 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::zip;
 
+use super::bltn_func::BltnFunc;
 use super::mat::Matrix;
 
 use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
-use crate::object::bltn_func::BltnFunc;
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {

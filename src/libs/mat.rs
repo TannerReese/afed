@@ -8,11 +8,12 @@ use std::ops::{Index, IndexMut};
 use std::iter::zip;
 
 use super::vec::Vector;
+use super::augmat::AugMatrix;
+use super::bltn_func::BltnFunc;
 
 use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
-use crate::object::bltn_func::BltnFunc;
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -27,7 +28,7 @@ macro_rules! check_dims {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matrix {
     dims: (usize, usize),
-    comps: Vec<Object>,
+    pub comps: Vec<Object>,
 }
 impl NamedType for Matrix { fn type_name() -> &'static str { "matrix" }}
 
@@ -116,6 +117,8 @@ impl Operable for Matrix {
         Some("row_vecs") => Some(0),
         Some("col_vecs") => Some(0),
         Some("trsp") => Some(0),
+        Some("inv") => Some(0),
+        Some("deter") => Some(0),
         _ => None,
     }}
 
@@ -146,6 +149,8 @@ impl Operable for Matrix {
             m.transpose();
             m.into()
         },
+        Some("inv") => self.clone().inverse(),
+        Some("deter") => self.clone().determinant(),
         _ => panic!(),
     }}
 }
@@ -182,6 +187,10 @@ impl Matrix {
             comps.push(gen(i, j))
         }}
         Matrix {dims: (rows, cols), comps}
+    }
+
+    pub fn identity(dims: usize) -> Self {
+        Self::build((dims, dims), |r, c| if r == c { 1 } else { 0 }.into())
     }
     
     pub fn rows(&self) -> usize { self.dims.0 }
@@ -227,6 +236,43 @@ impl Matrix {
     pub fn flrdiv_assign(&mut self, rhs: Object)
         { self.comps.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
     pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }
+
+
+    pub fn inverse(self) -> Object {
+        if self.dims.0 != self.dims.1 {
+            return eval_err!(concat!(
+                "Rows dimension {} and column dimension {} don't match.",
+                " Cannot take inverse"
+            ), self.dims.0, self.dims.1);
+        }
+
+        let rows = self.rows();
+        let ident = Self::identity(rows);
+        let mut augmat = AugMatrix::new(vec![self, ident]);
+        if let Err(err) = augmat.gauss_elim(0) { return err; }
+
+        if augmat.matrices[0] == Self::identity(rows) {
+            let inv = augmat.matrices.remove(1);
+            inv.into()
+        } else { eval_err!("Matrix is singular") }
+    }
+
+    pub fn determinant(self) -> Object {
+        if self.dims.0 != self.dims.1 {
+            return eval_err!(concat!(
+                "Rows dimension {} and column dimension {} don't match.",
+                " Cannot take inverse"
+            ), self.dims.0, self.dims.1);
+        }
+
+        let rows = self.rows();
+        let mut augmat = AugMatrix::new(vec![self]);
+        if let Err(err) = augmat.gauss_elim(0) { return err; }
+
+        if augmat.matrices[0] == Self::identity(rows) {
+            obj_call!((augmat.deter).inv())
+        } else { 0.into() }
+    }
 }
 
 impl Index<(usize, usize)> for Matrix {
@@ -393,11 +439,30 @@ impl From<Matrix> for Object {
 pub fn make_bltns() -> Object {
     let mut mat = HashMap::new();
     def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
+    def_bltn!(mat.zeroM(rows: Number, cols: Number) = {
+        match (rows.as_index(), cols.as_index()) {
+            (Some(rs), Some(cs)) => if rs > 0 && cs > 0 {
+                Matrix::build((rs, cs), |_, _| 0.into()).into()
+            } else { eval_err!("Matrix dimensions can't be zero") },
+            _ => eval_err!("Dimensions must be positive integers"),
+        }
+    });
+    def_bltn!(mat.identM(dims: Number) = match dims.as_index() {
+        None | Some(0) => eval_err!("Dimension must be a positive integer"),
+        Some(dims) => Matrix::identity(dims).into(),
+    });
+
     def_getter!(mat.rows);
     def_getter!(mat.cols);
     def_getter!(mat.row_vecs);
     def_getter!(mat.col_vecs);
-    def_getter!(mat.trsp);
+    def_getter!(mat.inv);
+
+    def_bltn!(mat.trsp(m: Matrix) = {
+        let mut m = m;
+        m.transpose(); m.into()
+    });
+    def_bltn!(mat.deter(m: Matrix) = m.determinant());
     mat.into()
 }
 

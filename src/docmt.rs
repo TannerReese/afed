@@ -514,11 +514,13 @@ impl<'a, 'b, W> Parser<'a, 'b, W> where W: Write {
             }
 
             self.skip();
-            let c = self.pos.peek();
-            if !has_err && c != Some(',') && c != Some('}') {
-                self.print_err(parse_err!(self, "Ill formed map member"));
-                has_err = true;
-            }
+            if !has_err { match self.pos.peek() {
+                None | Some(',') | Some('}') => {},
+                _ => {
+                    self.print_err(parse_err!(self, "Ill formed map member"));
+                    has_err = true;
+                },
+            }}
 
             if has_err {
                 self.pos = before;

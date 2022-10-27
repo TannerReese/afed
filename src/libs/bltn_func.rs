@@ -1,8 +1,7 @@
 use std::vec::Vec;
 use std::fmt::{Debug, Display, Formatter, Error};
 
-use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType};
+use crate::object::{Operable, Object, Unary, Binary, NamedType};
 
 #[derive(Clone, Copy)]
 pub struct BltnFunc<const N: usize> {
@@ -36,7 +35,7 @@ impl<const N: usize> Operable for BltnFunc<N> {
         None => (self.ptr)(args.try_into().expect(
             "Incorrect number of arguments given"
         )),
-        Some("arity") => (N as i64).into(),
+        Some("arity") => N.into(),
         _ => panic!(),
     }}
 }

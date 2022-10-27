@@ -25,6 +25,16 @@ V[8, -9, 3] * m2 * m1 = ``,
 m1.rows = ``, m1.cols = ``,
 m3.row_vecs = ``, m4.col_vecs = ``,
 m1.trsp = ``,
+m2.inv = ``,
+
+# Matrix functions
+rows m1 = ``, cols m2 = ``,
+row_vecs m4 = ``, col_vecs m3 = ``,
+trsp m1 = ``,
+inv m5 = ``,
+
+identM 3 = ``,
+zeroM 2 3 = ``,
 
 # Dimension mismatch errors
 M[1, 2, 3] = ``,

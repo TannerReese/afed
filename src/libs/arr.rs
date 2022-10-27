@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
+use super::bltn_func::BltnFunc;
+
 use crate::object::{Object, EvalError};
 use crate::object::bool::Bool;
 use crate::object::number::Number;
 use crate::object::array::Array;
-use crate::object::bltn_func::BltnFunc;
 
 pub fn range(mut start: Number, end: Number, step: Number) -> Object {
-    let zero = (0 as i64).into();
+    let zero = 0.into();
     if step == zero {
         return eval_err!("Cannot have a step of zero")
     }
@@ -20,7 +21,7 @@ pub fn range(mut start: Number, end: Number, step: Number) -> Object {
     }
 
     let mut elems = Vec::new();
-    let is_desc = (if is_desc { -1 } else { 1 } as i64).into();
+    let is_desc = if is_desc { -1 } else { 1 }.into();
     while (end - start) * is_desc >= zero {
         elems.push(start.into());
         start += step;

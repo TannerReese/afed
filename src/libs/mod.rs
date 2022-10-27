@@ -58,10 +58,13 @@ macro_rules! def_getter {
     };
 }
 
+pub mod bltn_func;
+
 pub mod num;
 pub mod arr;
 pub mod vec;
 pub mod mat;
+mod augmat;
 
 pub fn make_bltns() -> HashMap<String, Object> {[
     ("num", num::make_bltns()),

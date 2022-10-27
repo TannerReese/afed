@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
+use super::bltn_func::BltnFunc;
+
 use crate::object::Object;
 use crate::object::number::Number;
-use crate::object::bltn_func::BltnFunc;
 
 pub fn make_bltns() -> Object {
     let mut num = HashMap::new();
