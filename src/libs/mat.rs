@@ -1,7 +1,8 @@
 use std::mem::swap;
 use std::vec::{Vec, IntoIter};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Error, Write};
+use std::fmt::{Debug, Display, Formatter, Error, Write};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::ops::{Index, IndexMut};
@@ -25,10 +26,10 @@ macro_rules! check_dims {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Matrix {
     dims: (usize, usize),
     pub comps: Vec<Object>,
+    deter: Cell<Option<Object>>,
 }
 impl NamedType for Matrix { fn type_name() -> &'static str { "matrix" }}
 
@@ -149,8 +150,16 @@ impl Operable for Matrix {
             m.transpose();
             m.into()
         },
-        Some("inv") => self.clone().inverse(),
-        Some("deter") => self.clone().determinant(),
+        Some("inv") => {
+            let (inv, det) = self.clone().inverse();
+            if let Some(det) = det { self.deter.set(Some(det)); }
+            inv
+        },
+        Some("deter") => {
+            let det = self.clone().determinant();
+            self.deter.set(Some(det.clone()));
+            det
+        },
         _ => panic!(),
     }}
 }
@@ -169,7 +178,10 @@ impl Matrix {
         }
         
         let comps = rows.into_iter().flatten().collect();
-        Matrix {dims: (row_dim, col_dim), comps}.into()
+        Matrix {
+            dims: (row_dim, col_dim), comps,
+            deter: Cell::new(None),
+        }.into()
     }
     
     pub fn from_array(arr: Array) -> Object {
@@ -186,11 +198,15 @@ impl Matrix {
         for i in 0..rows { for j in 0..cols {
             comps.push(gen(i, j))
         }}
-        Matrix {dims: (rows, cols), comps}
+        Matrix {dims: (rows, cols), comps, deter: Cell::new(None)}
     }
 
     pub fn identity(dims: usize) -> Self {
-        Self::build((dims, dims), |r, c| if r == c { 1 } else { 0 }.into())
+        let ident = Self::build((dims, dims), |r, c|
+            if r == c { 1 } else { 0 }.into()
+        );
+        ident.deter.set(Some(1.into()));
+        ident
     }
     
     pub fn rows(&self) -> usize { self.dims.0 }
@@ -238,26 +254,30 @@ impl Matrix {
     pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }
 
 
-    pub fn inverse(self) -> Object {
+    pub fn inverse(self) -> (Object, Option<Object>) {
         if self.dims.0 != self.dims.1 {
-            return eval_err!(concat!(
+            return (eval_err!(concat!(
                 "Rows dimension {} and column dimension {} don't match.",
                 " Cannot take inverse"
-            ), self.dims.0, self.dims.1);
+            ), self.dims.0, self.dims.1), None);
         }
 
         let rows = self.rows();
         let ident = Self::identity(rows);
         let mut augmat = AugMatrix::new(vec![self, ident]);
-        if let Err(err) = augmat.gauss_elim(0) { return err; }
+        if let Err(err) = augmat.gauss_elim(0) { return (err, None); }
 
         if augmat.matrices[0] == Self::identity(rows) {
             let inv = augmat.matrices.remove(1);
-            inv.into()
-        } else { eval_err!("Matrix is singular") }
+            let det = obj_call!((augmat.deter).inv());
+            inv.deter.set(Some(augmat.deter));
+            (inv.into(), Some(det))
+        } else { (eval_err!("Matrix is singular"), None) }
     }
 
     pub fn determinant(self) -> Object {
+        if let Some(deter) = self.deter.take() { return deter }
+
         if self.dims.0 != self.dims.1 {
             return eval_err!(concat!(
                 "Rows dimension {} and column dimension {} don't match.",
@@ -274,6 +294,29 @@ impl Matrix {
         } else { 0.into() }
     }
 }
+
+impl Debug for Matrix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "Matrix {{ dims: {:?}, comps: {:?} }}", self.dims, self.comps)
+    }
+}
+
+impl Clone for Matrix {
+    fn clone(&self) -> Self {
+        let old_det = self.deter.take();
+        let deter = Cell::new(old_det.clone());
+        self.deter.set(old_det);
+        Matrix { dims: self.dims, comps: self.comps.clone(), deter }
+    }
+}
+
+impl PartialEq for Matrix {
+    fn eq(&self, other: &Self) -> bool {
+        self.dims == other.dims && self.comps == other.comps
+    }
+}
+
+impl Eq for Matrix {}
 
 impl Index<(usize, usize)> for Matrix {
     type Output = Object;
@@ -456,12 +499,12 @@ pub fn make_bltns() -> Object {
     def_getter!(mat.cols);
     def_getter!(mat.row_vecs);
     def_getter!(mat.col_vecs);
-    def_getter!(mat.inv);
 
     def_bltn!(mat.trsp(m: Matrix) = {
         let mut m = m;
         m.transpose(); m.into()
     });
+    def_bltn!(mat.inv(m: Matrix) = m.inverse().0);
     def_bltn!(mat.deter(m: Matrix) = m.determinant());
     mat.into()
 }
