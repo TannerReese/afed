@@ -17,10 +17,16 @@ macro_rules! def_bltn {
         }
     };
 
-    ($pkg:ident.$func:ident ($($arg:ident : $tp:ty),+) = $body:expr) => {
+    ($pkg:ident.$func:ident($($arg:ident : $tp:ty),+) = $body:expr) => {
+        def_bltn!($pkg(stringify!($pkg)).$func($($arg : $tp),+) = $body)
+    };
+
+    ($pkg:ident($pkg_name:expr).$func:ident (
+        $($arg:ident : $tp:ty),+
+    ) = $body:expr) => {
         if $pkg.insert(stringify!($func).to_owned(),
         BltnFunc::new(
-            concat!(stringify!($pkg), '.', stringify!($func)),
+            concat!($pkg_name, '.', stringify!($func)),
             {
                 fn unwrap(
                     arr: [Object; count_tt!($($arg)+)]
@@ -62,6 +68,7 @@ pub mod bltn_func;
 
 pub mod num;
 pub mod arr;
+pub mod modulo;
 pub mod vec;
 pub mod mat;
 mod augmat;
@@ -69,6 +76,7 @@ mod augmat;
 pub fn make_bltns() -> HashMap<String, Object> {[
     ("num", num::make_bltns()),
     ("arr", arr::make_bltns()),
+    ("mod", modulo::make_bltns()),
     ("vec", vec::make_bltns()),
     ("mat", mat::make_bltns()),
 ].map(|(key, obj)| (key.to_owned(), obj)).into()}

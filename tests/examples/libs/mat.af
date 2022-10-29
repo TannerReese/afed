@@ -6,6 +6,17 @@ m3: mat.M[[8, 4, -5 / 7], [12, 67 / 10, 4], [0, 17, 0]],
 m4: M[[10, 9 /2], [15 / 13, -7/8]],
 m5: M[[-1, 11], [4/5, -13]],
 
+# Dimension mismatch errors
+M[1, 2, 3] = ``,
+M[[0], [1, 2]] = ``,
+m3 + m4 = ``,
+m4 * m1 = ``,
+m2 * m5 = ``,
+
+# Matrix Unimplemented operations
+m2 / m3 = ``,
+4 % m3 = ``,
+
 # Linear operations
 -m2 + 3 * m3 = ``,
 2.1 * m4 - m5 / 7 = ``,
@@ -26,24 +37,15 @@ m1.rows = ``, m1.cols = ``,
 m3.row_vecs = ``, m4.col_vecs = ``,
 m1.trsp = ``,
 m2.inv = ``,
+m2.deter = ``,
 
 # Matrix functions
 rows m1 = ``, cols m2 = ``,
 row_vecs m4 = ``, col_vecs m3 = ``,
 trsp m1 = ``,
 inv m5 = ``,
+deter m5 = ``,
 
 identM 3 = ``,
 zeroM 2 3 = ``,
-
-# Dimension mismatch errors
-M[1, 2, 3] = ``,
-M[[0], [1, 2]] = ``,
-m3 + m4 = ``,
-m4 * m1 = ``,
-m2 * m5 = ``,
-
-# Matrix Unimplemented operations
-m2 / m3 = ``,
-4 % m3 = ``,
 

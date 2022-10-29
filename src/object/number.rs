@@ -47,6 +47,7 @@ impl Operable for Number {
     }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
+        Some("numer") | Some("denom") => Some(0),
         Some("has_inv") | Some("inv") => Some(0),
         Some("abs") | Some("signum") => Some(0),
         Some("real") => Some(0),
@@ -74,6 +75,15 @@ impl Operable for Number {
     fn call<'a>(&self,
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
+        Some("numer") => match self {
+            &Number::Ratio(n, _) => n.into(),
+            Number::Real(_) => eval_err!("Real number has no numerator"),
+        },
+        Some("denom") => match self {
+            &Number::Ratio(_, d) => (d as i64).into(),
+            Number::Real(_) => eval_err!("Real number has no denominator"),
+        },
+
         Some("has_inv") => (*self != Number::Ratio(0, 1)).into(),
         Some("inv") => (Number::Ratio(1, 1) / *self).into(),
 
@@ -305,7 +315,9 @@ impl PartialEq for Number {
                 n1 * d2 as i64 == n2 * d1 as i64
             },
             (num1, num2) => {
-                (num1.to_real() - num2.to_real()).abs() < 1e-10
+                let (r1, r2) = (num1.to_real(), num2.to_real());
+                if r1.is_infinite() && r2.is_infinite() { true }
+                else { (r1 - r2).abs() < 1e-10 }
             },
         }
     }

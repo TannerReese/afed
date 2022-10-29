@@ -1,8 +1,8 @@
-line 40, column 14 Eval Error: Expected array, but found number
-line 41, column 18 Eval Error: Matrix cannot have jagged rows
-line 42, column 11 Eval Error: Matrix dimensions (3, 3) and (2, 2) do not match
-line 43, column 11 Eval Error: For matrix multiplication, 2 and 3 do not match
-line 44, column 11 Eval Error: For matrix multiplication, 3 and 2 do not match
-line 47, column 11 Eval Error: Binary operator / not implemented between types matrix and matrix
-line 48, column 10 Eval Error: Binary operator % not implemented between types number and matrix
+line 10, column 14 Eval Error: Expected array, but found number
+line 11, column 18 Eval Error: Matrix cannot have jagged rows
+line 12, column 11 Eval Error: Matrix dimensions (3, 3) and (2, 2) do not match
+line 13, column 11 Eval Error: For matrix multiplication, 2 and 3 do not match
+line 14, column 11 Eval Error: For matrix multiplication, 3 and 2 do not match
+line 17, column 11 Eval Error: Binary operator / not implemented between types matrix and matrix
+line 18, column 10 Eval Error: Binary operator % not implemented between types number and matrix
 7 Eval Errors encountered

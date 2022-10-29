@@ -44,7 +44,7 @@ impl Operable for Matrix {
         Unary::Neg => Some((-self).into()),
         _ => None,
     }}
-    
+
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Add | Binary::Sub => other.is_a::<Matrix>(),
         Binary::Mul => true,
@@ -53,12 +53,12 @@ impl Operable for Matrix {
         },
         _ => false,
     }}
-    
+
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         if other.is_a::<Matrix>() {
             let (mut m1, mut m2) = (self, try_cast!(other => Matrix));
             if rev { swap(&mut m1, &mut m2); }
-            
+
             match op {
                 Binary::Add => if m1.dims == m2.dims {
                     (m1 + m2).into()
@@ -109,8 +109,8 @@ impl Operable for Matrix {
             _ => panic!(),
         }}
     }
-    
-    
+
+
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
         Some("rows") => Some(0),
@@ -171,19 +171,19 @@ impl Matrix {
         if row_dim == 0 {
             return eval_err!("Matrix cannot be zero-dimensional");
         }
-        
+
         let col_dim = rows[0].len();
         if rows.iter().any(|r| r.len() != col_dim) {
             return eval_err!("Matrix cannot have jagged rows");
         }
-        
+
         let comps = rows.into_iter().flatten().collect();
         Matrix {
             dims: (row_dim, col_dim), comps,
             deter: Cell::new(None),
         }.into()
     }
-    
+
     pub fn from_array(arr: Array) -> Object {
         let mut comps = Vec::new();
         for row in arr.0.into_iter() {
@@ -191,7 +191,7 @@ impl Matrix {
         }
         Matrix::new(comps)
     }
-    
+
     pub fn build<F>((rows, cols): (usize, usize), mut gen: F) -> Self
     where F: FnMut(usize, usize) -> Object {
         let mut comps = Vec::new();
@@ -208,10 +208,10 @@ impl Matrix {
         ident.deter.set(Some(1.into()));
         ident
     }
-    
+
     pub fn rows(&self) -> usize { self.dims.0 }
     pub fn columns(&self) -> usize { self.dims.1 }
-    
+
     pub fn transpose(&mut self){
         let (rows, cols) = self.dims;
         let comps = &mut self.comps;
@@ -219,14 +219,14 @@ impl Matrix {
             let (j, i) = (idx / rows, idx % rows);
             j + i * cols
         };
-        
+
         let mut visited = Vec::with_capacity(rows * cols);
         visited.resize(rows * cols, false);
         for i in 0..rows { for j in 0..cols {
             let start = j + i * cols;
             if visited[start] { continue }
             visited[start] = true;
-            
+
             let mut loc = start;
             loop {
                 let prev_loc = prev(loc);
@@ -238,17 +238,17 @@ impl Matrix {
         }}
         self.dims = (self.dims.1, self.dims.0);
     }
-    
+
     pub fn into_rows(self) -> IntoVectors {
         IntoVectors {dims: self.columns(), comps: self.comps.into_iter()}
     }
-    
+
     pub fn into_columns(mut self) -> IntoVectors {
         self.transpose();
         self.into_rows()
     }
-    
-    
+
+
     pub fn flrdiv_assign(&mut self, rhs: Object)
         { self.comps.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
     pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }

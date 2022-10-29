@@ -1,0 +1,22 @@
+# Test modular arithmetic
+
+# Erroneous cases
+Mod 0 = ``,
+(3 * Mod 13) ^ (4 / 3) = ``,
+
+# Standard Arithmetic
+43 * (mod.Mod 91 / 43) = ``,
+8 + 4 * Mod 7 - 10 = ``,
+(101 * Mod 1427) ^ 72 = ``,
+-(5 * Mod 7) = ``,
+
+# Reduction of modulo cases
+Mod 15 / 3 = ``,
+Mod 4 + Mod 7 = ``,
+a: Mod (2^4 * 3^3 * 13) / 42 = ``,
+a * 42 = ``,
+
+# Modular Methods
+(mod.Mod 67 / 3).resid = ``,
+(Mod 30 + Mod 21).modulo = ``,
+

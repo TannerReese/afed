@@ -1,0 +1,22 @@
+# Test modular arithmetic
+
+# Erroneous cases
+Mod 0 = `Eval Error: Modulo can't be zero`,
+(3 * Mod 13) ^ (4 / 3) = `Eval Error: Exponent of modulo must be an integer`,
+
+# Standard Arithmetic
+43 * (mod.Mod 91 / 43) = `1 (mod 91)`,
+8 + 4 * Mod 7 - 10 = `2 (mod 7)`,
+(101 * Mod 1427) ^ 72 = `1301 (mod 1427)`,
+-(5 * Mod 7) = `2 (mod 7)`,
+
+# Reduction of modulo cases
+Mod 15 / 3 = `2 (mod 5)`,
+Mod 4 + Mod 7 = `0 (mod 1)`,
+a: Mod (2^4 * 3^3 * 13) / 42 = `9 (mod 13)`,
+a * 42 = `1 (mod 13)`,
+
+# Modular Methods
+(mod.Mod 67 / 3).resid = `45`,
+(Mod 30 + Mod 21).modulo = `3`,
+

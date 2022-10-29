@@ -115,11 +115,10 @@ impl<T> Objectish for T where T:
 {}
 
 fn as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
-fn as_any_mut<T>(x: &mut T) -> &mut dyn Any where T: Objectish { x }
 
 trait ObjectishSafe {
     fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn as_any_opt(&mut self) -> &mut dyn Any;
     fn type_name_dyn(&self) -> &'static str;
 
     fn clone(&self) -> Object;
@@ -137,11 +136,10 @@ trait ObjectishSafe {
 
 fn to_obj<T>(obj: &mut Option<T>) -> T { std::mem::take(obj).unwrap() }
 fn to_ref<T>(obj: &Option<T>) -> &T { obj.as_ref().unwrap() }
-fn to_mut<T>(obj: &mut Option<T>) -> &mut T { obj.as_mut().unwrap() }
 
 impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
     fn as_any(&self) -> &dyn Any { as_any(to_ref(self)) }
-    fn as_any_mut(&mut self) -> &mut dyn Any { as_any_mut(to_mut(self)) }
+    fn as_any_opt(&mut self) -> &mut dyn Any { self }
     fn type_name_dyn(&self) -> &'static str { T::type_name() }
 
     fn clone(&self) -> Object { Object::new(to_ref(self).clone()) }
@@ -221,12 +219,13 @@ pub trait CastObject: Sized {
     fn cast(obj: Object) -> Result<Self, Object>;
 }
 
-impl<T> CastObject for T where T: NamedType + Sized {
-    fn cast(obj: Object) -> Result<Self, Object> {
+impl<T> CastObject for T where T: NamedType + Sized + Debug {
+    fn cast(mut obj: Object) -> Result<Self, Object> {
         let given_type = (*obj.0).type_name_dyn();
-        let box_any = unsafe { Box::from_raw(Box::leak(obj.0).as_any_mut()) };
-        if let Ok(obj_box) = box_any.downcast() { Ok(*obj_box) }
-        else { Err(eval_err!(
+        let any_ref = (*obj.0).as_any_opt();
+        if let Some(opt) = any_ref.downcast_mut::<Option<T>>() {
+            Ok(std::mem::take(opt).unwrap())
+        } else { Err(eval_err!(
             "Expected {}, but found {}", T::type_name(), given_type
         ))}
     }
