@@ -19,8 +19,16 @@ arr + ["Hell"] + arr = `[1, 2, 3, "Hell", 1, 2, 3]`,
 [0] * [9, 3] = `Eval Error: Binary operator * not implemented between types array and array`,
 [2, 3] % 8 = `Eval Error: Binary operator % not implemented between types array and number`,
 
+# Not a method
+arr.njfd = `Eval Error: Cannot call method njfd on type array`,
+
+# Array method errors
+(b + ["Hello"]).min = `Eval Error: Cannot compare all elements in array`,
+
 # Array methods
 arr2.len = `6`,
+arr2.fst = `8`, arr2.snd = `-1`,
+arr2.last = `3`,
 arr2: [8, -1, 2, 0, -7, 3],
 arr2.sum = `5`,
 
@@ -33,6 +41,8 @@ arr2.any \x: x^2 > 50 = `true`,
 arr2.all \x: x > 0 = `false`,
 pos.has 2 = `true`,
 
-# Not a method
-arr.njfd = `Eval Error: Cannot call method njfd on type array`,
+b.max = `13 / 4`, b.min = `-2.3`,
+b.rev = `[13 / 4, -2.3, 2, 1]`,
+b: [1, 2, -2.3, 13/4],
+b.fold 1 \acc t: (acc + t) / 2 = `1.425`,
 

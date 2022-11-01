@@ -19,8 +19,16 @@ arr + ["Hell"] + arr = ``,
 [0] * [9, 3] = ``,
 [2, 3] % 8 = ``,
 
+# Not a method
+arr.njfd = ``,
+
+# Array method errors
+(b + ["Hello"]).min = ``,
+
 # Array methods
 arr2.len = ``,
+arr2.fst = ``, arr2.snd = ``,
+arr2.last = ``,
 arr2: [8, -1, 2, 0, -7, 3],
 arr2.sum = ``,
 
@@ -33,6 +41,8 @@ arr2.any \x: x^2 > 50 = ``,
 arr2.all \x: x > 0 = ``,
 pos.has 2 = ``,
 
-# Not a method
-arr.njfd = ``,
+b.max = ``, b.min = ``,
+b.rev = ``,
+b: [1, 2, -2.3, 13/4],
+b.fold 1 \acc t: (acc + t) / 2 = ``,
 

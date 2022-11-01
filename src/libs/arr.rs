@@ -66,27 +66,38 @@ pub fn make_bltns() -> Object {
     def_bltn!(arr.iter_while(init: Object, pred: Object, f: Object) =
         iter_while(init, pred, f));
 
-    def_bltn!(arr.fst(arr: Array) = {
-        let mut arr = arr;
-        if arr.0.len() >= 1 { arr.0.remove(0) } else {
+    def_bltn!(arr.fst(vc: Vec<Object>) = {
+        let mut vc = vc;
+        if vc.len() >= 1 { vc.remove(0) } else {
             eval_err!("Array does not have a first element")
         }
     });
-    def_bltn!(arr.snd(arr: Array) = {
-        let mut arr = arr;
-        if arr.0.len() >= 2 { arr.0.remove(1) } else {
+    def_bltn!(arr.snd(vc: Vec<Object>) = {
+        let mut vc = vc;
+        if vc.len() >= 2 { vc.remove(1) } else {
             eval_err!("Array does not have a second element")
         }
     });
+   def_bltn!(arr.last(vc: Vec<Object>) = {
+        let mut vc = vc;
+        if let Some(elem) = vc.pop() { elem } else {
+            eval_err!("Array does not have a last element")
+        }
+    });
+
 
     def_getter!(arr.len);
     def_getter!(arr.sum);
     def_getter!(arr.prod);
+    def_getter!(arr.max);
+    def_getter!(arr.min);
+    def_getter!(arr.rev);
 
     def_bltn!(arr.map(f: Object, obj: Object) = obj_call!(obj.map(f)));
     def_bltn!(arr.filter(f: Object, obj: Object) = obj_call!(obj.filter(f)));
-    def_bltn!(arr.all(f: Object, obj: Object) = obj_call!(obj.all(f)));
-    def_bltn!(arr.any(f: Object, obj: Object) = obj_call!(obj.any(f)));
+    def_bltn!(arr.fold(init: Object, f: Object, a: Array) = a.fold(init, f));
+    def_bltn!(arr.all(f: Object, a: Array) = a.all(f));
+    def_bltn!(arr.any(f: Object, a: Array) = a.any(f));
     def_bltn!(arr.has(elm: Object, obj: Object) = obj_call!(obj.has(elm)));
     arr.into()
 }

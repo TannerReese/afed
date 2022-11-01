@@ -8,7 +8,6 @@ use super::{
     Operable, Object, CastObject,
     NamedType, EvalError,
 };
-use super::bool::Bool;
 use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,13 +45,16 @@ impl Operable for Array {
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
         Some("len") => Some(0),
-        Some("fst") | Some("snd") => Some(0),
+        Some("fst") | Some("snd") | Some("last") => Some(0),
         Some("map") => Some(1),
         Some("filter") => Some(1),
+        Some("fold") => Some(2),
         Some("all") | Some("any") => Some(1),
         Some("has") => Some(1),
 
         Some("sum") | Some("prod") => Some(0),
+        Some("min") | Some("max") => Some(0),
+        Some("rev") => Some(0),
         _ => None,
     }}
 
@@ -72,6 +74,9 @@ impl Operable for Array {
         Some("snd") => self.0.get(1).cloned().unwrap_or(
             eval_err!("Array doesn't have a second element")
         ),
+        Some("last") => self.0.last().cloned().unwrap_or(
+            eval_err!("Array doesn't have a last element")
+        ),
 
         Some("map") => {
             let func = args.remove(0);
@@ -83,15 +88,20 @@ impl Operable for Array {
             let pred = args.remove(0);
             let mut new_arr = Vec::with_capacity(self.0.len());
             for elem in self.0.iter() {
-                if obj_call!(pred(elem.clone()) => Bool).0 {
+                if obj_call!(pred(elem.clone()) => bool) {
                     new_arr.push(elem.clone());
                 }
             }
             Array(new_arr).into()
         },
+        Some("fold") => {
+            let init = args.remove(0);
+            let func = args.remove(0);
+            self.clone().fold(init, func)
+        },
 
-        Some("all") => self.all(args.remove(0)),
-        Some("any") => self.any(args.remove(0)),
+        Some("all") => self.clone().all(args.remove(0)),
+        Some("any") => self.clone().any(args.remove(0)),
         Some("has") => {
             let target = args.remove(0);
             self.0.contains(&target).into()
@@ -99,15 +109,25 @@ impl Operable for Array {
 
         Some("sum") => self.0.iter().cloned().sum(),
         Some("prod") => self.0.iter().cloned().product(),
+        Some("max") => self.extreme(Ordering::Greater),
+        Some("min") => self.extreme(Ordering::Less),
+        Some("rev") => self.0.iter().cloned().rev().collect(),
         _ => panic!(),
     }}
 }
 
 impl Array {
-    fn all(&self, pred: Object) -> Object {
+    pub fn fold(self, mut work: Object, func: Object) -> Object {
+        for elem in self.0.into_iter() {
+            work = obj_call!(func(work, elem));
+        }
+        work
+    }
+
+    pub fn all(self, pred: Object) -> Object {
         let mut is_all = true;
-        for elem in self.0.iter() {
-            if !obj_call!(pred(elem.clone()) => Bool).0 {
+        for elem in self.0.into_iter() {
+            if !obj_call!(pred(elem) => bool) {
                 is_all = false;
                 break;
             }
@@ -115,15 +135,29 @@ impl Array {
         is_all.into()
     }
 
-    fn any(&self, pred: Object) -> Object {
+    pub fn any(self, pred: Object) -> Object {
         let mut is_any = false;
-        for elem in self.0.iter() {
-            if obj_call!(pred(elem.clone()) => Bool).0 {
+        for elem in self.0.into_iter() {
+            if obj_call!(pred(elem) => bool) {
                 is_any = true;
                 break;
             }
         }
         is_any.into()
+    }
+
+    fn extreme(&self, direc: Ordering) -> Object {
+        if self.0.len() == 0 { return eval_err!(
+            "Empty array has no maximum or minimum"
+        )}
+
+        let mut ext_obj = &self.0[0];
+        for obj in self.0[1..].iter() {
+            if let Some(ord) = obj.partial_cmp(ext_obj) {
+                if ord == direc { ext_obj = obj; }
+            } else { return eval_err!("Cannot compare all elements in array") }
+        }
+        ext_obj.clone()
     }
 }
 

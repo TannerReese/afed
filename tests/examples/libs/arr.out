@@ -10,6 +10,7 @@ map arr.snd $ iter_while [1, 1] (\pr: pr 1 < 200) \pr: [1 + pr 0, pr 0 * pr 1] =
 
 # Test getters
 len (a: [1, -2, 3, 9.3]) = `4`,
+last a = `9.3`,
 sum a = `11.3`,
 prod a = `-55.800000000000004`,
 arr.map (num.sqrt) [1, 2, 3, 4, 4/5] = `[1, 1.4142135623730951, 1.7320508075688772, 2, 0.8944271909999159]`,
@@ -18,6 +19,12 @@ filter (\x: x > 0) [1, 2, -9, 3, -8.4, -2 /13, 3/4] = `[1, 2, 3, 3 / 4]`,
 any (\x: len x > 3) $ (b: [[1, 2], [2, 3], [7, 8.4, -3]]) = `false`,
 all (\x: sum x > 0) b = `true`,
 arr.has [2, 3] b = `true`,
+
+max c = `3.56`,
+min c = `-3 / 4`,
+rev c = `[-3 / 4, 3.56, 2, 1]`,
+c: [1, 2, 3.56, -3/4],
+fold 0 (\acc y: (acc + y) / (1 - acc * y)) c = `-0.6776859504132231`,
 
 # Compound operation
 filter (\x: x > 0) $ map (\x: 7*x - x^2 / 2) $ arr.range 3 97
