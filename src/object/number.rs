@@ -5,7 +5,11 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::cmp::Ordering;
 
-use super::{Operable, Object, Unary, Binary, NamedType, EvalError};
+use super::{
+    Operable, Object, CastObject,
+    Unary, Binary,
+    NamedType, EvalError,
+};
 use super::bool::Bool;
 
 #[derive(Debug, Clone, Copy)]
@@ -89,66 +93,66 @@ impl Operable for Number {
 
         Some("abs") => self.abs().into(),
         Some("signum") => self.signum().into(),
-        Some("real") => self.to_real().into(),
+        Some("real") => f64::from(self).into(),
         Some("floor") => self.floor().into(),
         Some("ceil") => self.ceil().into(),
         Some("round") => self.round().into(),
 
         Some("sqrt") => {
-            let r = self.to_real();
+            let r = f64::from(self);
             if r < 0.0 { eval_err!("Cannot take square root of negative") }
             else { r.sqrt().into() }
         },
-        Some("cbrt") => self.to_real().cbrt().into(),
+        Some("cbrt") => f64::from(self).cbrt().into(),
 
-        Some("sin") => self.to_real().sin().into(),
-        Some("cos") => self.to_real().cos().into(),
-        Some("tan") => self.to_real().tan().into(),
-        Some("asin") => self.to_real().asin().into(),
-        Some("acos") => self.to_real().acos().into(),
-        Some("atan") => self.to_real().atan().into(),
+        Some("sin") => f64::from(self).sin().into(),
+        Some("cos") => f64::from(self).cos().into(),
+        Some("tan") => f64::from(self).tan().into(),
+        Some("asin") => f64::from(self).asin().into(),
+        Some("acos") => f64::from(self).acos().into(),
+        Some("atan") => f64::from(self).atan().into(),
         Some("atan2") => {
-            let other = try_cast!(args.remove(0) => Number);
-            self.to_real().atan2(other.to_real()).into()
+            let other = try_cast!(args.remove(0));
+            f64::from(self).atan2(other).into()
         },
 
-        Some("sinh") => self.to_real().sinh().into(),
-        Some("cosh") => self.to_real().cosh().into(),
-        Some("tanh") => self.to_real().tanh().into(),
-        Some("asinh") => self.to_real().asinh().into(),
-        Some("acosh") => self.to_real().acosh().into(),
-        Some("atanh") => self.to_real().atanh().into(),
+        Some("sinh") => f64::from(self).sinh().into(),
+        Some("cosh") => f64::from(self).cosh().into(),
+        Some("tanh") => f64::from(self).tanh().into(),
+        Some("asinh") => f64::from(self).asinh().into(),
+        Some("acosh") => f64::from(self).acosh().into(),
+        Some("atanh") => f64::from(self).atanh().into(),
 
-        Some("exp") => self.to_real().exp().into(),
-        Some("exp2") => self.to_real().exp2().into(),
-        Some("ln") => self.to_real().ln().into(),
-        Some("log10") => self.to_real().log10().into(),
-        Some("log2") => self.to_real().log2().into(),
+        Some("exp") => f64::from(self).exp().into(),
+        Some("exp2") => f64::from(self).exp2().into(),
+        Some("ln") => f64::from(self).ln().into(),
+        Some("log10") => f64::from(self).log10().into(),
+        Some("log2") => f64::from(self).log2().into(),
         Some("log") => {
-            let other = try_cast!(args.remove(0) => Number);
-            other.to_real().log(self.to_real()).into()
+            let other = try_cast!(args.remove(0) => f64);
+            other.log(f64::from(self)).into()
         },
 
         Some("gcd") => {
-            let other = try_cast!(args.remove(0) => Number);
+            let other = try_cast!(args.remove(0));
             Number::gcd(*self, other).map_or(
                 eval_err!("Cannot take GCD of reals"),
                 &Object::new,
             )
         },
         Some("lcm") => {
-            let other = try_cast!(args.remove(0) => Number);
+            let other = try_cast!(args.remove(0));
             Number::lcm(*self, other).map_or(
                 eval_err!("Cannot take LCM of reals"),
                 &Object::new,
             )
         },
-        Some("factorial") => self.factorial().map_or(
-            eval_err!("Can only take factorial of positive integer"),
-            &Object::new,
-        ),
+        Some("factorial") => {
+            let n: u64 = try_cast!(Object::new(*self));
+            (1..=n).product::<u64>().into()
+        },
         Some("choose") => {
-            let other = try_cast!(args.remove(0) => Number);
+            let other = try_cast!(args.remove(0));
             Number::choose(*self, other).map_or(
                 eval_err!("Second argument to choose must be a positive integer"),
                 &Object::new,
@@ -180,16 +184,6 @@ impl Number {
         &num => num,
     }}
 
-    pub fn to_real(&self) -> f64 { match self {
-        &Number::Ratio(n, d) => n as f64 / d as f64,
-        &Number::Real(r) => r,
-    }}
-
-    pub fn as_index(&self) -> Option<usize> { match self {
-        &Number::Ratio(n, 1) => usize::try_from(n).ok(),
-        _ => None,
-    }}
-
     pub fn pow(self, rhs: Self) -> Self { match (self, rhs) {
         (Number::Ratio(n1, d1), Number::Ratio(n2, 1)) => {
             let (n1, d1, n2) = if n2 < 0 {
@@ -198,7 +192,7 @@ impl Number {
             } else { (n1, d1, n2 as u32) };
             Number::Ratio(n1.pow(n2), d1.pow(n2))
         },
-        (num1, num2) => num1.to_real().powf(num2.to_real()).into(),
+        (num1, num2) => f64::from(num1).powf(f64::from(num2)).into(),
     }}
 
     pub fn flrdiv(self, rhs: Self) -> Self { match (self, rhs) {
@@ -211,7 +205,7 @@ impl Number {
                 (-(n as i64)).into()
             }
         },
-        (num1, num2) => num1.to_real().div_euclid(num2.to_real()).into(),
+        (num1, num2) => f64::from(num1).div_euclid(f64::from(num2)).into(),
     }}
 
 
@@ -257,56 +251,85 @@ impl Number {
         _ => None,
     }}
 
-    pub fn factorial(self) -> Option<Self> {
-        Some(((1..self.as_index()? + 1).product::<usize>() as i64).into())
+    pub fn factorial(n: u64) -> u64 {
+        (1..n + 1).product::<u64>().into()
     }
 
-    pub fn choose(n: Number, k: Number) -> Option<Self> {
+    pub fn choose(n: Number, k: usize) -> Option<Self> {
         let one = Number::Ratio(1, 1);
-        Some((0..k.as_index()?).map(|i| (i as i64).into())
+        Some((0..k).map(|i| (i as i64).into())
         .fold(one, |accum, i|
             accum * (n - i) / (i + one)
         ))
     }
 }
 
+macro_rules! convert_integral { ($tp:ty) => {
+    impl From<$tp> for Number {
+        fn from(n: $tp) -> Self { Number::Ratio(n as i64, 1) }
+    }
 
+    impl From<$tp> for Object {
+        fn from(n: $tp) -> Self { Number::from(n).into() }
+    }
 
-impl From<i64> for Number {
-    fn from(n: i64) -> Self { Number::Ratio(n, 1) }
-}
+    impl TryFrom<Number> for $tp {
+        type Error = Object;
+        fn try_from(num: Number) -> Result<$tp, Object> {
+            if let Number::Ratio(n, 1) = num {
+                if let Ok(n) = n.try_into() { return Ok(n) }
+            }
+            Err(eval_err!("Cannot cast number to integer type"))
+        }
+    }
 
-impl From<i32> for Number {
-    fn from(n: i32) -> Self { Number::Ratio(n as i64, 1) }
-}
+    impl CastObject for $tp {
+        fn cast(obj: Object) -> Result<$tp, Object> {
+            obj.cast::<Number>()?.try_into()
+        }
+    }
+};}
 
-impl From<usize> for Number {
-    fn from(n: usize) -> Self { Number::Ratio(n as i64, 1) }
-}
+convert_integral!{i8}
+convert_integral!{u8}
+convert_integral!{i16}
+convert_integral!{u16}
+convert_integral!{i32}
+convert_integral!{u32}
+convert_integral!{i64}
+convert_integral!{u64}
+convert_integral!{usize}
 
 impl From<f64> for Number {
     fn from(r: f64) -> Self { Number::Real(r) }
+}
+
+impl From<f64> for Object {
+    fn from(r: f64) -> Self { Number::Real(r).into() }
+}
+
+impl From<Number> for f64 {
+    fn from(num: Number) -> f64 { match num {
+        Number::Ratio(n, d) => (n as f64) / (d as f64),
+        Number::Real(r) => r,
+    }}
+}
+
+impl From<&Number> for f64 {
+    fn from(num: &Number) -> f64 { f64::from(*num) }
+}
+
+impl CastObject for f64 {
+    fn cast(obj: Object) -> Result<f64, Object> {
+        Ok(obj.cast::<Number>()?.into())
+    }
 }
 
 impl From<Number> for Object {
     fn from(n: Number) -> Self { Object::new(n) }
 }
 
-impl From<i64> for Object {
-    fn from(n: i64) -> Self { Number::Ratio(n, 1).into() }
-}
 
-impl From<i32> for Object {
-    fn from(n: i32) -> Self { Number::Ratio(n as i64, 1).into() }
-}
-
-impl From<usize> for Object {
-    fn from(n: usize) -> Self { Number::Ratio(n as i64, 1).into() }
-}
-
-impl From<f64> for Object {
-    fn from(r: f64) -> Self { Number::Real(r).into() }
-}
 
 impl PartialEq for Number {
     fn eq(&self, other: &Self) -> bool {
@@ -315,7 +338,7 @@ impl PartialEq for Number {
                 n1 * d2 as i64 == n2 * d1 as i64
             },
             (num1, num2) => {
-                let (r1, r2) = (num1.to_real(), num2.to_real());
+                let (r1, r2) = (f64::from(num1), f64::from(num2));
                 if r1.is_infinite() && r2.is_infinite() { true }
                 else { (r1 - r2).abs() < 1e-10 }
             },
@@ -330,7 +353,7 @@ impl PartialOrd for Number {
         (&Number::Ratio(n1, d1), &Number::Ratio(n2, d2)) => {
             Some((n1 * d2 as i64).cmp(&(n2 * d1 as i64)))
         },
-        (num1, num2) => num1.to_real().partial_cmp(&num2.to_real()),
+        (num1, num2) => f64::from(num1).partial_cmp(&f64::from(num2)),
     }}
 }
 
@@ -354,7 +377,7 @@ impl Add for Number {
         (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => Number::Ratio(
             n1 * d2 as i64 + n2 * d1 as i64, d1 * d2
         ).simplify(),
-        (num1, num2) => Number::Real(num1.to_real() + num2.to_real()),
+        (num1, num2) => (f64::from(num1) + f64::from(num2)).into(),
     }}
 }
 
@@ -364,7 +387,7 @@ impl Sub for Number {
         (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => Number::Ratio(
             n1 * d2 as i64 - n2 * d1 as i64, d1 * d2
         ).simplify(),
-        (num1, num2) => Number::Real(num1.to_real() - num2.to_real()),
+        (num1, num2) => (f64::from(num1) - f64::from(num2)).into(),
     }}
 }
 
@@ -375,7 +398,7 @@ impl Mul for Number {
         (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => Number::Ratio(
             n1 * n2, d1 * d2
         ).simplify(),
-        (num1, num2) => Number::Real(num1.to_real() * num2.to_real()),
+        (num1, num2) => (f64::from(num1) * f64::from(num2)).into(),
     }}
 }
 
@@ -387,7 +410,7 @@ impl Div for Number {
                 else { (d2 as i64, n2 as u64) };
             Number::Ratio(n1 * n2, d1 * d2).simplify()
         },
-        (num1, num2) => Number::Real(num1.to_real() / num2.to_real()),
+        (num1, num2) => (f64::from(num1) / f64::from(num2)).into(),
     }}
 }
 
@@ -399,7 +422,7 @@ impl Rem for Number {
             if rem < 0 { rem += n2 * d1 as i64; }
             Number::Ratio(rem, d1 * d2).simplify()
         },
-        (num1, num2) => Number::Real(num1.to_real().rem_euclid(num2.to_real())),
+        (num1, num2) => f64::from(num1).rem_euclid(f64::from(num2)).into(),
     }}
 }
 

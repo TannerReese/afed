@@ -6,8 +6,10 @@ use std::hash::Hash;
 use std::borrow::Borrow;
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, EvalError};
-use super::string::Str;
+use super::{
+    Operable, Object, CastObject,
+    NamedType, EvalError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map(pub HashMap<String, Object>);
@@ -44,7 +46,7 @@ impl Operable for Map {
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         let s;
         let key = if let Some(key) = attr { key }
-        else { s = try_cast!(args.remove(0) => Str); s.0.as_str() };
+        else { s = try_cast!(args.remove(0) => String); s.as_str() };
         self.0.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
@@ -85,6 +87,10 @@ impl From<Map> for Object {
 
 impl From<HashMap<String, Object>> for Object {
     fn from(map: HashMap<String, Object>) -> Object { Map(map).into() }
+}
+
+impl CastObject for HashMap<String, Object> {
+    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj.cast::<Map>()?.0) }
 }
 
 impl<const N: usize> From<[(&str, Object); N]> for Object {

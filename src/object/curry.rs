@@ -1,6 +1,9 @@
 use std::fmt::{Display, Formatter, Error};
 
-use super::{Operable, Unary, Binary, Object, NamedType};
+use super::{
+    Operable, Object,
+    Unary, Binary, NamedType,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Curry {

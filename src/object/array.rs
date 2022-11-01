@@ -1,8 +1,13 @@
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error, Write};
+use std::cmp::Ordering;
+use std::iter::repeat;
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, EvalError};
+use super::{
+    Operable, Object, CastObject,
+    NamedType, EvalError,
+};
 use super::bool::Bool;
 use super::number::Number;
 
@@ -24,36 +29,30 @@ impl Operable for Array {
 
         match op {
             Binary::Add => {
-                let Array(mut arr2) = try_cast!(other);
+                let mut arr2 = try_cast!(other);
                 if rev { std::mem::swap(&mut arr1, &mut arr2); }
                 arr1.append(&mut arr2);
+                arr1
             },
             Binary::Mul => {
-                if let Some(idx) = try_cast!(other => Number).as_index() {
-                    arr1 = std::iter::repeat(arr1)
-                    .take(idx).flatten().collect();
-                } else { return eval_err!(
-                    "Can only multiply array by positive integer"
-                )}
+                let idx: usize = try_cast!(other);
+                repeat(arr1).take(idx).flatten().collect()
             },
             _ => panic!(),
-        }
-        arr1.into()
+        }.into()
     }
 
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
         Some("len") => Some(0),
-        Some("fst") => Some(0),
-        Some("snd") => Some(0),
+        Some("fst") | Some("snd") => Some(0),
         Some("map") => Some(1),
         Some("filter") => Some(1),
-        Some("all") => Some(1),
-        Some("any") => Some(1),
+        Some("all") | Some("any") => Some(1),
         Some("has") => Some(1),
-        Some("sum") => Some(0),
-        Some("prod") => Some(0),
+
+        Some("sum") | Some("prod") => Some(0),
         _ => None,
     }}
 
@@ -61,10 +60,9 @@ impl Operable for Array {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-                if let Some(obj) = self.0.get(idx) { obj.clone() }
-                else { eval_err!("Index {} is out of bounds", idx) }
-            } else { eval_err!("Index could not be cast to correct integer") }
+            let idx: usize = try_cast!(args.remove(0));
+            if let Some(obj) = self.0.get(idx) { obj.clone() }
+            else { eval_err!("Index {} is out of bounds", idx) }
         },
 
         Some("len") => self.0.len().into(),
@@ -165,6 +163,10 @@ impl From<Vec<Object>> for Object {
 
 impl From<Array> for Object {
     fn from(arr: Array) -> Self { arr.0.into() }
+}
+
+impl CastObject for Vec<Object> {
+    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj.cast::<Array>()?.0) }
 }
 
 impl<const N: usize> From<[Object; N]> for Object {

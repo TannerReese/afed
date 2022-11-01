@@ -39,7 +39,6 @@ pub struct Modulo {
     residue: i64,
     modulo: u64,
 }
-
 impl NamedType for Modulo { fn type_name() -> &'static str { "modulo" }}
 
 impl Operable for Modulo {
@@ -58,12 +57,7 @@ impl Operable for Modulo {
     }}
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        if op == Binary::Pow {
-            return match try_cast!(other) {
-                Number::Ratio(n, 1) => self.pow(n).into(),
-                _ => eval_err!("Exponent of modulo must be an integer"),
-            }
-        }
+        if op == Binary::Pow { return self.pow(try_cast!(other)).into() }
 
         let mut m1 = self;
         let mut m2 = if other.is_a::<Modulo>() { try_cast!(other) }

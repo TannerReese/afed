@@ -3,11 +3,12 @@ use std::vec::Vec;
 use std::clone::Clone;
 use std::fmt::{Debug, Display, Formatter, Error, Write};
 
+use std::cmp::Ordering;
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::{Sum, Product};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 use std::hash::Hash;
 use std::borrow::Borrow;
@@ -179,8 +180,6 @@ impl Object {
     pub fn is_a<T>(&self) -> bool where T: Any
         { TypeId::of::<T>() == self.type_id() }
 
-    pub fn cast<T>(self) -> Result<T, Object> where T: CastObject { T::cast(self) }
-
     pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
         { (*self.0).as_any().downcast_ref() }
 
@@ -191,6 +190,8 @@ impl Object {
         ));
         self.0 = func(owned).0;
     }
+
+    pub fn cast<T: CastObject>(self) -> Result<T, Object> { T::cast(self) }
 
 
     pub fn get<B>(&self, key: &B) -> Option<&Object>
@@ -219,8 +220,12 @@ pub trait CastObject: Sized {
     fn cast(obj: Object) -> Result<Self, Object>;
 }
 
-impl<T> CastObject for T where T: NamedType + Sized + Debug {
-    fn cast(mut obj: Object) -> Result<Self, Object> {
+impl CastObject for Object {
+    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj) }
+}
+
+impl<T> CastObject for T where T: Objectish {
+    fn cast(mut obj: Object) -> Result<T, Object> {
         let given_type = (*obj.0).type_name_dyn();
         let any_ref = (*obj.0).as_any_opt();
         if let Some(opt) = any_ref.downcast_mut::<Option<T>>() {
@@ -231,9 +236,6 @@ impl<T> CastObject for T where T: NamedType + Sized + Debug {
     }
 }
 
-impl CastObject for Object {
-    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj) }
-}
 
 
 impl Object {
@@ -352,6 +354,18 @@ impl PartialEq for Object {
 
 impl Eq for Object {}
 
+impl PartialOrd for Object {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self == other { return Some(Ordering::Equal) }
+        let leq = self.clone().binary(Binary::Leq, other.clone());
+        match leq.cast::<Bool>() {
+            Ok(Bool(true)) => Some(Ordering::Less),
+            Ok(Bool(false)) => Some(Ordering::Greater),
+            Err(_) => None,
+        }
+    }
+}
+
 impl Clone for Object {
     fn clone(&self) -> Self { (*self.0).clone() }
 }
@@ -454,6 +468,7 @@ impl NamedType for EvalError { fn type_name() -> &'static str { "error" }}
 static EVAL_ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl EvalError {
     pub fn new(msg: String) -> Object {
+        use std::sync::atomic::Ordering;
         let id = EVAL_ERROR_COUNTER.fetch_add(1, Ordering::Relaxed);
         Object::new(EvalError {id, msg})
     }

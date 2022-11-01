@@ -12,8 +12,11 @@ use super::vec::Vector;
 use super::augmat::AugMatrix;
 use super::bltn_func::BltnFunc;
 
-use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
-use crate::object::number::Number;
+use crate::object::{
+    Operable, Object,
+    Unary, Binary,
+    NamedType, EvalError,
+};
 use crate::object::array::Array;
 
 macro_rules! check_dims {
@@ -56,7 +59,7 @@ impl Operable for Matrix {
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         if other.is_a::<Matrix>() {
-            let (mut m1, mut m2) = (self, try_cast!(other => Matrix));
+            let (mut m1, mut m2) = (self, try_cast!(other));
             if rev { swap(&mut m1, &mut m2); }
 
             match op {
@@ -127,16 +130,15 @@ impl Operable for Matrix {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-                if idx >= self.rows() { eval_err!(
-                    "Index {} is larger or equal to {} number of rows",
-                    idx, self.rows()
-                )} else {
-                    let cols = self.columns();
-                    self.comps[idx * cols .. (idx + 1) * cols]
-                    .iter().cloned().collect::<Vector>().into()
-                }
-            } else { eval_err!("Index could not be cast to correct integer") }
+            let idx: usize = try_cast!(args.remove(0));
+            if idx >= self.rows() { eval_err!(
+                "Index {} is larger or equal to {} number of rows",
+                idx, self.rows()
+            )} else {
+                let cols = self.columns();
+                self.comps[idx * cols .. (idx + 1) * cols]
+                .iter().cloned().collect::<Vector>().into()
+            }
         },
 
         Some("rows") => self.rows().into(),
@@ -187,7 +189,7 @@ impl Matrix {
     pub fn from_array(arr: Array) -> Object {
         let mut comps = Vec::new();
         for row in arr.0.into_iter() {
-            comps.push(try_cast!(row => Array).0)
+            comps.push(try_cast!(row))
         }
         Matrix::new(comps)
     }
@@ -482,18 +484,13 @@ impl From<Matrix> for Object {
 pub fn make_bltns() -> Object {
     let mut mat = HashMap::new();
     def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
-    def_bltn!(mat.zeroM(rows: Number, cols: Number) = {
-        match (rows.as_index(), cols.as_index()) {
-            (Some(rs), Some(cs)) => if rs > 0 && cs > 0 {
-                Matrix::build((rs, cs), |_, _| 0.into()).into()
-            } else { eval_err!("Matrix dimensions can't be zero") },
-            _ => eval_err!("Dimensions must be positive integers"),
-        }
-    });
-    def_bltn!(mat.identM(dims: Number) = match dims.as_index() {
-        None | Some(0) => eval_err!("Dimension must be a positive integer"),
-        Some(dims) => Matrix::identity(dims).into(),
-    });
+    def_bltn!(mat.zeroM(rows: usize, cols: usize) = if rows > 0 && cols > 0 {
+        Matrix::build((rows, cols), |_, _| 0.into()).into()
+    } else { eval_err!("Matrix dimensions can't be zero") });
+    def_bltn!(mat.identM(dims: usize) =
+        if dims == 0 { eval_err!("Dimension must be a positive integer") }
+        else { Matrix::identity(dims).into() }
+    );
 
     def_getter!(mat.rows);
     def_getter!(mat.cols);

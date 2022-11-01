@@ -29,10 +29,7 @@ pub fn range(mut start: Number, end: Number, step: Number) -> Object {
     elems.into()
 }
 
-pub fn iter(init: Object, times: Number, func: Object) -> Object {
-    let times = if let Some(x) = times.as_index() { x } else {
-        return eval_err!("Cannot cast number to correct integer type")
-    };
+pub fn iter(init: Object, times: usize, func: Object) -> Object {
     if times == 0 { return Vec::new().into() }
 
     let mut elems = Vec::new();
@@ -63,7 +60,7 @@ pub fn make_bltns() -> Object {
     def_bltn!(arr.range_step(x: Number, y: Number, step: Number) =
         range(x, y, step));
 
-    def_bltn!(arr.iter(init: Object, times: Number, f: Object) =
+    def_bltn!(arr.iter(init: Object, times: usize, f: Object) =
         iter(init, times, f));
 
     def_bltn!(arr.iter_while(init: Object, pred: Object, f: Object) =

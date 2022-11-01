@@ -9,8 +9,11 @@ use std::iter::zip;
 use super::bltn_func::BltnFunc;
 use super::mat::Matrix;
 
-use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
-use crate::object::number::Number;
+use crate::object::{
+    Operable, Object,
+    Unary, Binary,
+    NamedType, EvalError,
+};
 use crate::object::array::Array;
 
 macro_rules! check_dims {
@@ -83,12 +86,11 @@ impl Operable for Vector {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            if let Some(idx) = try_cast!(args.remove(0) => Number).as_index() {
-                if let Some(obj) = self.0.get(idx) { obj.clone() }
-                else { eval_err!(
-                    "Index {} is larger or equal to dimension {}", idx, self.dims(),
-                )}
-            } else { eval_err!("Index could not be cast to correct integer") }
+            let idx = try_cast!(args.remove(0) => usize);
+            if let Some(obj) = self.0.get(idx) { obj.clone() }
+            else { eval_err!(
+                "Index {} is larger or equal to dimension {}", idx, self.dims(),
+            )}
         },
 
         Some("dims") => self.dims().into(),
