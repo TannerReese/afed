@@ -1,0 +1,23 @@
+# Test prime number related functions
+
+# Erroneous cases
+prime_factors 4.32 = ``,
+divisors [1, 2] = ``,
+radical (-13) = ``,
+
+# Prime number operations
+prs.primes 47 = ``,
+filter is_prime (range 0 47) = ``,
+prime_factors 73827 = ``,
+
+# Square free operations
+is_sqfree r = ``, is_sqfree 60 = ``,
+r: radical (2^4 * 3^3 * 5^7 * 101) = ``,
+
+# Other operations
+map euler_totient (range 0 20) = ``,
+divisors 84 = ``,
+sum $ (divisors x).map \d: d^2 = ``,
+divisor_sum 2 (x: 67328) = ``,
+filter prs.is_perfect (range 0 10000) = ``,
+

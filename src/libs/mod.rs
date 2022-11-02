@@ -10,8 +10,7 @@ macro_rules! count_tt {
 macro_rules! def_bltn {
     ($pkg:ident.$name:ident = $val:expr) => {
         if $pkg.insert(
-            stringify!($name).to_owned(),
-            Object::new($val)
+            stringify!($name).to_owned(), $val.into(),
         ).is_some() {
             panic!(concat!(stringify!($name), " redeclared"))
         }
@@ -68,6 +67,7 @@ pub mod bltn_func;
 
 pub mod num;
 pub mod arr;
+pub mod prs;
 pub mod modulo;
 pub mod vec;
 pub mod mat;
@@ -76,6 +76,7 @@ mod augmat;
 pub fn make_bltns() -> HashMap<String, Object> {[
     ("num", num::make_bltns()),
     ("arr", arr::make_bltns()),
+    ("prs", prs::make_bltns()),
     ("mod", modulo::make_bltns()),
     ("vec", vec::make_bltns()),
     ("mat", mat::make_bltns()),

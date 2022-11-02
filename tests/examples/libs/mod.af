@@ -19,4 +19,6 @@ a * 42 = ``,
 # Modular Methods
 (mod.Mod 67 / 3).resid = ``,
 (Mod 30 + Mod 21).modulo = ``,
+(m: 7823 * Mod 99901) ^ m.order = ``,
+(21 * Mod 28).order = ``,
 

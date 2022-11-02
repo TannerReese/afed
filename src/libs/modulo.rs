@@ -83,6 +83,7 @@ impl Operable for Modulo {
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         Some("resid") | Some("modulo") => Some(0),
         Some("has_inv") | Some("inv") => Some(0),
+        Some("order") => Some(0),
         _ => None,
     }}
 
@@ -96,6 +97,8 @@ impl Operable for Modulo {
             self.residue.abs() as u64, self.modulo
         ).0 == 1).into(),
         Some("inv") => self.inverse().into(),
+
+        Some("order") => self.order().into(),
         _ => panic!(),
     }}
 }
@@ -138,6 +141,23 @@ impl Modulo {
             exp >>= 1;
         }
         accum
+    }
+
+    pub fn order(self) -> u64 {
+        if bezout(self.residue.abs() as u64, self.modulo).0 > 1 {
+            return 0;
+        }
+
+        use super::prs::{prime_factors, euler_totient};
+        let max_order = euler_totient(self.modulo);
+        let mut ord = max_order;
+        for (p, _) in prime_factors(max_order) {
+            while ord % p == 0
+            && self.pow((ord / p) as i64).residue == 1 {
+                ord /= p;
+            }
+        }
+        ord
     }
 }
 

@@ -1,7 +1,5 @@
 use super::mat::Matrix;
-
 use crate::object::Object;
-use crate::object::bool::Bool;
 
 #[derive(Debug, Clone)]
 pub struct AugMatrix {
@@ -88,13 +86,13 @@ impl AugMatrix {
             let mut inv = None;
             for r in pivot_row..rows {
                 let elem = &mat[(r, c)];
-                match obj_call!(elem.has_inv()).cast::<Bool>() {
-                    Ok(Bool(true)) => {
+                match obj_call!(elem.has_inv()).cast::<bool>() {
+                    Ok(true) => {
                         inv = Some(obj_call!(elem.inv()));
                         self.swap_rows(pivot_row, r);
                         break;
                     },
-                    Ok(Bool(false)) => {},
+                    Ok(false) => {},
                     Err(err) => return Err(err),
                 }
             }

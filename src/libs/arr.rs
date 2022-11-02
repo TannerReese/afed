@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use super::bltn_func::BltnFunc;
 
 use crate::object::{Object, EvalError};
-use crate::object::bool::Bool;
 use crate::object::number::Number;
 use crate::object::array::Array;
 
@@ -45,7 +44,7 @@ pub fn iter(init: Object, times: usize, func: Object) -> Object {
 pub fn iter_while(init: Object, pred: Object, func: Object) -> Object {
     let mut elems = Vec::new();
     let mut work = init;
-    while obj_call!(pred(work.clone()) => Bool).0 {
+    while obj_call!(pred(work.clone()) => bool) {
         elems.push(work.clone());
         work = obj_call!(func(work));
     }
@@ -55,8 +54,7 @@ pub fn iter_while(init: Object, pred: Object, func: Object) -> Object {
 
 pub fn make_bltns() -> Object {
     let mut arr = HashMap::new();
-    def_bltn!(arr.range(x: Number, y: Number) =
-        range(x, y, (1 as i64).into()));
+    def_bltn!(arr.range(x: Number, y: Number) = range(x, y, 1.into()));
     def_bltn!(arr.range_step(x: Number, y: Number, step: Number) =
         range(x, y, step));
 

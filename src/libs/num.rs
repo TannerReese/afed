@@ -1,15 +1,12 @@
 use std::collections::HashMap;
-
 use super::bltn_func::BltnFunc;
-
 use crate::object::Object;
-use crate::object::number::Number;
 
 pub fn make_bltns() -> Object {
     let mut num = HashMap::new();
-    def_bltn!(num.pi = Number::Real(std::f64::consts::PI));
-    def_bltn!(num.e = Number::Real(std::f64::consts::E));
-    def_bltn!(num.gold = Number::Real((1.0 + (5.0 as f64).sqrt()) / 2.0));
+    def_bltn!(num.pi = std::f64::consts::PI);
+    def_bltn!(num.e = std::f64::consts::E);
+    def_bltn!(num.gold = (1.0 + (5.0 as f64).sqrt()) / 2.0);
 
     def_getter!(num.signum);  def_getter!(num.abs);
     def_getter!(num.real);
