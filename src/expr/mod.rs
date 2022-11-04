@@ -165,8 +165,7 @@ impl ExprArena {
             ) = &mut self.0[id].inner { if *is_defn {
                 if named.insert(nm.clone(), *target).is_some() {
                     panic!("Redefinition of label in map");
-                }
-                *is_defn = false;
+                } else { *is_defn = false; }
                 continue;
             }}
             panic!("VarId doesn't refer to a definition");
@@ -213,9 +212,14 @@ impl ExprArena {
         self.create_node(vars, Inner::Binary(op, arg1, arg2))
     }
 
-    pub fn create_access(&mut self,
+    pub fn create_access(&mut self, exp: ExprId, path: Vec<String>) -> ExprId {
+        self.create_call(exp, path, Vec::with_capacity(0))
+    }
+
+    pub fn create_call(&mut self,
         exp: ExprId, path: Vec<String>, args: Vec<ExprId>
     ) -> ExprId {
+        if path.len() == 0 && args.len() == 0 { return exp }
         let mut vars = self.take_vars(exp);
         vars.extend(args.iter().map(|&id| self.take_vars(id)).flatten());
         self.create_node(vars, Inner::Access(exp, path, args))
@@ -501,7 +505,7 @@ impl ExprArena {
                 let args = args.iter().map(|&id|
                     self.clone_into(arena, id)
                 ).collect();
-                arena.create_access(target, path.cloned().collect(), args)
+                arena.create_call(target, path.cloned().collect(), args)
             },
 
             Inner::Arg(name) => arena.create_var(name.clone()),

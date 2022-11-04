@@ -1,31 +1,31 @@
 Parse Error in line 4, column 13
-	{ x: 4, x: 5},
-	            ^
+|   { x: 4, x: 5},
+|               ^
 Error: Redefinition of label 'x' in map
 
-Parse Error in line 14, column 27
-	{1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
-	                          ^
-Error: Missing value
+Parse Error in line 14, column 30
+|   {1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
+|                                ^
+Error: Ill formed member
 
-Parse Error in line 15, column 24
-	{ "good", second: njd %% & 62 ] , third: "good"} = ``,
-	                       ^
-Error: Missing value
+Parse Error in line 15, column 33
+|   { "good", second: njd %% & 62 ] , third: "good"} = ``,
+|                                   ^
+Error: Ill formed member
 
-Parse Error in line 16, column 20
-	["this", "next"  ( % ^&, "last"] = ``,
-	                   ^
-Error: Missing value
+Parse Error in line 16, column 24
+|   ["this", "next"  ( % ^&, "last"] = ``,
+|                          ^
+Error: Ill formed member
 
-Parse Error in line 21, column 20
-	    4 * (x: 3) = ``,
-	                   ^
+Parse Error in line 21, column 21
+|       4 * (x: 3) = ``,
+|                       ^
 Error: Redefinition of label 'x' in map
 
-Parse Error in line 23, column 15
-	    y: 12 = ``,
-	              ^
+Parse Error in line 23, column 16
+|       y: 12 = ``,
+|                  ^
 Error: Redefinition of label 'y' in map
 
 6 Parse Errors encountered

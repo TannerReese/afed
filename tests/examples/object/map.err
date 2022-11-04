@@ -1,7 +1,7 @@
-Parse Error in line 18, column 3
-	{3: 4} = ``,
-	  ^
-Error: Ill formed map member
+Parse Error in line 18, column 6
+|   {3: 4} = ``,
+|        ^
+Error: Ill formed member
 
 1 Parse Error encountered
 
