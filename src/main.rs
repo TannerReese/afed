@@ -26,6 +26,12 @@ impl Stream {
         } else { Stream::Path(PathBuf::from(path)) }
     }
 
+    fn get_path(&self) -> Option<PathBuf> { match self {
+        Stream::Void |
+        Stream::Stdin | Stream::Stdout | Stream::Stderr => None,
+        Stream::Path(buf) => Some(buf.clone()),
+    }}
+
     fn to_reader(&self) -> Box<dyn Read> {
         match self {
             Stream::Void => Box::new(empty()),
@@ -205,7 +211,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut prog = String::new();
     prms.input.to_reader().read_to_string(&mut prog)?;
 
-    let mut doc = docmt::Docmt::new(prog);
+    let mut doc = docmt::Docmt::new(prog, prms.input.get_path());
     doc.only_clear = prms.clear;
     let mut any_errors = false;
 

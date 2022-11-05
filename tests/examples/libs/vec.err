@@ -1,7 +1,7 @@
-line 25, column 14 Eval Error: Vector dimensions 4 and 3 do not match
-line 26, column 14 Eval Error: Vector dimensions 3 and 4 do not match
-line 29, column 10 Eval Error: Binary operator ^ not implemented between types vector and number
-line 30, column 12 Eval Error: Binary operator ^ not implemented between types number and vector
-line 31, column 10 Eval Error: Binary operator / not implemented between types number and vector
-line 32, column 10 Eval Error: Binary operator % not implemented between types number and vector
+line 25, column 14 of "vec.af" Eval Error: Vector dimensions 4 and 3 do not match
+line 26, column 14 of "vec.af" Eval Error: Vector dimensions 3 and 4 do not match
+line 29, column 10 of "vec.af" Eval Error: Binary operator ^ not implemented between types vector and number
+line 30, column 12 of "vec.af" Eval Error: Binary operator ^ not implemented between types number and vector
+line 31, column 10 of "vec.af" Eval Error: Binary operator / not implemented between types number and vector
+line 32, column 10 of "vec.af" Eval Error: Binary operator % not implemented between types number and vector
 6 Eval Errors encountered

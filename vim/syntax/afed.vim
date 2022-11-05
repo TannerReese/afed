@@ -9,6 +9,10 @@ syn match afedOper /\v[\:!$%&|*+-/<=>?@^~]+/
 syn keyword afedOper if
 hi link afedOper Operator
 
+" Syntactic Keywords
+syn keyword afedKeyword use
+hi link afedKeyword Keyword
+
 " Variable name
 syn match afedVar /\v\a\w*/
 hi link afedVar Ignore

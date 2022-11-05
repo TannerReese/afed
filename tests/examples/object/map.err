@@ -1,4 +1,4 @@
-Parse Error in line 18, column 6
+Parse Error in line 18, column 6 of "map.af"
 |   {3: 4} = ``,
 |        ^
 Error: Ill formed member
@@ -6,8 +6,8 @@ Error: Ill formed member
 1 Parse Error encountered
 
 
-line 6, column 8 Eval Error: Expected string, but found number
-line 7, column 14 Eval Error: Key hello is not contained in map
-line 21, column 19 Eval Error: Binary operator * not implemented between types map and map
-line 22, column 14 Eval Error: Binary operator / not implemented between types number and map
+line 6, column 8 of "map.af" Eval Error: Expected string, but found number
+line 7, column 14 of "map.af" Eval Error: Key hello is not contained in map
+line 21, column 19 of "map.af" Eval Error: Binary operator * not implemented between types map and map
+line 22, column 14 of "map.af" Eval Error: Binary operator / not implemented between types number and map
 4 Eval Errors encountered

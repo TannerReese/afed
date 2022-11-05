@@ -1,0 +1,8 @@
+Parse Error in line 4, column 21 of "parent_use.af"
+|   use "child_use1.af",
+|                       ^
+Error: Redefinition of label 'redef' in map
+
+1 Parse Error encountered
+
+

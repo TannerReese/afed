@@ -1,0 +1,6 @@
+# Test clearing of substitutions
+y: 10, x: 56, z: 17,
+x * y - z = `jbfdnfnn`,
+x / y = `28 / 5`,
+z - x = ``
+

@@ -1,0 +1,6 @@
+# Test importing of other files
+use "subdir/child_use2.af",
+from_child1 = `4`,
+use "child_use1.af",
+from_child2 = `5`
+

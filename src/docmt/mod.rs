@@ -1,6 +1,8 @@
 use std::io::Write;
 use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::ffi::OsString;
 
 use super::expr::{ExprId, ExprArena};
 use super::object::Object;
@@ -13,6 +15,7 @@ mod parser;
 struct Subst {
     start: usize,
     end: usize,
+    filename: Option<OsString>,
 
     lineno: usize,
     column: usize,
@@ -23,22 +26,29 @@ struct Subst {
 pub struct Docmt {
     src: String,
     len: usize,
+    pub paths: Vec<PathBuf>,
 
     arena: ExprArena,
     is_parsed: bool,
     pub only_clear: bool,
     errors: Vec<ParseError>,
     substs: Vec<Subst>,
+    pub ignore_substs: bool,
 }
 
 impl Docmt {
-    pub fn new(src: String) -> Docmt {
+    pub fn new(src: String, path: Option<PathBuf>) -> Docmt {
+        let paths = path.and_then(|p|
+            p.canonicalize().ok()
+        ).into_iter().collect();
+
         Docmt {
-            len: src.len(), src,
+            len: src.len(), src, paths,
             arena: ExprArena::new(),
             is_parsed: false, only_clear: false,
             errors: Vec::new(),
             substs: Vec::new(),
+            ignore_substs: false,
         }
     }
 
@@ -53,9 +63,8 @@ impl Docmt {
         }
 
         for err in self.errors.iter() {
-            if let Err(_) = write!(err_out, "{}\n", err) {
-                panic!("IO Error while writing parse error");
-            }
+            write!(err_out, "{}\n", err)
+            .expect("IO Error while writing parse error");
         }
 
         let count = self.errors.len();
@@ -68,14 +77,18 @@ impl Docmt {
         if self.only_clear { return Ok(()) }
 
         let mut err_count = 0;
-        for Subst {target, value, lineno, column, ..} in self.substs.iter_mut() {
+        for Subst {
+            filename, target, value, lineno, column, ..
+        } in self.substs.iter_mut() {
             if value.is_some() { continue; }
             let res = self.arena.eval(*target);
             if res.is_err() {
-                if let Err(_) = write!(err_out,
-                    "line {}, column {} {}\n",
-                    lineno, column, res
-                ) { panic!("IO Error while writing eval error"); }
+                write!(err_out, "line {}, column {}", lineno, column)
+                .and_then(|_| if let Some(name) = filename {
+                    write!(err_out, " of {:?}", name)
+                } else { Ok(()) })
+                .and_then(|_| write!(err_out, " {}\n", res))
+                .expect("IO Error while writing eval error");
                 err_count += 1;
             }
             *value = Some(res);
@@ -84,9 +97,16 @@ impl Docmt {
     }
 
 
-    fn add_error(&mut self, err: ParseError) { self.errors.push(err) }
+    fn add_error(&mut self, mut err: ParseError) {
+        if let Some(name) = self.paths.last()
+        .and_then(|file| file.file_name()) {
+            err.set_filename(name.to_owned());
+        }
+        self.errors.push(err);
+    }
 
-    fn push(&mut self, new: Subst) -> bool {
+    fn push(&mut self, mut new: Subst) -> bool {
+        if self.ignore_substs { return false }
         if new.start > new.end || new.end > self.len { return false }
 
         let i = self.substs.iter()
@@ -103,6 +123,10 @@ impl Docmt {
         }
 
         self.arena.set_saved(new.target);
+        if let Some(name) = self.paths.last()
+        .and_then(|file| file.file_name()) {
+            new.filename = Some(name.to_owned());
+        }
         self.substs.insert(i, new);
         return true;
     }
@@ -136,6 +160,4 @@ impl Display for Docmt {
         } else { Ok(()) }
     }
 }
-
-
 

@@ -1,6 +1,9 @@
 use std::cmp::max;
 use std::fmt::{Display, Formatter, Error};
 use std::collections::HashMap;
+use std::fs::read_to_string;
+use std::path::PathBuf;
+use std::ffi::OsString;
 
 use crate::expr::ExprId;
 
@@ -26,12 +29,9 @@ macro_rules! alt {
 
 macro_rules! recover {
     ($doc:expr, $parse:expr, $recover:expr) => { match $parse {
-        Ok(good) => Ok(Some(good)),
-        Err(None) => $recover.map(|_| None),
-        Err(Some(err)) => {
-            $doc.add_error(err);
-            $recover.map(|_| None)
-        },
+        Ok(good) => Ok(good),
+        Err(None) => $recover,
+        Err(Some(err)) => { $doc.add_error(err); $recover },
     }};
 }
 
@@ -42,6 +42,15 @@ macro_rules! revert {
         if res.is_err() { *$pos = start; }
         res
     }};
+}
+
+macro_rules! peek {
+    ($pos:ident : $parse:expr) => {{
+        let start = *$pos;
+        let res = $parse;
+        *$pos = start;
+        res
+    }}
 }
 
 macro_rules! opt {
@@ -92,17 +101,33 @@ macro_rules! many1 {
 #[derive(Debug, Clone)]
 pub struct ParseError {
     msg: String,
+    filename: Option<OsString>,
     line: String,
     lineno: usize,
     column: usize,
 }
 
+impl ParseError {
+    pub fn set_filename(&mut self, name: OsString) -> bool {
+        if self.filename.is_some() { false }
+        else { self.filename = Some(name); true }
+    }
+}
+
 impl Display for ParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "Parse Error in line {}, column {}\n", self.lineno, self.column)?;
-        write!(f, "|   {}\n|   {:2$}^\n", self.line, "", self.column - 1)?;
+        write!(f, "Parse Error in line {}, column {}", self.lineno, self.column)?;
+        if let Some(name) = &self.filename {
+            write!(f, " of {:?}", name)?;
+        }
+
+        write!(f, "\n|   {}\n|   {:2$}^\n", self.line, "", self.column - 1)?;
         write!(f, "Error: {}\n", self.msg)
     }
+}
+
+macro_rules! parse_err {
+    ($pos:expr, $($arg:tt)+) => { Err(Some($pos.error(format!($($arg)+)))) }
 }
 
 
@@ -194,6 +219,14 @@ impl<'a> Pos<'a> {
         })
     }
 
+    fn eoi(&mut self) -> ParseResult<()> {
+        revert!(self: {
+            _ = self.skip();
+            if let None = self.peek() { Ok(()) }
+            else { Err(None) }
+        })
+    }
+
     fn shift(&mut self, s: &str) -> usize {
         let count = s.chars().count();
         for _ in 0..count { self.next(); }
@@ -205,7 +238,7 @@ impl<'a> Pos<'a> {
 impl<'a> Pos<'a> {
     fn error(&self, msg: String) -> ParseError {
         ParseError {
-            msg,
+            msg, filename: None,
             line: self.line_begin
                 .lines().next()
                 .unwrap_or("").to_owned(),
@@ -216,9 +249,8 @@ impl<'a> Pos<'a> {
 
     fn expect(&mut self, c: char, msg: &str) -> ParseResult<char> {
         let res = self.char(c);
-        if let Err(None) = res {
-            Err(Some(self.error(msg.to_owned())))
-        } else { res }
+        if let Err(None) = res { parse_err!(self, "{}", msg) }
+        else { res }
     }
 
     fn constant(&mut self) -> ParseResult<Object> {
@@ -239,9 +271,8 @@ impl<'a> Pos<'a> {
                     Ok(Number::Ratio(n, 1))
                 } else if let Ok(f) = numstr.parse::<f64>() {
                     Ok(Number::Real(f))
-                } else { Err(Some(self.error(
-                    "Invalid Number".to_owned()
-                ))) }
+                } else { parse_err!(self, "Invalid Number") }
+
             )
         ).map(|(_, num)| num)
     }
@@ -302,6 +333,7 @@ impl<'a> Pos<'a> {
 }
 
 
+
 impl<'a> Pos<'a> {
     fn defn(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         let (labels, mut body) = seq!(self:
@@ -343,7 +375,7 @@ impl<'a> Pos<'a> {
                     }
                     let end = self.idx;
                     doc.push(Subst {
-                        start, end,
+                        start, end, filename: None,
                         lineno, column,
                         target: body, value: None,
                     });
@@ -416,48 +448,54 @@ impl<'a> Pos<'a> {
 
     fn member(
         &mut self, term: char, doc: &mut Docmt
-    ) -> ParseResult<Option<ExprId>> {
-        recover!(doc,
-            seq!(self: self.defn(doc), alt!(self.char(','), {
-                _ = self.skip();
-                let c = self.peek();
-                if c == Some(term) || c == None { Ok(term) }
-                else { Err(None) }
-            })).map(|(id, _)| id),
-            seq!(self:
-                self.skip(),
-                self.while_char(|c| c != term && c != ',')
-                .map(|_| { doc.add_error(self.error(
-                    "Ill formed member".to_owned()
-                )); }),
-                opt!(self.char(','))
+    ) -> ParseResult<Vec<ExprId>> { recover!(doc,
+        seq!(self:
+            alt!(
+                self.use_stmt(doc),
+                self.defn(doc).map(|id| vec![id])
+            ),
+            alt!(ign!(self.char(',')),
+                alt!(self.eoi()),
+                peek!(self: ign!(self.char(term)))
             )
-        )
-    }
+        ).map(|(ids, _)| ids),
+        seq!(self:
+            self.skip(),
+            self.while_char(|c| c != term && c != ',').map(|_| {
+                doc.add_error(self.error(
+                    "Ill formed member".to_owned()
+                ));
+                vec![]
+            }),
+            opt!(self.char(','))
+        ).map(|(_, ids, _)| ids)
+    )}
 
     fn array(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         let membs = seq!(self: self.char('['),
             many0!(self.member(']', doc)),
             self.expect(']', "Missing closing bracket in array")
         )?.1;
-        let membs = membs.into_iter().filter_map(|opt| opt).collect();
+        let membs = membs.into_iter().flatten().collect();
         Ok(doc.arena.create_array(membs))
     }
 
     fn map(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let (_, id, _) = seq!(self:
+        let (_, membs, _) = seq!(self:
             self.char('{'),
-            self.map_no_braces(doc),
+            self.map_members(doc),
             self.expect('}', "Missing closing brace in map")
         )?;
-        Ok(id)
+        Ok(doc.arena.create_map(membs))
     }
 
-    fn map_no_braces(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
+    fn map_members(
+        &mut self, doc: &mut Docmt
+    ) -> ParseResult<Vec<ExprId>> {
         let mut keys = Vec::new();
         let mut membs = Vec::new();
-        _ = many0!(self.member('}', doc).map(|opt| {
-            if let Some(id) = opt {
+        _ = many0!(self.member('}', doc).map(|ids|
+            for id in ids.into_iter() {
                 let mut has_redef = false;
                 let mut defns = doc.arena.get_defns(id);
                 for nm in defns.iter() {
@@ -473,10 +511,33 @@ impl<'a> Pos<'a> {
                     keys.append(&mut defns);
                     membs.push(id);
                 }
-            };
-        }))?;
-        Ok(doc.arena.create_map(membs))
+            }
+        ))?;
+        Ok(membs)
     }
+
+    fn use_stmt(
+        &mut self, doc: &mut Docmt
+    ) -> ParseResult<Vec<ExprId>> { revert!(self:
+        seq!(self:
+            self.skip(), self.tag("use"), self.string()
+        ).and_then(|(_, _, path)| {
+            let path = self.check_path(&path, doc)
+                .map_err(|err| Some(err))?;
+            match read_to_string(&path) {
+                Ok(content) => {
+                    doc.paths.push(path);
+                    let ign_subs = doc.ignore_substs;
+                    doc.ignore_substs = false;
+                    let membs = Pos::new(&content).root(doc)?;
+                    doc.ignore_substs = ign_subs;
+                    doc.paths.pop();
+                    Ok(membs)
+                },
+                Err(err) => parse_err!(self, "{}", err),
+            }
+        })
+    )}
 
     fn lambda(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         let (_, args, _, body) = seq!(self:
@@ -487,19 +548,45 @@ impl<'a> Pos<'a> {
         )?;
         Ok(doc.arena.create_func(None, args, body))
     }
+
+    fn root(&mut self, doc: &mut Docmt) -> ParseResult<Vec<ExprId>> {
+        let membs = self.map_members(doc)?;
+        _ = self.skip();
+        if !self.is_empty() { doc.add_error(self.error(
+            "Extra unparsed content in document".to_owned()
+        ))}
+        Ok(membs)
+    }
+
+
+    fn check_path(&self, path: &str, doc: &mut Docmt) -> Result<PathBuf, ParseError> {
+        let path = PathBuf::from(path);
+        let canonical = doc.paths.last()
+        .and_then(|last_path| last_path.parent())
+        .and_then(|last_path| if path.is_relative() {
+            last_path.join(&path).canonicalize().ok()
+        } else { None })
+        .or_else(|| path.canonicalize().ok())
+        .ok_or_else(|| self.error(format!(
+            "Cannot find path '{}'", path.display()
+        )))?;
+
+        if doc.paths.contains(&canonical) {
+            return Err(self.error(format!(
+                "Circular dependence in file imports from '{}'",
+                canonical.display()
+            )))
+        }
+        Ok(canonical)
+    }
 }
+
 
 pub fn parse(doc: &mut Docmt, src: &str, bltns: HashMap<String, Object>) {
     let mut pos = Pos::new(src);
-    match pos.map_no_braces(doc) {
-        Ok(root) => {
-            _ = pos.skip();
-            if !pos.is_empty() {
-                doc.add_error(pos.error(
-                    "Extra unparsed content in document".to_owned()
-                ))
-            }
-
+    match pos.root(doc) {
+        Ok(membs) => {
+            let root = doc.arena.create_map(membs);
             doc.arena.resolve_builtins(root, bltns);
         }
         Err(Some(err)) => doc.add_error(err),
