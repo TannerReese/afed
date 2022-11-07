@@ -84,6 +84,7 @@ impl PartialEq for Stream {
 
 struct Params {
     clear: bool,
+    input_path: Option<PathBuf>,
     input: Stream,
     output: Stream,
     errors: Stream,
@@ -123,8 +124,18 @@ const HELP_MSG: &str = concat!(
     "  afed file.af -o output.af\n",
 );
 
+macro_rules! usage {
+    ($($arg:tt),*) => {{
+        eprintln!($($arg),*);
+        eprintln!("{}", USAGE_MSG);
+        exit(1);
+    }};
+}
+
+
 impl Params {
     fn parse() -> Params {
+        let mut input_path = None;
         let (mut input, mut output, mut errors) = (None, None, None);
         let (
             mut check, mut clear,
@@ -137,38 +148,32 @@ impl Params {
         while let Some(opt) = args.next() {
             match opt.as_str() {
                 "-i" | "--input" => if let Some(_) = input {
-                    eprintln!("Input file already provided\n{}", USAGE_MSG);
-                    exit(1);
+                    usage!("Input file already provided");
                 } else if let Some(path) = args.next() {
                     input = Some(Stream::new(path, true));
-                } else {
-                    eprintln!("No input file provided to -i\n{}", USAGE_MSG);
-                    exit(1);
-                },
+                } else { usage!("No input file provided to -i"); },
                 "-o" | "--ouput" => if let Some(_) = output {
-                    eprintln!("Output file already provided\n{}", USAGE_MSG);
-                    exit(1);
+                    usage!("Output file already provided");
                 } else if let Some(path) = args.next() {
                     output = Some(Stream::new(path, false));
-                } else {
-                    eprintln!("No output file provided to -o\n{}", USAGE_MSG);
-                    exit(1);
-                },
+                } else { usage!("No output file provided to -o"); },
+
+                "-f" | "--filename" => if let Some(_) = input_path {
+                    usage!("Input filename already provided");
+                } else if let Some(path) = args.next() {
+                    input_path = Some(PathBuf::from(path));
+                } else { usage!("No input name provided to -f"); },
 
                 "-C" | "--check" => { check = true; },
                 "-d" | "--clear" => { clear = true; },
                 "-n" | "--no-clobber" => { no_clobber = true; },
 
+                "-E" | "--no-errors" => { no_errors = true; },
                 "-e" | "--errors" => if let Some(_) = errors {
-                    eprintln!("Error output already provided\n{}", USAGE_MSG);
-                    exit(1);
+                    usage!("Error output already provided");
                 } else if let Some(path) = args.next() {
                     errors = Some(Stream::new(path, false));
-                } else {
-                    eprintln!("No error file provided to -e\n{}", USAGE_MSG);
-                    exit(1);
-                },
-                "-E" | "--no-errors" => { no_errors = true; },
+                } else { usage!("No error file provided"); },
 
                 "-h" | "-?" | "--help" => {
                     println!("{}", HELP_MSG);
@@ -180,10 +185,7 @@ impl Params {
                         input = Some(Stream::new(opt, true));
                     } else if let None = output {
                         output = Some(Stream::new(opt, false));
-                    } else {
-                        eprintln!("Extra positional argument: {}\n{}", opt, USAGE_MSG);
-                        exit(1);
-                    }
+                    } else { usage!("Extra positional argument: {}", opt); }
                 },
             }
         }
@@ -197,12 +199,16 @@ impl Params {
             else if let Some(err) = errors { err }
             else { Stream::Stderr };
 
+        let input_path = input_path.or(input.get_path());
+
         if no_clobber && input == output {
-            eprintln!("Input and output files match, but --no-clobber is on\n{}", USAGE_MSG);
-            exit(1);
+            usage!("Input and output files match, but --no-clobber is on");
         }
 
-        Params { clear, input, output, errors }
+        Params {
+            clear, input_path,
+            input, output, errors,
+        }
     }
 }
 
@@ -211,7 +217,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut prog = String::new();
     prms.input.to_reader().read_to_string(&mut prog)?;
 
-    let mut doc = docmt::Docmt::new(prog, prms.input.get_path());
+    let mut doc = docmt::Docmt::new(prog, prms.input_path);
     doc.only_clear = prms.clear;
     let mut any_errors = false;
 
@@ -220,20 +226,16 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     let mut errout = prms.errors.to_writer();
     if let Err(count) = doc.parse(&mut errout, bltns) {
         any_errors = true;
-        if count == 1 {
-            write!(&mut errout, "1 Parse Error encountered\n\n\n")?;
-        } else {
-            write!(&mut errout, "{} Parse Errors encountered\n\n\n", count)?;
-        }
+        write!(&mut errout, "{} Parse Error{} encountered\n\n\n",
+            count, if count == 1 { "" } else { "s" }
+        )?;
     }
 
     if let Err(count) = doc.eval(&mut errout) {
         any_errors = true;
-        if count == 1 {
-            write!(&mut errout, "1 Eval Error encountered\n")?;
-        } else {
-            write!(&mut errout, "{} Eval Errors encountered\n", count)?;
-        }
+        write!(&mut errout, "{} Eval Error{} encountered\n",
+            count, if count == 1 { "" } else { "s" }
+        )?;
     }
 
     if !any_errors { write!(&mut errout, "No Errors encountered\n")?; }

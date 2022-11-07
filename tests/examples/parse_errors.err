@@ -3,19 +3,19 @@ Parse Error in line 4, column 13 of "parse_errors.af"
 |               ^
 Error: Redefinition of label 'x' in map
 
-Parse Error in line 14, column 30 of "parse_errors.af"
+Parse Error in line 14, column 24 of "parse_errors.af"
 |   {1, "zing zing", 4n  kd ( $ $, "this is": "correct"} = ``,
-|                                ^
-Error: Ill formed member
-
-Parse Error in line 15, column 33 of "parse_errors.af"
-|   { "good", second: njd %% & 62 ] , third: "good"} = ``,
-|                                   ^
-Error: Ill formed member
-
-Parse Error in line 16, column 24 of "parse_errors.af"
-|   ["this", "next"  ( % ^&, "last"] = ``,
 |                          ^
+Error: Ill formed member
+
+Parse Error in line 15, column 22 of "parse_errors.af"
+|   { "good", second: njd %% & 62 ] , third: "good"} = ``,
+|                        ^
+Error: Ill formed member
+
+Parse Error in line 16, column 16 of "parse_errors.af"
+|   ["this", "next"  ( % ^&, "last"] = ``,
+|                  ^
 Error: Ill formed member
 
 Parse Error in line 21, column 21 of "parse_errors.af"

@@ -3,6 +3,11 @@ Parse Error in line 4, column 21 of "parent_use.af"
 |                       ^
 Error: Redefinition of label 'redef' in map
 
-1 Parse Error encountered
+Parse Error in line 8, column 8 of "parent_use.af"
+|   [1, use + 3, "h"] = ``
+|          ^
+Error: 'use' keyword can only be used for importing
+
+2 Parse Errors encountered
 
 

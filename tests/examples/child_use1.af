@@ -1,4 +1,6 @@
 # Helper file for use test
 redef: 16,
-from_child1: 4
+from_child1: 4,
+
+from_child1 + 2 = ``
 

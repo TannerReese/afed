@@ -1,4 +1,5 @@
 # Helper file for use test
+from_child2 = ``,
 from_child2: 5,
 redef: 10
 

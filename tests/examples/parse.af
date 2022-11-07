@@ -5,7 +5,7 @@ x   : {
 	y_
 	:
 	# Array
-	[1, 2],
+	[1, 2, null],
 	y_ = ``,
 	# String-keyed member
 	"!!#!!" : 3,

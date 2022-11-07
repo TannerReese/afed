@@ -2,5 +2,8 @@
 use "subdir/child_use2.af",
 from_child1 = `4`,
 use "child_use1.af",
-from_child2 = `5`
+from_child2 = `5`,
+
+# Check incorrect usage of 'use'
+[1, use + 3, "h"] = `[1, "h"]`
 

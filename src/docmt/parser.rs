@@ -66,6 +66,32 @@ macro_rules! ign {
 }
 
 macro_rules! seq {
+    ($pos:ident : $before:expr, $parse:expr) => {
+        seq!($pos: $before, $parse, Ok(()))
+    };
+    ($pos:ident : , $parse:expr, $after:expr) => {
+        seq!($pos: Ok(()), $parse, $after)
+    };
+    ($pos:ident : $before:expr, $parse:expr, $after:expr) => {
+        revert!($pos: loop {
+            match $before {
+                Err(err) => break Err(err),
+                _ => {},
+            }
+
+            let value = $parse;
+            if value.is_err() { break value; }
+
+            match $after {
+                Err(err) => break Err(err),
+                _ => {},
+            }
+            break value;
+        })
+    };
+}
+
+macro_rules! tuple {
     ($pos:ident : $($parse:expr),+) => {
         revert!($pos: loop {
             break Ok(($(match $parse {
@@ -82,7 +108,7 @@ macro_rules! many0 {
         loop { match $parse {
             Ok(val) => results.push(val),
             Err(None) => break Ok(results),
-            Err(Some(errs)) => break Err(Some(errs)),
+            Err(Some(err)) => break Err(Some(err)),
         }}
     }};
 }
@@ -127,7 +153,7 @@ impl Display for ParseError {
 }
 
 macro_rules! parse_err {
-    ($pos:expr, $($arg:tt)+) => { Err(Some($pos.error(format!($($arg)+)))) }
+    ($pos:expr, $($arg:tt)+) => { $pos.error(format!($($arg)+)) }
 }
 
 
@@ -196,12 +222,12 @@ impl<'a> Pos<'a> {
     fn skip(&mut self) -> ParseResult<()> {
         _ = many0!(alt!(
             ign!(self.while_char(|c| c.is_whitespace())),
-            ign!(seq!(self:
+            ign!(tuple!(self:
                 self.tag("#{"),
                 self.while_str(|s| !s.starts_with("}#")),
                 self.tag("}#")
             )),
-            ign!(seq!(self:
+            ign!(tuple!(self:
                 self.tag("#"),
                 self.while_char(|c| c != '\n')
             ))
@@ -249,7 +275,7 @@ impl<'a> Pos<'a> {
 
     fn expect(&mut self, c: char, msg: &str) -> ParseResult<char> {
         let res = self.char(c);
-        if let Err(None) = res { parse_err!(self, "{}", msg) }
+        if let Err(None) = res { Err(Some(parse_err!(self, "{}", msg))) }
         else { res }
     }
 
@@ -258,7 +284,10 @@ impl<'a> Pos<'a> {
             self.tag("null").map(|_| Object::new(Null())),
             self.tag("true").map(|_| Object::new(Bool(true))),
             self.tag("false").map(|_| Object::new(Bool(false))),
-            self.tag("if").map(|_| Object::new(Ternary()))
+            self.tag("if").map(|_| Object::new(Ternary())),
+            seq!(self: self.tag("use"), Err(Some(parse_err!(self,
+                "'use' keyword can only be used for importing"
+            ))))
         )
     }
 
@@ -271,10 +300,10 @@ impl<'a> Pos<'a> {
                     Ok(Number::Ratio(n, 1))
                 } else if let Ok(f) = numstr.parse::<f64>() {
                     Ok(Number::Real(f))
-                } else { parse_err!(self, "Invalid Number") }
+                } else { Err(Some(parse_err!(self, "Invalid Number"))) }
 
             )
-        ).map(|(_, num)| num)
+        )
     }
 
     fn name(&mut self) -> ParseResult<String> {
@@ -336,12 +365,14 @@ impl<'a> Pos<'a> {
 
 impl<'a> Pos<'a> {
     fn defn(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let (labels, mut body) = seq!(self:
-            opt!(seq!(self:
-                alt!(self.string(), self.name()),
-                many0!(self.name()),
+        let (labels, mut body) = tuple!(self:
+            opt!(seq!(self: ,
+                tuple!(self:
+                    alt!(self.string(), self.name()),
+                    many0!(self.name())
+                ),
                 self.char(':')
-            ).map(|(name, args, _)| (name, args))),
+            )),
             self.equals(doc)
         )?;
 
@@ -359,7 +390,7 @@ impl<'a> Pos<'a> {
         revert!(self: self.expr(doc, 0)
         .and_then(|body| {
             let (start, lineno, column);
-            opt!(seq!(self:
+            opt!(tuple!(self:
                 self.char('='), self.skip(),
                 {
                     lineno = self.lineno;
@@ -411,7 +442,7 @@ impl<'a> Pos<'a> {
     }
 
     fn call(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let ((val, attrs), args) = seq!(self:
+        let ((val, attrs), args) = tuple!(self:
             self.access(doc),
             many0!(self.access(doc).map(|(arg, arg_attrs)|
                 doc.arena.create_access(arg, arg_attrs)
@@ -422,11 +453,9 @@ impl<'a> Pos<'a> {
 
     fn access(
         &mut self, doc: &mut Docmt
-    ) -> ParseResult<(ExprId, Vec<String>)> { seq!(self:
+    ) -> ParseResult<(ExprId, Vec<String>)> { tuple!(self:
         self.single(doc),
-        many0!(seq!(self:
-            self.char('.'), self.name()
-        ).map(|(_, nm)| nm))
+        many0!(seq!(self: self.char('.'), self.name()))
     )}
 
     fn single(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
@@ -434,54 +463,53 @@ impl<'a> Pos<'a> {
             self.string().map(|s| doc.arena.create_obj(Str(s))),
             seq!(self:
                 self.char('('), self.defn(doc), self.char(')')
-            ).map(|(_, id, _)| id),
+            ),
             self.array(doc),
             self.map(doc),
             self.lambda(doc),
             self.number().map(|num| doc.arena.create_obj(num)),
             self.constant().map(|obj| doc.arena.from_obj(obj)),
             self.name().map(|name| doc.arena.create_var(name))
-        )).map(|(_, id)| id)
+        ))
     }
 
 
 
     fn member(
-        &mut self, term: char, doc: &mut Docmt
+        &mut self, term: char, allow_use: bool, doc: &mut Docmt
     ) -> ParseResult<Vec<ExprId>> { recover!(doc,
-        seq!(self:
+        seq!(self:,
             alt!(
-                self.use_stmt(doc),
+                if allow_use {
+                    self.use_stmt(doc)
+                } else { Err(None) },
                 self.defn(doc).map(|id| vec![id])
             ),
             alt!(ign!(self.char(',')),
                 alt!(self.eoi()),
                 peek!(self: ign!(self.char(term)))
-            )
-        ).map(|(ids, _)| ids),
+            ).map_err(|_| Some(self.error(
+                "Ill formed member".to_owned()
+            )))
+        ),
         seq!(self:
             self.skip(),
-            self.while_char(|c| c != term && c != ',').map(|_| {
-                doc.add_error(self.error(
-                    "Ill formed member".to_owned()
-                ));
-                vec![]
-            }),
+            self.while_char(|c| c != term && c != ','),
             opt!(self.char(','))
-        ).map(|(_, ids, _)| ids)
+        ).map(|_| vec![])
     )}
 
     fn array(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         let membs = seq!(self: self.char('['),
-            many0!(self.member(']', doc)),
+            many0!(self.member(']', false, doc)),
             self.expect(']', "Missing closing bracket in array")
-        )?.1;
+        )?;
         let membs = membs.into_iter().flatten().collect();
         Ok(doc.arena.create_array(membs))
     }
 
     fn map(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let (_, membs, _) = seq!(self:
+        let membs = seq!(self:
             self.char('{'),
             self.map_members(doc),
             self.expect('}', "Missing closing brace in map")
@@ -494,7 +522,7 @@ impl<'a> Pos<'a> {
     ) -> ParseResult<Vec<ExprId>> {
         let mut keys = Vec::new();
         let mut membs = Vec::new();
-        _ = many0!(self.member('}', doc).map(|ids|
+        _ = many0!(self.member('}', true, doc).map(|ids|
             for id in ids.into_iter() {
                 let mut has_redef = false;
                 let mut defns = doc.arena.get_defns(id);
@@ -520,30 +548,32 @@ impl<'a> Pos<'a> {
         &mut self, doc: &mut Docmt
     ) -> ParseResult<Vec<ExprId>> { revert!(self:
         seq!(self:
-            self.skip(), self.tag("use"), self.string()
-        ).and_then(|(_, _, path)| {
+            tuple!(self: self.skip(), self.tag("use")), self.string()
+        ).and_then(|path| {
             let path = self.check_path(&path, doc)
                 .map_err(|err| Some(err))?;
             match read_to_string(&path) {
                 Ok(content) => {
                     doc.paths.push(path);
                     let ign_subs = doc.ignore_substs;
-                    doc.ignore_substs = false;
+                    doc.ignore_substs = true;
                     let membs = Pos::new(&content).root(doc)?;
                     doc.ignore_substs = ign_subs;
                     doc.paths.pop();
                     Ok(membs)
                 },
-                Err(err) => parse_err!(self, "{}", err),
+                Err(err) => Err(Some(parse_err!(self, "{}", err))),
             }
         })
     )}
 
     fn lambda(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let (_, args, _, body) = seq!(self:
-            self.char('\\'),
-            many1!(self.name()),
-            self.expect(':', "Missing colon in lambda definition"),
+        let (args, body) = tuple!(self:
+            seq!(self:
+                self.char('\\'),
+                many1!(self.name()),
+                self.expect(':', "Missing colon in lambda definition")
+            ),
             self.expr(doc, 0)
         )?;
         Ok(doc.arena.create_func(None, args, body))
@@ -567,15 +597,15 @@ impl<'a> Pos<'a> {
             last_path.join(&path).canonicalize().ok()
         } else { None })
         .or_else(|| path.canonicalize().ok())
-        .ok_or_else(|| self.error(format!(
+        .ok_or_else(|| parse_err!(self,
             "Cannot find path '{}'", path.display()
-        )))?;
+        ))?;
 
         if doc.paths.contains(&canonical) {
-            return Err(self.error(format!(
+            return Err(parse_err!(self,
                 "Circular dependence in file imports from '{}'",
                 canonical.display()
-            )))
+            ))
         }
         Ok(canonical)
     }

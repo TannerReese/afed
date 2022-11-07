@@ -7,8 +7,22 @@ let b:afed_plugin = 1
 function! AfedEval()
 	let curs = getcurpos()
 	" Filter through Afed without printing errors
-	:%! afed -E -
+	if expand("%") == ""
+		:%! afed -E -
+	else
+		" Pass the filename if available
+		:execute "%! afed -f '" . expand("%:p") . "' -E -"
+	endif
 	call setpos('.', curs)
+endfunction
+
+function! AfedCheck()
+	if expand("%") == ""
+		:w ! afed -C -
+	else
+		" Pass the filename if available
+		:execute "w ! afed -f '" . expand("%:p") . "' -C -"
+	endif
 endfunction
 
 function! AfedClear()
@@ -21,7 +35,7 @@ endfunction
 nnoremap <buffer> ,, :call AfedEval()<CR>
 
 " Check for errors in document
-nnoremap <buffer> ,. :w ! afed -C -<CR>
+nnoremap <buffer> ,. :call AfedCheck()<CR>
 
 " Clear all substitution expressions
 nnoremap <buffer> ,l :call AfedClear()<CR>
