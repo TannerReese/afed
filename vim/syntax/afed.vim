@@ -40,7 +40,9 @@ syn region afedResult start=/`/ skip=/\\`/ end=/`/ keepend
 hi link afedResult Special
 
 " Identifier in Map
-syn match afedName /\v(\a\w*|\s|\n|#[^\n]*\n|#\{.{-}\}#)*:/ contains=afedOper,afedComment
+syn match afedLabel /\v(\a\w*|\s|\n|\[.{-}\]|\{.{-}\}|#[^\n]*\n|#\{.{-}\}#)*:/ contains=afedName,afedString,afedOper,afedComment
+hi link afedLabel Ignore
+syn match afedName /\v\a\w*/ contained
 hi link afedName Identifier 
 
 " Single line comments

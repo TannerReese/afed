@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::ffi::OsString;
 
-use crate::expr::ExprId;
+use crate::expr::{ExprId, Pattern};
 
 use crate::object::{Object, Unary, Binary, Assoc};
 use crate::object::null::Null;
@@ -14,113 +14,6 @@ use crate::object::number::Number;
 use crate::object::string::Str;
 
 use super::{Docmt, Subst};
-
-
-macro_rules! alt {
-    ($($parse:expr),+) => { loop {
-        $(match $parse {
-            Ok(good) => break Ok(good),
-            Err(Some(err)) => break Err(Some(err)),
-            Err(None) => {},
-        })+
-        break Err(None);
-    }};
-}
-
-macro_rules! recover {
-    ($doc:expr, $parse:expr, $recover:expr) => { match $parse {
-        Ok(good) => Ok(good),
-        Err(None) => $recover,
-        Err(Some(err)) => { $doc.add_error(err); $recover },
-    }};
-}
-
-macro_rules! revert {
-    ($pos:ident : $parse:expr) => {{
-        let start = *$pos;
-        let res = $parse;
-        if res.is_err() { *$pos = start; }
-        res
-    }};
-}
-
-macro_rules! peek {
-    ($pos:ident : $parse:expr) => {{
-        let start = *$pos;
-        let res = $parse;
-        *$pos = start;
-        res
-    }}
-}
-
-macro_rules! opt {
-    ($parse:expr) => { match $parse {
-        Ok(good) => Ok(Some(good)),
-        Err(None) => Ok(None),
-        Err(Some(errs)) => Err(Some(errs)),
-    }};
-}
-
-macro_rules! ign {
-    ($parse:expr) => { $parse.map(|_| ()) };
-}
-
-macro_rules! seq {
-    ($pos:ident : $before:expr, $parse:expr) => {
-        seq!($pos: $before, $parse, Ok(()))
-    };
-    ($pos:ident : , $parse:expr, $after:expr) => {
-        seq!($pos: Ok(()), $parse, $after)
-    };
-    ($pos:ident : $before:expr, $parse:expr, $after:expr) => {
-        revert!($pos: loop {
-            match $before {
-                Err(err) => break Err(err),
-                _ => {},
-            }
-
-            let value = $parse;
-            if value.is_err() { break value; }
-
-            match $after {
-                Err(err) => break Err(err),
-                _ => {},
-            }
-            break value;
-        })
-    };
-}
-
-macro_rules! tuple {
-    ($pos:ident : $($parse:expr),+) => {
-        revert!($pos: loop {
-            break Ok(($(match $parse {
-                Ok(good) => good,
-                Err(err) => break Err(err),
-            }),+))
-        })
-    };
-}
-
-macro_rules! many0 {
-    ($parse:expr) => {{
-        let mut results = Vec::new();
-        loop { match $parse {
-            Ok(val) => results.push(val),
-            Err(None) => break Ok(results),
-            Err(Some(err)) => break Err(Some(err)),
-        }}
-    }};
-}
-
-macro_rules! many1 {
-    ($parse:expr) => {
-        many0!($parse).and_then(|results|
-            if results.len() == 0 { Err(None) }
-            else { Ok(results) }
-        )
-    }
-}
 
 
 
@@ -369,17 +262,17 @@ impl<'a> Pos<'a> {
             opt!(seq!(self: ,
                 tuple!(self:
                     alt!(self.string(), self.name()),
-                    many0!(self.name())
+                    many0!(self.pattern())
                 ),
                 self.char(':')
             )),
             self.equals(doc)
         )?;
 
-        if let Some((name, args)) = labels {
-            if args.len() > 0 {
+        if let Some((name, pats)) = labels {
+            if pats.len() > 0 {
                 body = doc.arena.create_func(
-                    Some(name.clone()), args, body
+                    Some(name.clone()), pats, body
                 );
             }
             Ok(doc.arena.create_defn(name, body))
@@ -417,6 +310,7 @@ impl<'a> Pos<'a> {
             Ok(body)
         }))
     }
+
     fn expr(
         &mut self, doc: &mut Docmt, min_prec: usize
     ) -> ParseResult<ExprId> {
@@ -568,15 +462,42 @@ impl<'a> Pos<'a> {
     )}
 
     fn lambda(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
-        let (args, body) = tuple!(self:
+        let (pats, body) = tuple!(self:
             seq!(self:
                 self.char('\\'),
-                many1!(self.name()),
+                many1!(self.pattern()),
                 self.expect(':', "Missing colon in lambda definition")
             ),
             self.expr(doc, 0)
         )?;
-        Ok(doc.arena.create_func(None, args, body))
+        Ok(doc.arena.create_func(None, pats, body))
+    }
+
+    fn pattern(&mut self) -> ParseResult<Pattern<String>> {
+        alt!(
+            self.name().map(|nm| Pattern::Arg(nm)),
+            seq!(self: self.char('['), many0!(
+                self.pattern(), self.char(',')
+            ), tuple!(self: opt!(self.char(',')), self.char(']')))
+            .map(|pats| Pattern::Array(pats)),
+
+            {
+                let mut is_fuzzy = false;
+                seq!(self: self.char('{'),
+                    many0!(alt!(
+                        seq!(self: self.skip(), self.tag(".."))
+                        .map(|_| { is_fuzzy = true; None }),
+                        tuple!(self:
+                            alt!(self.name(), self.string()),
+                            seq!(self: self.char(':'), self.pattern())
+                        ).map(Some)
+                    ), self.char(',')),
+                tuple!(self: opt!(self.char(',')), self.char('}')))
+                .map(|pats| Pattern::Map(is_fuzzy,
+                    pats.into_iter().filter_map(|opt| opt).collect()
+                ))
+            }
+        )
     }
 
     fn root(&mut self, doc: &mut Docmt) -> ParseResult<Vec<ExprId>> {

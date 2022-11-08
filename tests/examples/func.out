@@ -64,3 +64,22 @@ scope.f 4 = `7.5600000000000005`,
 	g 1 = `[1, 2]`,
 },
 
+# Argument destructuring
+{
+	f [x, {"_ a": x2}, y] : x - x2 / y,
+	f [1, {"_ a": 3}, 2] = `-1 / 2`,
+
+	# Fuzzy matching
+	g {"df": x, .., h: y}: x - y,
+	g {h: 3, df: 2, other: "j"} = `-1`,
+
+	# Lambdas
+	(\{.., a: z, "b": [x, y]} : x + 2 * y + 4 * z)
+	{a: 6, b: [1, 2], c: null} = `29`,
+
+	# Check erroneous calls
+	g {df: 3, other: -1} = `Eval Error: Map is missing key h`,
+	f [1, 2, 3] = `Eval Error: Expected map, but found number`,
+	f [9, {"_ a": 4, n: 7}, 3] = `Eval Error: Map contains unused keys ["n"]`,
+}
+

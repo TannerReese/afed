@@ -145,7 +145,7 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
 
     fn clone(&self) -> Object { Object::new(to_ref(self).clone()) }
     fn eq(&self, other: &Object) -> bool {
-        if let Some(other) = other.downcast_ref::<T>() {
+        if let Some(other) = other.cast_ref::<T>() {
             to_ref(self) == other
         } else { false }
     }
@@ -180,7 +180,7 @@ impl Object {
     pub fn is_a<T>(&self) -> bool where T: Any
         { TypeId::of::<T>() == self.type_id() }
 
-    pub fn downcast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
+    pub fn cast_ref<'a, T: 'static>(&'a self) -> Option<&'a T>
         { (*self.0).as_any().downcast_ref() }
 
 
@@ -198,7 +198,7 @@ impl Object {
     where
         B: Hash + Eq,
         String: Borrow<B>,
-    { self.downcast_ref::<map::Map>().and_then(|m| m.get(key)) }
+    { self.cast_ref::<map::Map>().and_then(|m| m.get(key)) }
 
     pub fn find<'a, I, B>(&self, path: I) -> Option<&Object>
     where

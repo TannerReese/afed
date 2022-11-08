@@ -9,8 +9,10 @@ use super::object::array::Array;
 use super::object::map::Map;
 
 use func::Func;
+pub use pattern::Pattern;
 
 pub mod func;
+pub mod pattern;
 
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ enum Inner {
     Binary(Binary, ExprId, ExprId),
     Access(ExprId, Vec<String>, Vec<ExprId>),
     Arg(String),
-    Func(Option<String>, Vec<ArgId>, ExprId),
+    Func(Option<String>, Vec<Pattern<ArgId>>, ExprId),
 }
 
 pub struct Node {
@@ -226,11 +228,13 @@ impl ExprArena {
     }
 
     pub fn create_func(&mut self,
-        name: Option<String>, args: Vec<String>, body: ExprId
+        name: Option<String>, pats: Vec<Pattern<String>>, body: ExprId
     ) -> ExprId {
-        let args = args.into_iter().map(|nm|
-            self.create_node(Vec::with_capacity(0), Inner::Arg(nm))
-        ).collect::<Vec<ArgId>>();
+        let mut args = Vec::new();
+        let pats = pats.into_iter().map(|p| p.into_map(|nm| {
+            let id = self.create_node(Vec::with_capacity(0), Inner::Arg(nm));
+            args.push(id);  id
+        })).collect::<Vec<Pattern<ArgId>>>();
 
         self.resolve(body, |ar, nm| {
             args.iter().filter_map(|&id|
@@ -239,7 +243,7 @@ impl ExprArena {
             ).next()
         });
         let vars = self.take_vars(body);
-        self.create_node(vars, Inner::Func(name, args, body))
+        self.create_node(vars, Inner::Func(name, pats, body))
     }
 
 
@@ -403,10 +407,12 @@ impl ExprArena {
             },
 
             Inner::Arg(_) => { args_used.push(exp); None },
-            Inner::Func(_, args, body) => {
+            Inner::Func(_, pats, body) => {
                 let mut used = Vec::new();
                 self.simplify(&mut used, *body);
-                let cnst = used.iter().all(|id| args.contains(id));
+                let cnst = used.iter().all(|id|
+                    pats.iter().any(|p| p.contains(id))
+                );
 
                 if !cnst { None } else {
                     let mut arena = ExprArena::new();
@@ -509,12 +515,12 @@ impl ExprArena {
             },
 
             Inner::Arg(name) => arena.create_var(name.clone()),
-            Inner::Func(name, args, body) => {
+            Inner::Func(name, pats, body) => {
                 let body = self.clone_into(arena, *body);
-                let args = args.iter().map(|&id|
+                let pats = pats.iter().map(|p| p.map(|&id|
                     self.get_argname(id).to_owned()
-                ).collect();
-                arena.create_func(name.clone(), args, body)
+                )).collect();
+                arena.create_func(name.clone(), pats, body)
             },
         }
     }

@@ -6,13 +6,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::object::{
     Object, Unary, Binary, Operable, NamedType,
 };
-use super::{ExprId, ArgId, ExprArena};
+use super::{ExprId, ArgId, ExprArena, Pattern};
 
 #[derive(Debug, Clone)]
 pub struct Func {
     name: Option<String>,
     id: usize,
-    args: Vec<ArgId>,
+    pats: Vec<Pattern<ArgId>>,
     body: ExprId,
     arena: ExprArena,
 }
@@ -22,10 +22,11 @@ impl NamedType for Func { fn type_name() -> &'static str{ "function" } }
 static FUNC_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Func {
     pub fn new(
-        name: Option<String>, args: Vec<ArgId>, body: ExprId, arena: ExprArena
+        name: Option<String>, pats: Vec<Pattern<ArgId>>,
+        body: ExprId, arena: ExprArena,
     ) -> Object {
         let id = FUNC_COUNTER.fetch_add(1, Ordering::Relaxed);
-        Object::new(Func {name, id, args, body, arena})
+        Object::new(Func {name, id, pats, body, arena})
     }
 }
 
@@ -34,7 +35,7 @@ impl Operable for Func {
     binary_not_impl!();
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(self.args.len()),
+        None => Some(self.pats.len()),
         Some("arity") => Some(0),
         _ => None,
     }}
@@ -44,13 +45,15 @@ impl Operable for Func {
     ) -> Object { match attr {
         None => {
             self.arena.clear_cache();
-            for (&id, obj) in zip(self.args.iter(), args.into_iter()) {
-                self.arena.set_arg(id, obj);
+            for (pat, obj) in zip(self.pats.iter(), args.into_iter()) {
+                if let Err(err) = pat.recognize(&self.arena, obj) {
+                    return err;
+                }
             }
             self.arena.eval(self.body)
         },
 
-        Some("arity") => self.args.len().into(),
+        Some("arity") => self.pats.len().into(),
         _ => panic!(),
     }}
 }
@@ -59,10 +62,10 @@ impl Display for Func {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if let Some(name) = &self.name {
             write!(f, "Func<name='{}', id={}, arity={}>",
-                name, self.id, self.args.len(),
+                name, self.id, self.pats.len(),
             )
         } else { write!(f, "Lambda<id={}, arity={}>",
-            self.id, self.args.len(),
+            self.id, self.pats.len(),
         )}
     }
 }

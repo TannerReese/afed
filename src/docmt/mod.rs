@@ -9,6 +9,7 @@ use super::object::Object;
 
 use parser::{parse, ParseError};
 
+#[macro_use] mod combins;
 mod parser;
 
 
