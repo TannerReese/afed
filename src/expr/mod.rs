@@ -504,14 +504,20 @@ impl ExprArena {
             },
 
             Inner::Access(target, path, args) => {
-                let mut path = path.iter();
-                let target = self.access(*target, &mut path);
-                let target = self.clone_into(arena, target);
-
                 let args = args.iter().map(|&id|
                     self.clone_into(arena, id)
                 ).collect();
-                arena.create_call(target, path.cloned().collect(), args)
+
+                let mut iter = path.iter();
+                let new_target = self.access(*target, &mut iter);
+                if self.has_value(new_target) {
+                    let new_target = arena.from_obj(self.take(new_target));
+                    let new_path = iter.cloned().collect();
+                    arena.create_call(new_target, new_path, args)
+                } else {
+                    let new_target = self.clone_into(arena, *target);
+                    arena.create_call(new_target, path.clone(), args)
+                }
             },
 
             Inner::Arg(name) => arena.create_var(name.clone()),

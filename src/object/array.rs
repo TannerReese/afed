@@ -185,13 +185,16 @@ impl FromIterator<Object> for Object {
         { Array(Vec::from_iter(iter)).into() }
 }
 
-impl From<Vec<Object>> for Object {
-    fn from(objs: Vec<Object>) -> Self {
-        if objs.iter().any(|elm| elm.is_err()) {
-            objs.into_iter()
-            .filter(|elm| elm.is_err())
-            .next().unwrap()
-        } else { Object::new(Array(objs)) }
+impl<T> From<Vec<T>> for Object where Object: From<T> {
+    fn from(elems: Vec<T>) -> Self {
+        let mut objs = Vec::new();
+        for elm in elems.into_iter() {
+            let elm = Object::from(elm);
+            if elm.is_err() {
+                return elm;
+            } else { objs.push(elm) }
+        }
+        Object::new(Array(objs))
     }
 }
 

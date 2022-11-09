@@ -81,5 +81,13 @@ scope.f 4 = ``,
 	g {df: 3, other: -1} = ``,
 	f [1, 2, 3] = ``,
 	f [9, {"_ a": 4, n: 7}, 3] = ``,
+},
+
+# Lambda expression with internal variables
+{
+	f x: {v: x * 2, w: x + 1, ans: v - w}.ans,
+	f 4 = ``,
+	lamb x: \y: {v: y + x, w: y / 2, ans: v * w}.ans,
+	lamb 1 5 = ``,
 }
 

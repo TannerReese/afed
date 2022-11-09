@@ -81,5 +81,13 @@ scope.f 4 = `7.5600000000000005`,
 	g {df: 3, other: -1} = `Eval Error: Map is missing key h`,
 	f [1, 2, 3] = `Eval Error: Expected map, but found number`,
 	f [9, {"_ a": 4, n: 7}, 3] = `Eval Error: Map contains unused keys ["n"]`,
+},
+
+# Lambda expression with internal variables
+{
+	f x: {v: x * 2, w: x + 1, ans: v - w}.ans,
+	f 4 = `3`,
+	lamb x: \y: {v: y + x, w: y / 2, ans: v * w}.ans,
+	lamb 1 5 = `15`,
 }
 

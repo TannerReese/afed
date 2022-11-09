@@ -22,14 +22,14 @@ pub fn range(mut start: Number, end: Number, step: Number) -> Object {
     let mut elems = Vec::new();
     let is_desc = if is_desc { -1 } else { 1 }.into();
     while (end - start) * is_desc >= zero {
-        elems.push(start.into());
+        elems.push(start);
         start += step;
     }
     elems.into()
 }
 
 pub fn iter(init: Object, times: usize, func: Object) -> Object {
-    if times == 0 { return Vec::new().into() }
+    if times == 0 { return Vec::<Object>::new().into() }
 
     let mut elems = Vec::new();
     let mut work = init;

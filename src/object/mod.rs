@@ -40,24 +40,23 @@ macro_rules! try_ok {
 }
 
 macro_rules! obj_call {
-    ($obj:ident ($($arg:expr),*)) => {
-        $obj.call(None, vec![$($arg,)*])
-    };
-    ($obj:ident ($($arg:expr),*) => $tp:ty) => {
-        try_cast!($obj.call(None, vec![$($arg,)*]) => $tp)
-    };
-    (($obj:expr).$method:ident ($($arg:expr),*)) => {
-        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
-    };
-    ($obj:ident.$method:ident ($($arg:expr),*)) => {
-        $obj.call(Some(stringify!($method)), vec![$($arg,)*])
-    };
-    (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) => {
-        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
-    };
-    ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) => {
-        try_cast!($obj.call(Some(stringify!($method)), vec![$($arg,)*]) => $tp)
-    };
+    (($obj:expr)($($arg:expr),*)) =>
+        { $obj.call(None, vec![$($arg.into()),*]) };
+    (($obj:expr)($($arg:expr),*) => $tp:ty) =>
+        { try_cast!(obj_call!(($obj)($($arg),*)) => $tp) };
+    ($obj:ident ($($arg:expr),*)) =>
+        { $obj.call(None, vec![$($arg.into()),*]) };
+    ($obj:ident ($($arg:expr),*) => $tp:ty) =>
+        { try_cast!(obj_call!($obj($($arg),*)) => $tp) };
+
+    (($obj:expr).$method:ident ($($arg:expr),*)) =>
+        { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
+    (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) =>
+        { try_cast!(obj_call!(($obj).$method($($arg),*)) => $tp) };
+    ($obj:ident.$method:ident ($($arg:expr),*)) =>
+        { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
+    ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) =>
+        { try_cast!(obj_call!($obj.$method($($arg),*)) => $tp) };
 }
 
 macro_rules! unary_not_impl {

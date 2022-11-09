@@ -140,7 +140,7 @@ pub fn make_bltns() -> Object {
         prime_sieve(x).map(|p| p.into()).collect()
     );
     def_bltn!(prs.prime_factors(x: u64) = prime_factors(x).map(|(p, k)|
-        vec![p.into(), k.into()].into()
+        vec![p, k as u64].into()
     ).collect());
 
     def_bltn!(prs.is_sqfree(x: u64) = is_sqfree(x).into());
