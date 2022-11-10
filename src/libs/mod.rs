@@ -67,11 +67,15 @@ pub mod bltn_func;
 
 pub mod num;
 pub mod arr;
+
 pub mod prs;
 pub mod modulo;
+
 pub mod vec;
 pub mod mat;
 mod augmat;
+
+pub mod calc;
 
 pub fn make_bltns() -> HashMap<String, Object> {[
     ("num", num::make_bltns()),
@@ -80,5 +84,6 @@ pub fn make_bltns() -> HashMap<String, Object> {[
     ("mod", modulo::make_bltns()),
     ("vec", vec::make_bltns()),
     ("mat", mat::make_bltns()),
+    ("calc", calc::make_bltns()),
 ].map(|(key, obj)| (key.to_owned(), obj)).into()}
 

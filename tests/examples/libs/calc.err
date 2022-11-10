@@ -1,0 +1,4 @@
+line 4, column 39 of "calc.af" Eval Error: Lower bound must be less than upper bound
+line 6, column 38 of "calc.af" Eval Error: Cannot cast number to integer type
+line 8, column 57 of "calc.af" Eval Error: Cannot call type number
+3 Eval Errors encountered

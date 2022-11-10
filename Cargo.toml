@@ -8,4 +8,5 @@ lto = true
 
 [dependencies]
 id-arena = "2"
+rand = "0.8"
 

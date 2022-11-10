@@ -31,7 +31,7 @@ syn keyword afedConstant null true false
 hi link afedConstant Constant
 
 " Builtin objects
-syn keyword afedBuiltin num arr prs mod vec mat contained
+syn keyword afedBuiltin num arr prs mod vec mat calc contained
 syn match afedBuiltinWithPeriod /\v\a\w*\./ contains=afedBuiltin,afedOper
 hi link afedBuiltin Structure
 

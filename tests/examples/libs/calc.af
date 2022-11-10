@@ -1,0 +1,35 @@
+# Test calculus functions
+
+# Bad bounds
+calc.integ_grid 100 [1, -1] \x: x^2 = ``,
+# Bad count
+calc.integ_rand 2.3 [0, 1] \x: x^3 = ``,
+# Incorrect dimension
+calc.argmax [[0, 1], [-1, 1], [2, 3]] \x y: x^2 + y^2 = ``,
+
+# Integration
+{
+	calc.integ_grid 10 ([[0, 1]] * 3) \x y z: x^2 + y^2 + z^2 = ``,
+	rand_val: calc.integ_rand 1000 ([[0, 1]] * 3) \x y z: sin (x + y^2) - cos z,
+	abs (rand_val + 0.16458) < 0.1 = ``,
+},
+
+# Derivative
+{
+	df: calc.deriv \x: x^3 - sqrt x,
+	df 3 = ``,
+	v: V[0, 1, -1], dx: V[1, 2, 1],
+	dg: calc.direc_deriv dx \x: x - (x * x) * v,
+	dg (V[2, 3, 1]) = ``,
+},
+
+# Maximum functions
+calc.argmax [0.5, 1.5] \x: sin(5 * x) = ``,
+calc.max_pt [[-1, 2], [2, 3]] \x y: x - x^2 - y^2 = ``,
+calc.max_val [[0.001, 1], [-1, 1]] \x x2: x2 * x - x^2 = ``,
+
+# Minimum functions
+calc.min_pt ([[-1, 1]] * 2) \x y: (x^2 - x + 2 * y^2) * (y^2 + y + 3 * x^2) = ``,
+calc.argmin [[0, 1], [-1, 0]] \x y: sin(x + y) - cos(x - y) = ``,
+calc.min_val [-5, 5] \v: v^4 - 3*v^3 + v^2 / 2 - 5*v + 1 = ``,
+
