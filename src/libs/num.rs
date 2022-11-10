@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use super::bltn_func::BltnFunc;
+use crate::expr::Bltn;
 use crate::object::Object;
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut num = HashMap::new();
     def_bltn!(num.pi = std::f64::consts::PI);
     def_bltn!(num.e = std::f64::consts::E);
@@ -12,6 +13,7 @@ pub fn make_bltns() -> Object {
     def_getter!(num.real);
     def_getter!(num.floor);   def_getter!(num.ceil);   def_getter!(num.round);
 
+    def_getter!(num.inv);     def_getter!(num.has_inv);
     def_getter!(num.sqrt);    def_getter!(num.cbrt);
     def_getter!(num.sin);     def_getter!(num.cos);    def_getter!(num.tan);
     def_getter!(num.sinh);    def_getter!(num.cosh);   def_getter!(num.tanh);
@@ -29,6 +31,6 @@ pub fn make_bltns() -> Object {
     def_getter!(num.factorial);
     def_bltn!(num.choose(n: Object, k: Object) = obj_call!(n.choose(k)));
 
-    num.into()
+    Bltn::Map(num)
 }
 

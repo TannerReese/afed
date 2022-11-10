@@ -78,10 +78,10 @@ impl ExprArena {
     }
 
     fn take_vars(&mut self, child: ExprId) -> Vec<VarId> {
-        std::mem::replace(&mut self.0[child].vars, Vec::with_capacity(0))
+        std::mem::replace(&mut self.0[child].vars, vec![])
     }
 
-    pub fn resolve<F>(&mut self, target: ExprId, mut resolver: F)
+    fn resolve<F>(&mut self, target: ExprId, mut resolver: F)
     where F: FnMut(&ExprArena, &str) -> Option<ExprId> {
         let vars = self.take_vars(target);
 
@@ -102,20 +102,45 @@ impl ExprArena {
         self.0[target].vars = unresolved;
     }
 
-    pub fn resolve_builtins(&mut self, root: ExprId, bltns: HashMap<String, Object>) {
-        let bltns: HashMap<String, ExprId> = bltns.into_iter()
-            .map(|(key, obj)| (key, self.from_obj(obj))).collect();
+    pub fn resolve_builtins(&mut self, root: ExprId, bltns: Bltn) {
+        let mut globals = HashMap::new();
+        match bltns {
+            Bltn::Const(_) => panic!("Cannot resolve against constant"),
+            Bltn::Map(bltns) => for (key, (_, pkg)) in bltns.into_iter() {
+                let id = self.from_bltn(pkg, &mut globals);
+                if globals.insert(key, id).is_some() { panic!(
+                    "Redefinition of builtin package"
+                )}
+            },
+        };
 
-        self.resolve(root, |ar, key| {
-            bltns.get(key)
-            .or_else(|| bltns.values().filter_map(|&pkg|
-                if let Inner::Map(elems) = &ar.0[pkg].inner {
-                    elems.get(key)
-                } else { None }
-            ).next()).cloned()
-        });
+        self.resolve(root, |_, key| globals.get(key).cloned());
     }
 }
+
+pub enum Bltn {
+    Const(Object),
+    Map(HashMap<String, (bool, Bltn)>),
+}
+
+impl ExprArena {
+    fn from_bltn(
+        &mut self, bltn: Bltn, globals: &mut HashMap<String, ExprId>
+    ) -> ExprId { match bltn {
+        Bltn::Const(obj) => self.from_obj(obj),
+        Bltn::Map(elems) => {
+            let elems = elems.into_iter().map(|(key, (is_global, elem))| {
+                let id = self.from_bltn(elem, globals);
+                if is_global && globals.insert(key.clone(), id).is_some() {
+                    panic!("Redefinition of global builtin '{}'", &key)
+                }
+                (key, id)
+            }).collect();
+            self.create_node(vec![], Inner::Map(elems))
+        },
+    }}
+}
+
 
 
 impl ExprArena {
@@ -183,8 +208,8 @@ impl ExprArena {
 
     pub fn create_var(&mut self, name: String) -> VarId {
         self.0.alloc_with_id(|id| Node {
-            evaling: Cell::new(false), vars: vec![id],
-            inner: Inner::Var(name, false, None),
+            evaling: Cell::new(false),
+            vars: vec![id], inner: Inner::Var(name, false, None),
             saved: true, value: Cell::new(None),
         })
     }
@@ -194,8 +219,8 @@ impl ExprArena {
         self.0.alloc_with_id(|id| {
             vars.push(id);
             Node {
-                evaling: Cell::new(false), vars: vars,
-                inner: Inner::Var(name, true, Some(body)),
+                evaling: Cell::new(false),
+                vars, inner: Inner::Var(name, true, Some(body)),
                 saved: true, value: Cell::new(None),
             }
         })
@@ -215,7 +240,7 @@ impl ExprArena {
     }
 
     pub fn create_access(&mut self, exp: ExprId, path: Vec<String>) -> ExprId {
-        self.create_call(exp, path, Vec::with_capacity(0))
+        self.create_call(exp, path, vec![])
     }
 
     pub fn create_call(&mut self,
@@ -232,7 +257,7 @@ impl ExprArena {
     ) -> ExprId {
         let mut args = Vec::new();
         let pats = pats.into_iter().map(|p| p.into_map(|nm| {
-            let id = self.create_node(Vec::with_capacity(0), Inner::Arg(nm));
+            let id = self.create_node(vec![], Inner::Arg(nm));
             args.push(id);  id
         })).collect::<Vec<Pattern<ArgId>>>();
 
@@ -262,7 +287,7 @@ impl ExprArena {
 
         self.0.alloc(Node {
             evaling: Cell::new(false),
-            vars: Vec::with_capacity(0), inner,
+            vars: vec![], inner,
             saved: false, value: Cell::new(None),
         })
     }
@@ -421,7 +446,7 @@ impl ExprArena {
                         name, args, body
                     ) = &mut arena.0[func].inner {
                         let name = std::mem::take(name);
-                        let args = std::mem::replace(args, Vec::with_capacity(0));
+                        let args = std::mem::replace(args, vec![]);
                         Some(Func::new(name, args, *body, arena))
                     } else { unreachable!() }
                 }

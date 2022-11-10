@@ -26,10 +26,10 @@ calc.argmax [[0, 1], [-1, 1], [2, 3]] \x y: x^2 + y^2 = ``,
 # Maximum functions
 calc.argmax [0.5, 1.5] \x: sin(5 * x) = ``,
 calc.max_pt [[-1, 2], [2, 3]] \x y: x - x^2 - y^2 = ``,
-calc.max_val [[0.001, 1], [-1, 1]] \x x2: x2 * x - x^2 = ``,
+calc.max [[0.001, 1], [-1, 1]] \x x2: x2 * x - x^2 = ``,
 
 # Minimum functions
 calc.min_pt ([[-1, 1]] * 2) \x y: (x^2 - x + 2 * y^2) * (y^2 + y + 3 * x^2) = ``,
 calc.argmin [[0, 1], [-1, 0]] \x y: sin(x + y) - cos(x - y) = ``,
-calc.min_val [-5, 5] \v: v^4 - 3*v^3 + v^2 / 2 - 5*v + 1 = ``,
+calc.min [-5, 5] \v: v^4 - 3*v^3 + v^2 / 2 - 5*v + 1 = ``,
 

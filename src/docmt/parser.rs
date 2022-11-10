@@ -1,11 +1,10 @@
 use std::cmp::max;
 use std::fmt::{Display, Formatter, Error};
-use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::ffi::OsString;
 
-use crate::expr::{ExprId, Pattern};
+use crate::expr::{ExprId, Pattern, Bltn};
 
 use crate::object::{Object, Unary, Binary, Assoc};
 use crate::object::null::Null;
@@ -533,7 +532,7 @@ impl<'a> Pos<'a> {
 }
 
 
-pub fn parse(doc: &mut Docmt, src: &str, bltns: HashMap<String, Object>) {
+pub fn parse(doc: &mut Docmt, src: &str, bltns: Bltn) {
     let mut pos = Pos::new(src);
     match pos.root(doc) {
         Ok(membs) => {

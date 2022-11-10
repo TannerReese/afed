@@ -5,6 +5,7 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 
 use super::bltn_func::BltnFunc;
 
+use crate::expr::Bltn;
 use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
 use crate::object::number::Number;
 
@@ -214,13 +215,13 @@ impl From<Modulo> for Object {
 
 
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut modulo = HashMap::new();
-    def_bltn!(modulo("mod").Mod(m: Number) = match m {
+    def_bltn!(static modulo("mod").Mod(m: Number) = match m {
         Number::Ratio(0, 1) => eval_err!("Modulo can't be zero"),
         Number::Ratio(m, 1) => Modulo::from(1, m.abs() as u64).into(),
         _ => eval_err!("Modulo must be a non-zero integer"),
     });
-    modulo.into()
+    Bltn::Map(modulo)
 }
 

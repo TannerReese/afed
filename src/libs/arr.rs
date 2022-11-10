@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::bltn_func::BltnFunc;
 
+use crate::expr::Bltn;
 use crate::object::{Object, EvalError};
 use crate::object::number::Number;
 use crate::object::array::Array;
@@ -52,7 +53,7 @@ pub fn iter_while(init: Object, pred: Object, func: Object) -> Object {
 }
 
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut arr = HashMap::new();
     def_bltn!(arr.range(x: Number, y: Number) = range(x, y, 1.into()));
     def_bltn!(arr.range_step(x: Number, y: Number, step: Number) =
@@ -97,6 +98,6 @@ pub fn make_bltns() -> Object {
     def_bltn!(arr.all(f: Object, a: Array) = a.all(f));
     def_bltn!(arr.any(f: Object, a: Array) = a.any(f));
     def_bltn!(arr.has(elm: Object, obj: Object) = obj_call!(obj.has(elm)));
-    arr.into()
+    Bltn::Map(arr)
 }
 

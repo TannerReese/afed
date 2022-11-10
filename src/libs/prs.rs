@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use super::bltn_func::BltnFunc;
+use crate::expr::Bltn;
 use crate::object::Object;
 
 pub fn is_prime(x: u64) -> bool {
@@ -133,7 +134,7 @@ pub fn is_perfect(x: u64) -> bool {
 }
 
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut prs = HashMap::new();
     def_bltn!(prs.is_prime(x: u64) = is_prime(x).into());
     def_bltn!(prs.primes(x: usize) =
@@ -152,6 +153,6 @@ pub fn make_bltns() -> Object {
     );
     def_bltn!(prs.divisor_sum(z: u8, n: u64) = sum_of_divisors(z, n).into());
     def_bltn!(prs.is_perfect(x: u64) = is_perfect(x).into());
-    prs.into()
+    Bltn::Map(prs)
 }
 

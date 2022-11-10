@@ -10,6 +10,7 @@ use rand::{
 
 use super::bltn_func::BltnFunc;
 
+use crate::expr::Bltn;
 use crate::object::{Object, CastObject, EvalError};
 use crate::object::array::Array;
 
@@ -247,7 +248,7 @@ fn pt_to_obj<T>(mut pt: Point<T>) -> Object where Object: From<T> {
 
 const EXTR_ITERS: usize = 30;
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut calc = HashMap::new();
     def_bltn!(calc.integ_grid(size: u32, bnds: Bounds<f64>, f: Object) = {
         let vol = bnds.volume();
@@ -268,7 +269,7 @@ pub fn make_bltns() -> Object {
     );
 
 
-    def_bltn!(calc.max_val(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.max(bnds: Bounds<f64>, f: Object) =
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
@@ -288,7 +289,7 @@ pub fn make_bltns() -> Object {
     );
 
 
-    def_bltn!(calc.min_val(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.min(bnds: Bounds<f64>, f: Object) =
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
@@ -307,6 +308,6 @@ pub fn make_bltns() -> Object {
         }
     );
 
-    calc.into()
+    Bltn::Map(calc)
 }
 

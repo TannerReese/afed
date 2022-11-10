@@ -12,6 +12,7 @@ use super::vec::Vector;
 use super::augmat::AugMatrix;
 use super::bltn_func::BltnFunc;
 
+use crate::expr::Bltn;
 use crate::object::{
     Operable, Object,
     Unary, Binary,
@@ -481,13 +482,13 @@ impl From<Matrix> for Object {
 
 
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut mat = HashMap::new();
-    def_bltn!(mat.M(rows: Array) = Matrix::from_array(rows).into());
-    def_bltn!(mat.zeroM(rows: usize, cols: usize) = if rows > 0 && cols > 0 {
+    def_bltn!(static mat.M(rows: Array) = Matrix::from_array(rows).into());
+    def_bltn!(mat.zero(rows: usize, cols: usize) = if rows > 0 && cols > 0 {
         Matrix::build((rows, cols), |_, _| 0.into()).into()
     } else { eval_err!("Matrix dimensions can't be zero") });
-    def_bltn!(mat.identM(dims: usize) =
+    def_bltn!(mat.ident(dims: usize) =
         if dims == 0 { eval_err!("Dimension must be a positive integer") }
         else { Matrix::identity(dims).into() }
     );
@@ -503,6 +504,6 @@ pub fn make_bltns() -> Object {
     });
     def_bltn!(mat.inv(m: Matrix) = m.inverse().0);
     def_bltn!(mat.deter(m: Matrix) = m.determinant());
-    mat.into()
+    Bltn::Map(mat)
 }
 

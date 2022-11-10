@@ -9,6 +9,7 @@ use std::iter::zip;
 use super::bltn_func::BltnFunc;
 use super::mat::Matrix;
 
+use crate::expr::Bltn;
 use crate::object::{
     Operable, Object,
     Unary, Binary,
@@ -236,9 +237,9 @@ impl From<Vector> for Object {
 
 
 
-pub fn make_bltns() -> Object {
+pub fn make_bltns() -> Bltn {
     let mut vec = HashMap::new();
-    def_bltn!(vec.V(comps: Array) =
+    def_bltn!(static vec.V(comps: Array) =
         if comps.0.len() > 0 { Vector(comps.0).into() } 
         else { eval_err!("Vector cannot be zero dimensional") }
     );
@@ -246,6 +247,6 @@ pub fn make_bltns() -> Object {
     def_getter!(vec.comps);
     def_getter!(vec.mag);
     def_getter!(vec.mag2);
-    vec.into()
+    Bltn::Map(vec)
 }
 

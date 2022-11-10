@@ -1,10 +1,9 @@
 use std::io::Write;
 use std::fmt::{Display, Formatter, Error};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::ffi::OsString;
 
-use super::expr::{ExprId, ExprArena};
+use super::expr::{ExprId, ExprArena, Bltn};
 use super::object::Object;
 
 use parser::{parse, ParseError};
@@ -54,7 +53,7 @@ impl Docmt {
     }
 
     pub fn parse<W: Write>(
-        &mut self, err_out: &mut W, bltns: HashMap<String, Object>
+        &mut self, err_out: &mut W, bltns: Bltn
     ) -> Result<(), usize> {
         if !self.is_parsed {
             let src = std::mem::take(&mut self.src);
