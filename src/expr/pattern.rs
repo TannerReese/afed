@@ -9,6 +9,7 @@ use crate::object::map::Map;
 
 #[derive(Debug, Clone)]
 pub enum Pattern<T> {
+    Ignore,
     Arg(T),
     Array(Vec<Pattern<T>>),
     Map(bool, HashMap<String, Pattern<T>>),
@@ -20,6 +21,7 @@ impl<A> Pattern<A> {
 
     fn map_raw<B, F>(&self, f: &mut F) -> Pattern<B>
     where F: FnMut(&A) -> B { match self {
+        Pattern::Ignore => Pattern::Ignore,
         Pattern::Arg(x) => Pattern::Arg(f(x)),
         Pattern::Array(pats) => Pattern::Array(
             pats.iter().map(|p| p.map_raw(f)).collect()
@@ -36,6 +38,7 @@ impl<A> Pattern<A> {
 
     fn into_map_raw<B, F>(self, f: &mut F) -> Pattern<B>
     where F: FnMut(A) -> B { match self {
+        Pattern::Ignore => Pattern::Ignore,
         Pattern::Arg(x) => Pattern::Arg(f(x)),
         Pattern::Array(pats) => Pattern::Array(
             pats.into_iter().map(|p| p.into_map_raw(f)).collect()
@@ -50,6 +53,7 @@ impl<A> Pattern<A> {
 
 impl<T: Eq> Pattern<T> {
     pub fn contains(&self, x: &T) -> bool { match self {
+        Pattern::Ignore => false,
         Pattern::Arg(arg) => *x == *arg,
         Pattern::Array(pats) => pats.iter().any(|p| p.contains(x)),
         Pattern::Map(_, pats) => pats.values().any(|p| p.contains(x)),
@@ -64,6 +68,7 @@ impl<T: Clone> Pattern<T> {
     }
 
     fn collect_args(self, args: &mut Vec<T>) { match self {
+        Pattern::Ignore => {},
         Pattern::Arg(x) => args.push(x.clone()),
         Pattern::Array(pats) => for p in pats.into_iter() {
             p.collect_args(args);
@@ -78,6 +83,7 @@ impl Pattern<ArgId> {
     pub fn recognize(
         &self, arena: &ExprArena, input: Object
     ) -> Result<(), Object> { match self {
+        Pattern::Ignore => Ok(()),
         Pattern::Arg(id) => { arena.set_arg(*id, input); Ok(()) },
         Pattern::Array(pats) => {
             let Array(elems) = input.cast()?;

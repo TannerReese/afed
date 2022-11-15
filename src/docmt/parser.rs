@@ -481,6 +481,7 @@ impl<'a> Pos<'a> {
 
     fn pattern(&mut self) -> ParseResult<Pattern<String>> {
         alt!(
+            self.char('_').map(|_| Pattern::Ignore),
             self.name().map(|nm| Pattern::Arg(nm)),
             seq!(self: self.char('['), many0!(
                 self.pattern(), self.char(',')

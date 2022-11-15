@@ -4,6 +4,6 @@ line 47, column 10 of "func.af" Eval Error: Binary operator * not implemented be
 line 61, column 12 of "func.af" Eval Error: Cannot call method hello on type function
 line 62, column 12 of "func.af" Eval Error: Cannot call method world on type function
 line 81, column 25 of "func.af" Eval Error: Map is missing key h
-line 82, column 16 of "func.af" Eval Error: Expected map, but found number
-line 83, column 31 of "func.af" Eval Error: Map contains unused keys ["n"]
+line 82, column 24 of "func.af" Eval Error: Expected map, but found number
+line 83, column 39 of "func.af" Eval Error: Map contains unused keys ["n"]
 8 Eval Errors encountered
