@@ -30,3 +30,14 @@
     4 * (z: x - 2) - 3 = `Eval Error: Circular dependency`,
 },
 
+
+# Redefinition of map target
+{
+	x: 4,
+	(hello: 3) + 1 = `4`,
+	(: 5 + 3) - x = `4`,
+	3 * x = `12`,
+	x / hello ^ (: 2) = `Eval Error: Unresolved name "x"`,
+	hello + x = `7`,
+} = `8`,
+

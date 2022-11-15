@@ -44,3 +44,6 @@ a1.a2.a3.a4.a5 = `{a6: 2}`,
     7 * (f x y: x + y / x) (f 3 4) (f 5 1) = `581 / 15`,
 },
 
+# Test map evaluating to its target
+{ x: 54 - 9, [: x / y] = `[45 / 77]`, y: 11 * 7 } = `45 / 77`,
+

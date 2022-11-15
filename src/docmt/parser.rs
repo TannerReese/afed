@@ -86,7 +86,7 @@ impl<'a> Pos<'a> {
         } else { None }
     }
 
-    fn tag(&mut self, name: &str) -> ParseResult<&'a str> {
+    fn tag_raw(&mut self, name: &str) -> ParseResult<&'a str> {
         if self.ptr.starts_with(name) {
             let name = self.ptr.split_at(name.len()).0;
             self.shift(name);
@@ -115,12 +115,12 @@ impl<'a> Pos<'a> {
         _ = many0!(alt!(
             ign!(self.while_char(|c| c.is_whitespace())),
             ign!(tuple!(self:
-                self.tag("#{"),
+                self.tag_raw("#{"),
                 self.while_str(|s| !s.starts_with("}#")),
-                self.tag("}#")
+                self.tag_raw("}#")
             )),
             ign!(tuple!(self:
-                self.tag("#"),
+                self.tag_raw("#"),
                 self.while_char(|c| c != '\n')
             ))
         ));
@@ -135,6 +135,10 @@ impl<'a> Pos<'a> {
                 Ok(c)
             } else { Err(None) }
         })
+    }
+
+    fn tag(&mut self, name: &str) -> ParseResult<&'a str> {
+        seq!(self: self.skip(), self.tag_raw(name))
     }
 
     fn eoi(&mut self) -> ParseResult<()> {
@@ -258,12 +262,15 @@ impl<'a> Pos<'a> {
 impl<'a> Pos<'a> {
     fn defn(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         let (labels, mut body) = tuple!(self:
-            opt!(seq!(self: ,
-                tuple!(self:
-                    alt!(self.string(), self.name()),
-                    many0!(self.pattern())
-                ),
-                self.char(':')
+            opt!(alt!(
+                self.char(':').map(|_| ("".to_owned(), vec![])),
+                seq!(self: ,
+                    tuple!(self:
+                        alt!(self.string(), self.name()),
+                        many0!(self.pattern())
+                    ),
+                    self.char(':')
+                )
             )),
             self.equals(doc)
         )?;
@@ -381,9 +388,7 @@ impl<'a> Pos<'a> {
             alt!(ign!(self.char(',')),
                 alt!(self.eoi()),
                 peek!(self: ign!(self.char(term)))
-            ).map_err(|_| Some(self.error(
-                "Ill formed member".to_owned()
-            )))
+            ).map_err(|_| Some(parse_err!(self, "Ill formed member")))
         ),
         seq!(self:
             self.skip(),
@@ -421,9 +426,11 @@ impl<'a> Pos<'a> {
                 let mut defns = doc.arena.get_defns(id);
                 for nm in defns.iter() {
                     if keys.contains(nm) {
-                        doc.add_error(self.error(format!(
+                        doc.add_error(if nm == "" { parse_err!(self,
+                            "Redefinition of map target"
+                        )} else { parse_err!(self,
                             "Redefinition of label '{}' in map", nm
-                        )));
+                        )});
                         has_redef = true;
                     }
                 }
@@ -441,7 +448,7 @@ impl<'a> Pos<'a> {
         &mut self, doc: &mut Docmt
     ) -> ParseResult<Vec<ExprId>> { revert!(self:
         seq!(self:
-            tuple!(self: self.skip(), self.tag("use")), self.string()
+            self.tag("use"), self.string()
         ).and_then(|path| {
             let path = self.check_path(&path, doc)
                 .map_err(|err| Some(err))?;
@@ -484,8 +491,7 @@ impl<'a> Pos<'a> {
                 let mut is_fuzzy = false;
                 seq!(self: self.char('{'),
                     many0!(alt!(
-                        seq!(self: self.skip(), self.tag(".."))
-                        .map(|_| { is_fuzzy = true; None }),
+                        self.tag("..").map(|_| { is_fuzzy = true; None }),
                         tuple!(self:
                             alt!(self.name(), self.string()),
                             seq!(self: self.char(':'), self.pattern())

@@ -25,7 +25,7 @@ pub type ArgId = ExprId;
 enum Inner {
     Const(Object),
     Array(Vec<ExprId>),
-    Map(HashMap<String, ExprId>),
+    Map(Option<ExprId>, HashMap<String, ExprId>),
 
     Var(String, bool, Option<ExprId>),
     Unary(Unary, ExprId),
@@ -136,7 +136,7 @@ impl ExprArena {
                 }
                 (key, id)
             }).collect();
-            self.create_node(vec![], Inner::Map(elems))
+            self.create_node(vec![], Inner::Map(None, elems))
         },
     }}
 }
@@ -186,11 +186,18 @@ impl ExprArena {
         ).flatten().collect::<Vec<VarId>>();
 
         let mut named = HashMap::new();
+        let mut map_target = None;
         for id in defns.into_iter() {
             if let Inner::Var(
                 nm, is_defn, Some(target)
             ) = &mut self.0[id].inner { if *is_defn {
-                if named.insert(nm.clone(), *target).is_some() {
+                if nm == "" {
+                    if map_target.is_none() {
+                        map_target = Some(*target);
+                    } else {
+                        panic!("Redefinition of map target");
+                    }
+                } else if named.insert(nm.clone(), *target).is_some() {
                     panic!("Redefinition of label in map");
                 } else { *is_defn = false; }
                 continue;
@@ -202,7 +209,7 @@ impl ExprArena {
             self.resolve(id, |_, path| named.get(path).cloned());
             self.take_vars(id)
         }).flatten().collect();
-        self.create_node(vars, Inner::Map(named))
+        self.create_node(vars, Inner::Map(map_target, named))
     }
 
 
@@ -275,7 +282,7 @@ impl ExprArena {
     pub fn from_obj(&mut self, obj: Object) -> ExprId {
         let inner = if obj.is_a::<Map>() {
             let Map(elems) = obj.cast::<Map>().unwrap();
-            Inner::Map(elems.into_iter().map(|(key, child)|
+            Inner::Map(None, elems.into_iter().map(|(key, child)|
                 (key, self.from_obj(child))
             ).collect())
         } else if obj.is_a::<Array>() {
@@ -335,7 +342,7 @@ impl ExprArena {
     ) -> ExprId {
         while let Some(key) = path.as_slice().get(0) {
             match &self.0[exp].inner {
-                Inner::Map(named) => if let Some(&id) = named.get(key) {
+                Inner::Map(None, named) => if let Some(&id) = named.get(key) {
                     path.next();
                     exp = id;
                 } else { break },
@@ -381,7 +388,7 @@ impl ExprArena {
                 }
             },
 
-            Inner::Map(named) => {
+            Inner::Map(None, named) => {
                 let named = named.clone();
                 let mut cnst = true;
                 for &id in named.values() { cnst &= simplify!(id); }
@@ -392,6 +399,9 @@ impl ExprArena {
                     Some(Object::new(Map(named)))
                 }
             },
+            &Inner::Map(Some(target), _) => if simplify!(target) {
+                Some(self.take(target))
+            } else { None },
 
             Inner::Var(name, _, target) => if let Some(target) = *target {
                 let res = self.simplify(args_used, target);
@@ -506,15 +516,18 @@ impl ExprArena {
                 ).collect();
                 arena.create_array(elems)
             },
-            Inner::Map(named) => {
+            Inner::Map(target, named) => {
+                let target = target.map(|id| self.clone_into(arena, id));
                 let named = named.iter().map(|(key, id)|
                     (key.clone(), self.clone_into(arena, *id))
                 ).collect::<HashMap<String, ExprId>>();
-                let vars = named.values().map(|&id| {
+
+                let vars = target.iter().chain(named.values())
+                .map(|&id| {
                     arena.resolve(id, |_, path| named.get(path).cloned());
                     arena.take_vars(id)
                 }).flatten().collect();
-                arena.create_node(vars, Inner::Map(named))
+                arena.create_node(vars, Inner::Map(target, named))
             },
 
             Inner::Var(name, _, _) => arena.create_var(name.clone()),

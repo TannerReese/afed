@@ -28,7 +28,12 @@ Parse Error in line 23, column 16 of "parse_errors.af"
 |                  ^
 Error: Redefinition of label 'y' in map
 
-6 Parse Errors encountered
+Parse Error in line 40, column 56 of "parse_errors.af"
+|   	x / hello ^ (: 2) = `Eval Error: Unresolved name "x"`,
+|                                                          ^
+Error: Redefinition of map target
+
+7 Parse Errors encountered
 
 
 line 8, column 26 of "parse_errors.af" Eval Error: Circular dependency
@@ -36,4 +41,5 @@ line 9, column 26 of "parse_errors.af" Eval Error: Circular dependency
 line 10, column 26 of "parse_errors.af" Eval Error: Circular dependency
 line 28, column 30 of "parse_errors.af" Eval Error: Circular dependency
 line 30, column 26 of "parse_errors.af" Eval Error: Circular dependency
-5 Eval Errors encountered
+line 40, column 22 of "parse_errors.af" Eval Error: Unresolved name "x"
+6 Eval Errors encountered
