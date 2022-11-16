@@ -52,30 +52,35 @@ impl<A> Pattern<A> {
 }
 
 impl<T: Eq> Pattern<T> {
+    pub fn has_dups(pats: &Vec<Self>) -> Option<&T> {
+        let mut args = Vec::new();
+        pats.iter().filter_map(|p|
+            p.has_dups_raw(&mut args)
+        ).next()
+    }
+
+    fn has_dups_raw<'a>(
+        &'a self, args: &mut Vec<&'a T>
+    ) -> Option<&'a T> { match self {
+        Pattern::Ignore => None,
+        Pattern::Arg(x) => if args.iter().any(|a| *x == **a) {
+            Some(x)
+        } else { args.push(x);  None },
+        Pattern::Array(pats) => pats.iter().filter_map(|p|
+            p.has_dups_raw(args)
+        ).next(),
+        Pattern::Map(_, pats) => pats.values().filter_map(|p|
+            p.has_dups_raw(args)
+        ).next(),
+    }}
+}
+
+impl<T: Eq> Pattern<T> {
     pub fn contains(&self, x: &T) -> bool { match self {
         Pattern::Ignore => false,
         Pattern::Arg(arg) => *x == *arg,
         Pattern::Array(pats) => pats.iter().any(|p| p.contains(x)),
         Pattern::Map(_, pats) => pats.values().any(|p| p.contains(x)),
-    }}
-}
-
-impl<T: Clone> Pattern<T> {
-    pub fn get_args(self) -> Vec<T> {
-        let mut args = Vec::new();
-        self.collect_args(&mut args);
-        args
-    }
-
-    fn collect_args(self, args: &mut Vec<T>) { match self {
-        Pattern::Ignore => {},
-        Pattern::Arg(x) => args.push(x.clone()),
-        Pattern::Array(pats) => for p in pats.into_iter() {
-            p.collect_args(args);
-        },
-        Pattern::Map(_, pats) => for p in pats.into_values() {
-            p.collect_args(args);
-        },
     }}
 }
 

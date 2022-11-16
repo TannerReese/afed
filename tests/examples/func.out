@@ -91,3 +91,6 @@ scope.f 4 = `7.5600000000000005`,
 	lamb 1 5 = `15`,
 }
 
+# Duplicated arguments
+{ f x x: x, f 3 4 = `Eval Error: Unresolved name "f"`},
+

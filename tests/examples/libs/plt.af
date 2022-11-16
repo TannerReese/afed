@@ -1,0 +1,23 @@
+# Test plotting functions
+
+# Erroneous cases
+plt.plot {jk: 5} [\x: x] = ``,
+plt.plot {rows: 30, cols: 10} [4, 5] = ``,
+
+
+{
+plt.plot {
+	ymin: -0.5, width: 3,
+	rows: 30, cols: 80, divs: 3,
+} [f, g] = ``,
+
+	f x: 1 / (1 + x^2),
+	g x: sin (2*x - 1),
+},
+
+plt.plot {
+	xcenter: 3, width: 6,
+	rows: 20, cols: 60, divs: 3,
+} [\x: sin x / x] = ``,
+
+

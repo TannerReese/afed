@@ -138,18 +138,16 @@ pub fn make_bltns() -> Bltn {
     let mut prs = HashMap::new();
     def_bltn!(prs.is_prime(x: u64) = is_prime(x).into());
     def_bltn!(prs.primes(x: usize) =
-        prime_sieve(x).map(|p| p.into()).collect()
+        prime_sieve(x).collect()
     );
-    def_bltn!(prs.prime_factors(x: u64) = prime_factors(x).map(|(p, k)|
-        vec![p, k as u64].into()
-    ).collect());
+    def_bltn!(prs.prime_factors(x: u64) = prime_factors(x).collect());
 
     def_bltn!(prs.is_sqfree(x: u64) = is_sqfree(x).into());
     def_bltn!(prs.radical(x: u64) = radical(x).into());
 
     def_bltn!(prs.euler_totient(x: u64) = euler_totient(x).into());
     def_bltn!(prs.divisors(n: u64) =
-        divisors(n).into_iter().map(|d| d.into()).collect()
+        divisors(n).into_iter().collect()
     );
     def_bltn!(prs.divisor_sum(z: u8, n: u64) = sum_of_divisors(z, n).into());
     def_bltn!(prs.is_perfect(x: u64) = is_perfect(x).into());

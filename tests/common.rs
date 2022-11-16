@@ -84,4 +84,5 @@ test_file!{libs_mod, "libs/mod.af"}
 test_file!{libs_vec, "libs/vec.af"}
 test_file!{libs_mat, "libs/mat.af"}
 test_file!{libs_calc, "libs/calc.af"}
+test_file!{libs_plt, "libs/plt.af"}
 

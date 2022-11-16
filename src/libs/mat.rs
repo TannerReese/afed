@@ -145,9 +145,9 @@ impl Operable for Matrix {
         Some("rows") => self.rows().into(),
         Some("cols") => self.columns().into(),
         Some("row_vecs") =>
-            self.clone().into_rows().map(|v| v.into()).collect(),
+            self.clone().into_rows().collect(),
         Some("col_vecs") =>
-            self.clone().into_columns().map(|v| v.into()).collect(),
+            self.clone().into_columns().collect(),
         Some("trsp") => {
             let mut m = self.clone();
             m.transpose();

@@ -125,6 +125,7 @@ pub mod mat;
 mod augmat;
 
 pub mod calc;
+pub mod plot;
 
 pub fn make_bltns() -> Bltn {
     let mut root = HashMap::new();
@@ -138,6 +139,7 @@ pub fn make_bltns() -> Bltn {
     def_pkg!(root.mat = mat::make_bltns());
 
     def_pkg!(root.calc = calc::make_bltns());
+    def_pkg!(root.plt = plot::make_bltns());
     Bltn::Map(root)
 }
 

@@ -91,3 +91,6 @@ scope.f 4 = ``,
 	lamb 1 5 = ``,
 }
 
+# Duplicated arguments
+{ f x x: x, f 3 4 = ``},
+

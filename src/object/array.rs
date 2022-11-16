@@ -175,14 +175,23 @@ impl Display for Array {
 }
 
 
-impl FromIterator<Object> for Array {
-    fn from_iter<T: IntoIterator<Item=Object>>(iter: T) -> Self
-        { Array(Vec::from_iter(iter)) }
+
+impl<T> FromIterator<T> for Array where Object: From<T> {
+    fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self {
+        Array(iter.into_iter().map(|x|
+            x.into()
+        ).collect())
+    }
 }
 
-impl FromIterator<Object> for Object {
-    fn from_iter<T: IntoIterator<Item=Object>>(iter: T) -> Self
-        { Array(Vec::from_iter(iter)).into() }
+impl<T> FromIterator<T> for Object where Object: From<T> {
+    fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self
+        { Array::from_iter(iter).into() }
+}
+
+
+impl From<Array> for Object {
+    fn from(arr: Array) -> Self { arr.0.into() }
 }
 
 impl<T> From<Vec<T>> for Object where Object: From<T> {
@@ -198,17 +207,69 @@ impl<T> From<Vec<T>> for Object where Object: From<T> {
     }
 }
 
-impl From<Array> for Object {
-    fn from(arr: Array) -> Self { arr.0.into() }
+impl<T, const N: usize> From<[T; N]> for Object where Object: From<T> {
+    fn from(arr: [T; N]) -> Object {
+        Array(arr.into_iter().map(|x| x.into()).collect()).into()
+    }
 }
 
-impl CastObject for Vec<Object> {
-    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj.cast::<Array>()?.0) }
+impl<A> From<(A,)> for Object where Object: From<A> {
+    fn from((x,): (A,)) -> Self { vec![Object::from(x)].into() }
 }
 
-impl<const N: usize> From<[Object; N]> for Object {
-    fn from(arr: [Object; N]) -> Object {
-        Array(arr.into()).into()
+impl<A, B> From<(A, B)> for Object where Object: From<A> + From<B> {
+    fn from((x, y): (A, B)) -> Self
+        { vec![Object::from(x), Object::from(y)].into() }
+}
+
+impl<A, B, C> From<(A, B, C)> for Object
+where Object: From<A> + From<B> + From<C> {
+    fn from((x, y, z): (A, B, C)) -> Self {
+        vec![Object::from(x), Object::from(y), Object::from(z)].into()
+    }
+}
+
+
+
+impl<T: CastObject> CastObject for Vec<T> {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        obj.cast::<Array>()?.0.into_iter()
+        .map(|x| x.cast()).collect()
+    }
+}
+
+impl<T: CastObject, const N: usize> CastObject for [T; N] {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        let mut elems = Vec::new();
+        for x in obj.cast::<Array>()?.0.into_iter() {
+            elems.push(x.cast()?);
+        }
+
+        elems.try_into().map_err(|v: Vec<T>| eval_err!(
+            "Array has {} elements, but {} were expected",
+            v.len(), N,
+        ))
+    }
+}
+
+impl<A: CastObject> CastObject for (A,) {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        let [x]: [Object; 1] = obj.cast()?;
+        Ok((x.cast()?,))
+    }
+}
+
+impl<A: CastObject, B: CastObject> CastObject for (A, B) {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        let [x, y]: [Object; 2] = obj.cast()?;
+        Ok((x.cast()?, y.cast()?))
+    }
+}
+
+impl<A: CastObject, B: CastObject, C: CastObject> CastObject for (A, B, C) {
+    fn cast(obj: Object) -> Result<Self, Object> {
+        let [x, y, z]: [Object; 3] = obj.cast()?;
+        Ok((x.cast()?, y.cast()?, z.cast()?))
     }
 }
 

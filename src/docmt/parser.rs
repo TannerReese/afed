@@ -277,6 +277,12 @@ impl<'a> Pos<'a> {
 
         if let Some((name, pats)) = labels {
             if pats.len() > 0 {
+                if let Some(dup) = Pattern::has_dups(&pats) {
+                    return Err(Some(parse_err!(self,
+                        "Duplicate argument '{}'", dup
+                    )))
+                }
+
                 body = doc.arena.create_func(
                     Some(name.clone()), pats, body
                 );
@@ -476,7 +482,12 @@ impl<'a> Pos<'a> {
             ),
             self.expr(doc, 0)
         )?;
-        Ok(doc.arena.create_func(None, pats, body))
+
+        if let Some(dup) = Pattern::has_dups(&pats) {
+            Err(Some(parse_err!(self, "Duplicate argument '{}'", dup)))
+        } else {
+            Ok(doc.arena.create_func(None, pats, body))
+        }
     }
 
     fn pattern(&mut self) -> ParseResult<Pattern<String>> {

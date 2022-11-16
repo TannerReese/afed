@@ -1,3 +1,11 @@
+Parse Error in line 95, column 11 of "func.af"
+|   { f x x: x, f 3 4 = ``},
+|             ^
+Error: Duplicate argument 'x'
+
+1 Parse Error encountered
+
+
 line 39, column 32 of "func.af" Eval Error: Depends on non-constant argument x
 line 46, column 10 of "func.af" Eval Error: Binary operator + not implemented between types function and number
 line 47, column 10 of "func.af" Eval Error: Binary operator * not implemented between types number and function
@@ -6,4 +14,5 @@ line 62, column 12 of "func.af" Eval Error: Cannot call method world on type fun
 line 81, column 25 of "func.af" Eval Error: Map is missing key h
 line 82, column 24 of "func.af" Eval Error: Expected map, but found number
 line 83, column 39 of "func.af" Eval Error: Map contains unused keys ["n"]
-8 Eval Errors encountered
+line 95, column 21 of "func.af" Eval Error: Unresolved name "f"
+9 Eval Errors encountered
