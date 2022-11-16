@@ -86,9 +86,9 @@ impl AugMatrix {
             let mut inv = None;
             for r in pivot_row..rows {
                 let elem = &mat[(r, c)];
-                match obj_call!(elem.has_inv()).cast::<bool>() {
+                match call!(elem.has_inv()).cast::<bool>() {
                     Ok(true) => {
-                        inv = Some(obj_call!(elem.inv()));
+                        inv = Some(call!(elem.inv()));
                         self.swap_rows(pivot_row, r);
                         break;
                     },

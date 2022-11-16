@@ -18,7 +18,7 @@ pub struct Plot {
     rows: usize, columns: usize,
     chars: Vec<char>,
 }
-impl NamedType for Plot { fn type_name() -> &'static str { "plot" }}
+name_type!{plot: Plot}
 
 impl Operable for Plot {
     unary_not_impl!{}
@@ -266,7 +266,7 @@ impl Plot {
             ($($prm:ident : $tp:ty = $def:expr),*) => { $(
                 let $prm: $tp;
                 if let Some(x) = options.remove(stringify!($prm)) {
-                    $prm = try_cast!(x);
+                    $prm = cast!(x);
                 } else { $prm = $def; }
             )*};
         }
@@ -303,7 +303,7 @@ impl Plot {
 
         for f in funcs {
             if let Err(err) = plot.plot(|x| {
-                let res = obj_call!(f(x));
+                let res = call!(f(x));
                 if res.is_err() { Err(res) }
                 else { res.cast() }
             }) { return err; }

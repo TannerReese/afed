@@ -40,7 +40,7 @@ pub struct Modulo {
     residue: i64,
     modulo: u64,
 }
-impl NamedType for Modulo { fn type_name() -> &'static str { "modulo" }}
+name_type!{modulo: Modulo}
 
 impl Operable for Modulo {
     fn unary(self, op: Unary) -> Option<Object> { match op {
@@ -58,11 +58,11 @@ impl Operable for Modulo {
     }}
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        if op == Binary::Pow { return self.pow(try_cast!(other)).into() }
+        if op == Binary::Pow { return self.pow(cast!(other)).into() }
 
         let mut m1 = self;
-        let mut m2 = if other.is_a::<Modulo>() { try_cast!(other) }
-        else if other.is_a::<Number>() { match try_cast!(other) {
+        let mut m2 = if other.is_a::<Modulo>() { cast!(other) }
+        else if other.is_a::<Number>() { match cast!(other) {
             Number::Ratio(n, d) => Modulo::from_ratio((n, d), self.modulo),
             Number::Real(_) => return eval_err!(
                 "Can't convert real number to modular"

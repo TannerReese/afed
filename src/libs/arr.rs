@@ -36,7 +36,7 @@ pub fn iter(init: Object, times: usize, func: Object) -> Object {
     let mut work = init;
     for _ in 1..times {
         elems.push(work.clone());
-        work = obj_call!(func(work));
+        work = call!(func(work));
     }
     elems.push(work);
     elems.into()
@@ -45,9 +45,9 @@ pub fn iter(init: Object, times: usize, func: Object) -> Object {
 pub fn iter_while(init: Object, pred: Object, func: Object) -> Object {
     let mut elems = Vec::new();
     let mut work = init;
-    while obj_call!(pred(work.clone()) => bool) {
+    while call!(pred(work.clone()) => bool) {
         elems.push(work.clone());
-        work = obj_call!(func(work));
+        work = call!(func(work));
     }
     elems.into()
 }
@@ -92,12 +92,12 @@ pub fn make_bltns() -> Bltn {
     def_getter!(arr.min);
     def_getter!(arr.rev);
 
-    def_bltn!(arr.map(f: Object, obj: Object) = obj_call!(obj.map(f)));
-    def_bltn!(arr.filter(f: Object, obj: Object) = obj_call!(obj.filter(f)));
+    def_bltn!(arr.map(f: Object, obj: Object) = call!(obj.map(f)));
+    def_bltn!(arr.filter(f: Object, obj: Object) = call!(obj.filter(f)));
     def_bltn!(arr.fold(init: Object, f: Object, a: Array) = a.fold(init, f));
     def_bltn!(arr.all(f: Object, a: Array) = a.all(f));
     def_bltn!(arr.any(f: Object, a: Array) = a.any(f));
-    def_bltn!(arr.has(elm: Object, obj: Object) = obj_call!(obj.has(elm)));
+    def_bltn!(arr.has(elm: Object, obj: Object) = call!(obj.has(elm)));
     Bltn::Map(arr)
 }
 

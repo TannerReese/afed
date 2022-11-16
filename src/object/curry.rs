@@ -12,8 +12,7 @@ pub struct Curry {
     attr: Option<String>,
     args: Vec<Object>,
 }
-
-impl NamedType for Curry { fn type_name() -> &'static str { "partial evaluation" } }
+name_type!{"partial evaluation": Curry}
 
 impl Curry {
     pub fn new(func: Object, attr: Option<String>, mut args: Vec<Object>) -> Object {
@@ -31,7 +30,7 @@ impl Curry {
                 "Curry object has no method {}", name
             )}
 
-            let mut curry = try_cast!(func => Curry);
+            let mut curry = cast!(func => Curry);
             curry.arity -= args.len();
             curry.args.append(&mut args);
             curry

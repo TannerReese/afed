@@ -8,12 +8,12 @@ use std::borrow::Borrow;
 use super::opers::{Unary, Binary};
 use super::{
     Operable, Object, CastObject,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map(pub HashMap<String, Object>);
-impl NamedType for Map { fn type_name() -> &'static str { "map" } }
+name_type!{map: Map}
 
 impl Map {
     pub fn get<B>(&self, key: &B) -> Option<&Object>
@@ -33,7 +33,7 @@ impl Operable for Map {
 
     fn binary(mut self, _: bool, op: Binary, other: Object) -> Object {
         if op != Binary::Add { panic!() }
-        let Map(elems) = try_cast!(other);
+        let Map(elems) = cast!(other);
         self.0.extend(elems);
         self.into()
     }
@@ -46,7 +46,7 @@ impl Operable for Map {
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         let s;
         let key = if let Some(key) = attr { key }
-        else { s = try_cast!(args.remove(0) => String); s.as_str() };
+        else { s = cast!(args.remove(0) => String); s.as_str() };
         self.0.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
@@ -90,7 +90,8 @@ impl From<HashMap<String, Object>> for Object {
 }
 
 impl CastObject for HashMap<String, Object> {
-    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj.cast::<Map>()?.0) }
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>
+        { Ok(Map::cast(obj)?.0) }
 }
 
 impl<const N: usize> From<[(&str, Object); N]> for Object {

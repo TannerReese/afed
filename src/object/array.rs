@@ -1,4 +1,4 @@
-use std::vec::Vec;
+use std::collections::VecDeque;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::cmp::Ordering;
 use std::iter::repeat;
@@ -6,13 +6,13 @@ use std::iter::repeat;
 use super::opers::{Unary, Binary};
 use super::{
     Operable, Object, CastObject,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);
-impl NamedType for Array { fn type_name() -> &'static str { "array" } }
+name_type!{array: Array}
 
 impl Operable for Array {
     unary_not_impl!{}
@@ -28,13 +28,13 @@ impl Operable for Array {
 
         match op {
             Binary::Add => {
-                let mut arr2 = try_cast!(other);
+                let mut arr2 = cast!(other);
                 if rev { std::mem::swap(&mut arr1, &mut arr2); }
                 arr1.append(&mut arr2);
                 arr1
             },
             Binary::Mul => {
-                let idx: usize = try_cast!(other);
+                let idx: usize = cast!(other);
                 repeat(arr1).take(idx).flatten().collect()
             },
             _ => panic!(),
@@ -62,7 +62,7 @@ impl Operable for Array {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            let idx: usize = try_cast!(args.remove(0));
+            let idx: usize = cast!(args.remove(0));
             if let Some(obj) = self.0.get(idx) { obj.clone() }
             else { eval_err!("Index {} is out of bounds", idx) }
         },
@@ -81,14 +81,14 @@ impl Operable for Array {
         Some("map") => {
             let func = args.remove(0);
             self.0.iter().cloned().map(|elem|
-                obj_call!(func(elem))
+                call!(func(elem))
             ).collect()
         },
         Some("filter") => {
             let pred = args.remove(0);
             let mut new_arr = Vec::with_capacity(self.0.len());
             for elem in self.0.iter() {
-                if obj_call!(pred(elem.clone()) => bool) {
+                if call!(pred(elem.clone()) => bool) {
                     new_arr.push(elem.clone());
                 }
             }
@@ -119,7 +119,7 @@ impl Operable for Array {
 impl Array {
     pub fn fold(self, mut work: Object, func: Object) -> Object {
         for elem in self.0.into_iter() {
-            work = obj_call!(func(work, elem));
+            work = call!(func(work, elem));
         }
         work
     }
@@ -127,7 +127,7 @@ impl Array {
     pub fn all(self, pred: Object) -> Object {
         let mut is_all = true;
         for elem in self.0.into_iter() {
-            if !obj_call!(pred(elem) => bool) {
+            if !call!(pred(elem) => bool) {
                 is_all = false;
                 break;
             }
@@ -138,7 +138,7 @@ impl Array {
     pub fn any(self, pred: Object) -> Object {
         let mut is_any = false;
         for elem in self.0.into_iter() {
-            if obj_call!(pred(elem) => bool) {
+            if call!(pred(elem) => bool) {
                 is_any = true;
                 break;
             }
@@ -213,63 +213,74 @@ impl<T, const N: usize> From<[T; N]> for Object where Object: From<T> {
     }
 }
 
-impl<A> From<(A,)> for Object where Object: From<A> {
-    fn from((x,): (A,)) -> Self { vec![Object::from(x)].into() }
+
+
+impl<T: CastObject> CastObject for Vec<T> where Object: From<T> {
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
+        let mut elems: VecDeque<Object> = Array::cast(obj)?.0.into();
+
+        let mut casted = Vec::new();
+        while let Some(x) = elems.pop_front() { match T::cast(x) {
+            Ok(x) => casted.push(x),
+            Err((x, err)) => {
+                elems.push_front(x);
+                return Err((
+                    casted.into_iter().map(|x| x.into())
+                    .chain(elems).collect(), err
+                ))
+            },
+        }}
+        Ok(casted.into())
+    }
 }
 
-impl<A, B> From<(A, B)> for Object where Object: From<A> + From<B> {
-    fn from((x, y): (A, B)) -> Self
-        { vec![Object::from(x), Object::from(y)].into() }
-}
-
-impl<A, B, C> From<(A, B, C)> for Object
-where Object: From<A> + From<B> + From<C> {
-    fn from((x, y, z): (A, B, C)) -> Self {
-        vec![Object::from(x), Object::from(y), Object::from(z)].into()
+impl<T: CastObject, const N: usize> CastObject for [T; N]
+where Object: From<T> {
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
+        Vec::<T>::cast(obj)?.try_into().map_err(|v: Vec<T>| {
+            let len = v.len();
+            (v.into(), eval_err!(
+                "Array has {} elements, but {} were expected",
+                len, N,
+            ))
+        })
     }
 }
 
 
 
-impl<T: CastObject> CastObject for Vec<T> {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        obj.cast::<Array>()?.0.into_iter()
-        .map(|x| x.cast()).collect()
-    }
+macro_rules! convert_tuple_helper {
+    ($on_err:expr, $($var:ident : $tp:ty),+) => { $(
+        let $var = match <$tp>::cast($var) {
+            Err(($var, err)) => return Err(($on_err, err)),
+            Ok(good) => good,
+        };
+    )+};
 }
 
-impl<T: CastObject, const N: usize> CastObject for [T; N] {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        let mut elems = Vec::new();
-        for x in obj.cast::<Array>()?.0.into_iter() {
-            elems.push(x.cast()?);
+macro_rules! convert_tuple {
+    ($($var:ident : $tp:ident),+) => {
+        impl<$($tp),+> From<($($tp,)+)> for Object
+        where Object: $(From<$tp> +)+ {
+            fn from(($($var,)+): ($($tp,)+)) -> Self
+               { vec![$(Object::from($var)),+].into() }
         }
 
-        elems.try_into().map_err(|v: Vec<T>| eval_err!(
-            "Array has {} elements, but {} were expected",
-            v.len(), N,
-        ))
-    }
+        impl<$($tp: CastObject),+> CastObject for ($($tp,)+)
+        where Object: $(From<$tp> +)+ {
+            fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
+                let [$($var),+] = <[Object; count_tt!($($var)+)]>::cast(obj)?;
+                convert_tuple_helper!(
+                    ($($var,)+).into(),
+                    $($var: $tp),+
+                );
+                Ok(($($var,)+))
+            }
+        }
+    };
 }
 
-impl<A: CastObject> CastObject for (A,) {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        let [x]: [Object; 1] = obj.cast()?;
-        Ok((x.cast()?,))
-    }
-}
-
-impl<A: CastObject, B: CastObject> CastObject for (A, B) {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        let [x, y]: [Object; 2] = obj.cast()?;
-        Ok((x.cast()?, y.cast()?))
-    }
-}
-
-impl<A: CastObject, B: CastObject, C: CastObject> CastObject for (A, B, C) {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        let [x, y, z]: [Object; 3] = obj.cast()?;
-        Ok((x.cast()?, y.cast()?, z.cast()?))
-    }
-}
+convert_tuple!{x: A}
+convert_tuple!{x: A, y: B}
+convert_tuple!{x: A, y: B, z: C}
 

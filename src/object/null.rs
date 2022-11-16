@@ -6,7 +6,7 @@ use super::{Operable, Object, NamedType, EvalError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null();
-impl NamedType for Null { fn type_name() -> &'static str { "null" }}
+name_type!{null: Null}
 
 impl Operable for Null {
     unary_not_impl!{}

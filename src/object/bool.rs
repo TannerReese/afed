@@ -2,11 +2,15 @@ use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
-use super::{Operable, Object, CastObject, Unary, Binary, NamedType, EvalError};
+use super::{
+    Operable, Object, CastObject,
+    Unary, Binary,
+    NamedType, ErrObject, EvalError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
-impl NamedType for Bool { fn type_name() -> &'static str { "boolean" } }
+name_type!{boolean: Bool}
 
 impl Bool {
     pub fn new(b: bool) -> Object { Bool(b).into() }
@@ -25,7 +29,7 @@ impl Operable for Bool {
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         let Bool(mut b1) = self;
-        let mut b2 = try_cast!(other);
+        let mut b2 = cast!(other);
         if rev { swap(&mut b1, &mut b2); }
 
         Bool::new(match op {
@@ -55,7 +59,8 @@ impl From<bool> for Object {
 }
 
 impl CastObject for bool {
-    fn cast(obj: Object) -> Result<bool, Object> { Ok(obj.cast::<Bool>()?.0) }
+    fn cast(obj: Object) -> Result<bool, (Object, ErrObject)>
+        { Ok(Bool::cast(obj)?.0) }
 }
 
 
@@ -75,7 +80,7 @@ impl Operable for Ternary {
 
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         if attr.is_some() { panic!() }
-        let cond: bool = try_cast!(args.remove(0));
+        let cond: bool = cast!(args.remove(0));
         args.remove(if cond { 0 } else { 1 })
     }
 }

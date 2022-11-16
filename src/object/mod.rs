@@ -20,8 +20,13 @@ macro_rules! eval_err {
     ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
 }
 
+macro_rules! count_tt {
+    () => { 0 };
+    ($fst:tt $($item:tt)*) => {1 + count_tt!($($item)*)};
+}
 
-macro_rules! try_cast {
+
+macro_rules! cast {
     ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
         Err(err) => return err,
@@ -39,24 +44,32 @@ macro_rules! try_ok {
     }};
 }
 
-macro_rules! obj_call {
+macro_rules! call {
     (($obj:expr)($($arg:expr),*)) =>
         { $obj.call(None, vec![$($arg.into()),*]) };
     (($obj:expr)($($arg:expr),*) => $tp:ty) =>
-        { try_cast!(obj_call!(($obj)($($arg),*)) => $tp) };
+        { cast!(call!(($obj)($($arg),*)) => $tp) };
     ($obj:ident ($($arg:expr),*)) =>
         { $obj.call(None, vec![$($arg.into()),*]) };
     ($obj:ident ($($arg:expr),*) => $tp:ty) =>
-        { try_cast!(obj_call!($obj($($arg),*)) => $tp) };
+        { cast!(call!($obj($($arg),*)) => $tp) };
 
     (($obj:expr).$method:ident ($($arg:expr),*)) =>
         { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
     (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) =>
-        { try_cast!(obj_call!(($obj).$method($($arg),*)) => $tp) };
+        { cast!(call!(($obj).$method($($arg),*)) => $tp) };
     ($obj:ident.$method:ident ($($arg:expr),*)) =>
         { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
     ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) =>
-        { try_cast!(obj_call!($obj.$method($($arg),*)) => $tp) };
+        { cast!(call!($obj.$method($($arg),*)) => $tp) };
+}
+
+macro_rules! name_type {
+    ($name:ident: $tp:ty) => { name_type!{stringify!($name), $tp} };
+    ($name:literal: $tp:ty) => { name_type!{$name, $tp} };
+    ($name:expr, $tp:ty) =>{
+        impl NamedType for $tp { fn type_name() -> &'static str { $name }}
+    };
 }
 
 macro_rules! unary_not_impl {
@@ -168,6 +181,7 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
 }
 
 pub struct Object(Box<dyn ObjectishSafe>);
+pub type ErrObject = Object;
 
 impl Object {
     pub fn new<T>(obj: T) -> Object where T: Objectish {
@@ -175,6 +189,8 @@ impl Object {
     }
 
     pub fn is_err(&self) -> bool {self.is_a::<EvalError>() }
+    pub fn ok_or_err(self) -> Result<Object, ErrObject>
+        { if self.is_err() { Err(self) } else { Ok(self) } }
     pub fn type_id(&self) -> TypeId { (*self.0).as_any().type_id() }
     pub fn is_a<T>(&self) -> bool where T: Any
         { TypeId::of::<T>() == self.type_id() }
@@ -190,7 +206,10 @@ impl Object {
         self.0 = func(owned).0;
     }
 
-    pub fn cast<T: CastObject>(self) -> Result<T, Object> { T::cast(self) }
+    pub fn cast<T: CastObject>(self) -> Result<T, ErrObject>
+        { T::cast(self).map_err(|(_, err)| err) }
+    pub fn try_cast<T: CastObject>(self) -> Result<T, Object>
+        { T::cast(self).map_err(|(obj, _)| obj) }
 
 
     pub fn get<B>(&self, key: &B) -> Option<&Object>
@@ -216,22 +235,22 @@ impl Object {
 }
 
 pub trait CastObject: Sized {
-    fn cast(obj: Object) -> Result<Self, Object>;
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>;
 }
 
 impl CastObject for Object {
-    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj) }
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> { Ok(obj) }
 }
 
 impl<T> CastObject for T where T: Objectish {
-    fn cast(mut obj: Object) -> Result<T, Object> {
+    fn cast(mut obj: Object) -> Result<T, (Object, ErrObject)> {
         let given_type = (*obj.0).type_name_dyn();
         let any_ref = (*obj.0).as_any_opt();
         if let Some(opt) = any_ref.downcast_mut::<Option<T>>() {
             Ok(std::mem::take(opt).unwrap())
-        } else { Err(eval_err!(
+        } else { Err((obj, eval_err!(
             "Expected {}, but found {}", T::type_name(), given_type
-        ))}
+        )))}
     }
 }
 
@@ -462,11 +481,11 @@ pub struct EvalError {
     pub id: usize,
     pub msg: String,
 }
-impl NamedType for EvalError { fn type_name() -> &'static str { "error" }}
+name_type!{error: EvalError}
 
 static EVAL_ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl EvalError {
-    pub fn new(msg: String) -> Object {
+    pub fn new(msg: String) -> ErrObject {
         use std::sync::atomic::Ordering;
         let id = EVAL_ERROR_COUNTER.fetch_add(1, Ordering::Relaxed);
         Object::new(EvalError {id, msg})

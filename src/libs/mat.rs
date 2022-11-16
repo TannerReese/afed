@@ -35,7 +35,7 @@ pub struct Matrix {
     pub comps: Vec<Object>,
     deter: Cell<Option<Object>>,
 }
-impl NamedType for Matrix { fn type_name() -> &'static str { "matrix" }}
+name_type!{matrix: Matrix}
 
 pub struct IntoVectors {
     dims: usize,
@@ -60,7 +60,7 @@ impl Operable for Matrix {
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         if other.is_a::<Matrix>() {
-            let (mut m1, mut m2) = (self, try_cast!(other));
+            let (mut m1, mut m2) = (self, cast!(other));
             if rev { swap(&mut m1, &mut m2); }
 
             match op {
@@ -85,7 +85,7 @@ impl Operable for Matrix {
                 _ => panic!(),
             }
         } else if other.is_a::<Vector>() {
-            let (m, v) = (self, try_cast!(other => Vector));
+            let (m, v) = (self, cast!(other => Vector));
             match op {
                 Binary::Mul => if rev {
                     if v.dims() == m.rows() { (v * m).into() }
@@ -131,7 +131,7 @@ impl Operable for Matrix {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            let idx: usize = try_cast!(args.remove(0));
+            let idx: usize = cast!(args.remove(0));
             if idx >= self.rows() { eval_err!(
                 "Index {} is larger or equal to {} number of rows",
                 idx, self.rows()
@@ -190,7 +190,7 @@ impl Matrix {
     pub fn from_array(arr: Array) -> Object {
         let mut comps = Vec::new();
         for row in arr.0.into_iter() {
-            comps.push(try_cast!(row))
+            comps.push(cast!(row))
         }
         Matrix::new(comps)
     }
@@ -272,7 +272,7 @@ impl Matrix {
 
         if augmat.matrices[0] == Self::identity(rows) {
             let inv = augmat.matrices.remove(1);
-            let det = obj_call!((augmat.deter).inv());
+            let det = call!((augmat.deter).inv());
             inv.deter.set(Some(augmat.deter));
             (inv.into(), Some(det))
         } else { (eval_err!("Matrix is singular"), None) }
@@ -293,7 +293,7 @@ impl Matrix {
         if let Err(err) = augmat.gauss_elim(0) { return err; }
 
         if augmat.matrices[0] == Self::identity(rows) {
-            obj_call!((augmat.deter).inv())
+            call!((augmat.deter).inv())
         } else { 0.into() }
     }
 }

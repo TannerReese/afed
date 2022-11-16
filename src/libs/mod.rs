@@ -2,11 +2,6 @@ use std::collections::HashMap;
 
 use super::expr::Bltn;
 
-macro_rules! count_tt {
-    () => { 0 };
-    ($fst:tt $($item:tt)*) => {1 + count_tt!($($item)*)};
-}
-
 macro_rules! def_bltn {
     ($pkg:ident.$name:ident = $val:expr) =>
         { def_bltn!(false, $pkg.$name = $val) };

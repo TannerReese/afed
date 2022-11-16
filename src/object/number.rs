@@ -8,7 +8,7 @@ use std::cmp::Ordering;
 use super::{
     Operable, Object, CastObject,
     Unary, Binary,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 use super::bool::Bool;
 
@@ -17,7 +17,7 @@ pub enum Number {
     Ratio(i64, u64),
     Real(f64),
 }
-impl NamedType for Number { fn type_name() -> &'static str { "number" } }
+name_type!{number: Number}
 
 impl Operable for Number {
     fn unary(self, op: Unary) -> Option<Object> { match op {
@@ -34,7 +34,7 @@ impl Operable for Number {
     }}
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        let (mut num1, mut num2) = (self, try_cast!(other));
+        let (mut num1, mut num2) = (self, cast!(other));
         if rev { swap(&mut num1, &mut num2); }
 
         match op {
@@ -112,7 +112,7 @@ impl Operable for Number {
         Some("acos") => f64::from(self).acos().into(),
         Some("atan") => f64::from(self).atan().into(),
         Some("atan2") => {
-            let other = try_cast!(args.remove(0));
+            let other = cast!(args.remove(0));
             f64::from(self).atan2(other).into()
         },
 
@@ -129,30 +129,30 @@ impl Operable for Number {
         Some("log10") => f64::from(self).log10().into(),
         Some("log2") => f64::from(self).log2().into(),
         Some("log") => {
-            let other = try_cast!(args.remove(0) => f64);
+            let other = cast!(args.remove(0) => f64);
             other.log(f64::from(self)).into()
         },
 
         Some("gcd") => {
-            let other = try_cast!(args.remove(0));
+            let other = cast!(args.remove(0));
             Number::gcd(*self, other).map_or(
                 eval_err!("Cannot take GCD of reals"),
                 &Object::new,
             )
         },
         Some("lcm") => {
-            let other = try_cast!(args.remove(0));
+            let other = cast!(args.remove(0));
             Number::lcm(*self, other).map_or(
                 eval_err!("Cannot take LCM of reals"),
                 &Object::new,
             )
         },
         Some("factorial") => {
-            let n: u64 = try_cast!(Object::new(*self));
+            let n: u64 = cast!(Object::new(*self));
             (1..=n).product::<u64>().into()
         },
         Some("choose") => {
-            let other = try_cast!(args.remove(0));
+            let other = cast!(args.remove(0));
             Number::choose(*self, other).map_or(
                 eval_err!("Second argument to choose must be a positive integer"),
                 &Object::new,
@@ -284,8 +284,9 @@ macro_rules! convert_integral { ($tp:ty) => {
     }
 
     impl CastObject for $tp {
-        fn cast(obj: Object) -> Result<$tp, Object> {
-            obj.cast::<Number>()?.try_into()
+        fn cast(obj: Object) -> Result<$tp, (Object, ErrObject)> {
+            let num = Number::cast(obj)?;
+            num.try_into().map_err(|err| (num.into(), err))
         }
     }
 };}
@@ -320,8 +321,8 @@ impl From<&Number> for f64 {
 }
 
 impl CastObject for f64 {
-    fn cast(obj: Object) -> Result<f64, Object> {
-        Ok(obj.cast::<Number>()?.into())
+    fn cast(obj: Object) -> Result<f64, (Object, ErrObject)> {
+        Ok(Number::cast(obj)?.into())
     }
 }
 

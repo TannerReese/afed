@@ -30,7 +30,7 @@ macro_rules! check_dims {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Vector(Vec<Object>);
-impl NamedType for Vector { fn type_name() -> &'static str { "vector" }}
+name_type!{vector: Vector}
 
 impl Operable for Vector {
     fn unary(self, op: Unary) -> Option<Object> { match op {
@@ -49,7 +49,7 @@ impl Operable for Vector {
 
     fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
         if other.is_a::<Vector>() {
-            let (mut v1, mut v2) = (self, try_cast!(other => Vector));
+            let (mut v1, mut v2) = (self, cast!(other => Vector));
             if v1.dims() != v2.dims() { return eval_err!(
                 "Vector dimensions {} and {} do not match",
                 v1.dims(), v2.dims(),
@@ -87,7 +87,7 @@ impl Operable for Vector {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            let idx = try_cast!(args.remove(0) => usize);
+            let idx = cast!(args.remove(0) => usize);
             if let Some(obj) = self.0.get(idx) { obj.clone() }
             else { eval_err!(
                 "Index {} is larger or equal to dimension {}", idx, self.dims(),
@@ -118,7 +118,7 @@ impl Vector {
     pub fn mag2(self) -> Object
         { self.0.into_iter().map(|x| x.clone() * x).sum() }
     pub fn mag(self) -> Object {
-        obj_call!((self.mag2()).sqrt())
+        call!((self.mag2()).sqrt())
     }
 
 

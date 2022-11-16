@@ -11,8 +11,7 @@ use rand::{
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Object, CastObject, EvalError};
-use crate::object::array::Array;
+use crate::object::{Object, CastObject, ErrObject, EvalError};
 
 macro_rules! dim_check {
     ($d1:expr, $d2:expr) => {
@@ -74,33 +73,21 @@ impl<
     }
 }
 
-impl<T: PartialOrd + CastObject> CastObject for Bounds<T> {
-    fn cast(obj: Object) -> Result<Self, Object> {
-        let Array(mut pairs) = obj.cast()?;
-        if pairs.len() == 0 { return Err(eval_err!(
-            "Bounds cannot have dimension zero"
-        ))} else if pairs.len() == 2 && !pairs[0].is_a::<Array>() {
-            let lower = pairs.remove(0).cast()?;
-            let upper = pairs.remove(0).cast()?;
-            if lower >= upper { return Err(eval_err!(
-                "Lower bound must be less than upper bound"
-            ))}
-            return Ok(Bounds(vec![(lower, upper)]));
-        }
+impl<T: PartialOrd + CastObject> CastObject for Bounds<T>
+where Object: From<T> {
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
+        let mut is_single: bool = false;
+        let mut bounds = match obj.try_cast() {
+            Ok(pair) => { is_single = true; vec![pair] },
+            Err(obj) => Vec::<(T, T)>::cast(obj)?,
+        };
 
-        let mut bounds = Vec::new();
-        for elem in pairs.into_iter() {
-            let Array(mut p) = elem.cast()?;
-            if p.len() != 2 { return Err(eval_err!(
-                "Bounds must array of pairs of lower and upper bounds"
+        for (lower, upper) in bounds.iter() {
+            if lower >= upper { return Err((
+                if is_single { bounds.remove(0).into() }
+                else { bounds.into() },
+                eval_err!("Lower bound must be less than upper bound"),
             ))}
-
-            let lower = p.remove(0).cast()?;
-            let upper = p.remove(0).cast()?;
-            if lower >= upper { return Err(eval_err!(
-                "Lower bound must be less than upper bound"
-            ))}
-            bounds.push((lower, upper));
         }
         Ok(Bounds(bounds))
     }
@@ -199,7 +186,7 @@ pub fn derivative(direc: Object, f: Object, x: Object) -> Object {
     let h = f64::EPSILON.cbrt();
     let px = x.clone() - direc.clone() * Object::from(h);
     let nx = x + direc * Object::from(h);
-    (obj_call!(f(nx)) - obj_call!(f(px))) / Object::from(2.0 * h)
+    (call!(f(nx)) - call!(f(px))) / Object::from(2.0 * h)
 }
 
 pub fn extremum_grid(

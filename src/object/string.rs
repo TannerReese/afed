@@ -5,13 +5,13 @@ use std::fmt::{Display, Formatter, Error};
 use super::opers::{Unary, Binary};
 use super::{
     Operable, Object, CastObject,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Str(pub String);
-impl NamedType for Str { fn type_name() -> &'static str { "string" } }
+name_type!{string: Str}
 
 impl Operable for Str {
     unary_not_impl!{}
@@ -27,12 +27,12 @@ impl Operable for Str {
 
         match op {
             Binary::Add => {
-                let mut s2 = try_cast!(other);
+                let mut s2 = cast!(other);
                 if rev { swap(&mut s1, &mut s2); }
                 s1.push_str(s2.as_str());
                 s1
             },
-            Binary::Mul => s1.repeat(try_cast!(other)),
+            Binary::Mul => s1.repeat(cast!(other)),
             _ => panic!(),
         }.into()
     }
@@ -50,7 +50,7 @@ impl Operable for Str {
         attr: Option<&str>, mut args: Vec<Object>
     ) -> Object { match attr {
         None => {
-            let idx = try_cast!(args.remove(0));
+            let idx = cast!(args.remove(0));
             if let Some(c) = self.0.chars().skip(idx).next() {
                 c.to_string().into()
             } else { eval_err!("Index {} is out of bounds", idx) }
@@ -72,7 +72,8 @@ impl From<String> for Object {
 }
 
 impl CastObject for String {
-    fn cast(obj: Object) -> Result<Self, Object> { Ok(obj.cast::<Str>()?.0) }
+    fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>
+        { Ok(Str::cast(obj)?.0) }
 }
 
 impl Display for Str {
