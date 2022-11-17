@@ -44,9 +44,9 @@ impl Operable for Map {
     }}
 
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
-        let s;
+        let s: String;
         let key = if let Some(key) = attr { key }
-        else { s = cast!(args.remove(0) => String); s.as_str() };
+        else { s = cast!(args.remove(0)); s.as_str() };
         self.0.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )

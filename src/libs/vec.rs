@@ -13,7 +13,7 @@ use crate::expr::Bltn;
 use crate::object::{
     Operable, Object,
     Unary, Binary,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 use crate::object::array::Array;
 
@@ -47,9 +47,11 @@ impl Operable for Vector {
         _ => false,
     }}
 
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        if other.is_a::<Vector>() {
-            let (mut v1, mut v2) = (self, cast!(other => Vector));
+    fn binary(
+        self, rev: bool, op: Binary, other: Object
+    ) -> Object { match_cast!(other,
+        v2: Vector => {
+            let (mut v1, mut v2) = (self, v2);
             if v1.dims() != v2.dims() { return eval_err!(
                 "Vector dimensions {} and {} do not match",
                 v1.dims(), v2.dims(),
@@ -62,7 +64,9 @@ impl Operable for Vector {
                 Binary::Mul => v1 * v2,
                 _ => panic!(),
             }
-        } else if rev { match op {
+        },
+
+        other: Object => if rev { match op {
             Binary::Mul => other * self,
             _ => panic!(),
         }.into()} else { match op {
@@ -72,7 +76,7 @@ impl Operable for Vector {
             Binary::FlrDiv => self.flrdiv(other),
             _ => panic!(),
         }.into()}
-    }
+    ).unwrap()}
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),

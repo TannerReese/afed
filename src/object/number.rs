@@ -129,7 +129,7 @@ impl Operable for Number {
         Some("log10") => f64::from(self).log10().into(),
         Some("log2") => f64::from(self).log2().into(),
         Some("log") => {
-            let other = cast!(args.remove(0) => f64);
+            let other: f64 = cast!(args.remove(0));
             other.log(f64::from(self)).into()
         },
 
@@ -148,7 +148,7 @@ impl Operable for Number {
             )
         },
         Some("factorial") => {
-            let n: u64 = cast!(Object::new(*self));
+            let n = cast!(Object::new(*self));
             (1..=n).product::<u64>().into()
         },
         Some("choose") => {
@@ -321,9 +321,8 @@ impl From<&Number> for f64 {
 }
 
 impl CastObject for f64 {
-    fn cast(obj: Object) -> Result<f64, (Object, ErrObject)> {
-        Ok(Number::cast(obj)?.into())
-    }
+    fn cast(obj: Object) -> Result<f64, (Object, ErrObject)>
+        { Ok(Number::cast(obj)?.into()) }
 }
 
 impl From<Number> for Object {

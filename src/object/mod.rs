@@ -26,6 +26,22 @@ macro_rules! count_tt {
 }
 
 
+macro_rules! match_cast {
+    ($obj:expr, $($var:ident $(: $tp:ty)? => $body:expr),+) => { loop {
+        let _obj = $obj;
+        $(
+            let res $(
+                : Result<$tp, (Object, ErrObject)>
+            )? = _obj.cast_with_err();
+            let (_obj, _err) = match res {
+                Ok($var) => break Ok($body),
+                Err((obj, err)) => (obj, err),
+            };
+        )+
+        break Err(_err);
+    }};
+}
+
 macro_rules! cast {
     ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
@@ -208,8 +224,10 @@ impl Object {
 
     pub fn cast<T: CastObject>(self) -> Result<T, ErrObject>
         { T::cast(self).map_err(|(_, err)| err) }
-    pub fn try_cast<T: CastObject>(self) -> Result<T, Object>
+    pub fn try_cast<T: CastObject>(self) -> Result<T, ErrObject>
         { T::cast(self).map_err(|(obj, _)| obj) }
+    pub fn cast_with_err<T: CastObject>(self) -> Result<T, (Object, ErrObject)>
+        { T::cast(self) }
 
 
     pub fn get<B>(&self, key: &B) -> Option<&Object>

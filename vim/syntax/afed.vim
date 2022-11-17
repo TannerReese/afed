@@ -4,6 +4,8 @@ if exists("b:current_syntax") && b:current_syntax
 endif
 let b:current_syntax = 1
 
+syn sync minlines=300
+
 " Expression operators
 syn match afedOper /\v[\:!$%&|*+-/<=>?@^~]+/
 syn keyword afedOper if
@@ -36,7 +38,8 @@ syn match afedBuiltinWithPeriod /\v\a\w*\./ contains=afedBuiltin,afedOper
 hi link afedBuiltin Structure
 
 " Results of Calculation
-syn region afedResult start=/`/ skip=/\\`/ end=/`/ keepend
+syn region afedResult start=/\v`/ skip=/\\`/ end=/`/ keepend contained
+syn region afedEqualsStmt start=/\v\=(\s|\n|#[^\n]*\n|#\{.{-}\}#)*`/ skip=/\\`/ end=/`/ keepend contains=afedOper,afedResult
 hi link afedResult Special
 
 " Identifier in Map

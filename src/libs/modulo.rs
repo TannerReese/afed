@@ -6,7 +6,11 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Operable, Object, Unary, Binary, NamedType, EvalError};
+use crate::object::{
+    Operable, Object,
+    Unary, Binary,
+    NamedType, ErrObject, EvalError,
+};
 use crate::object::number::Number;
 
 fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
@@ -61,13 +65,15 @@ impl Operable for Modulo {
         if op == Binary::Pow { return self.pow(cast!(other)).into() }
 
         let mut m1 = self;
-        let mut m2 = if other.is_a::<Modulo>() { cast!(other) }
-        else if other.is_a::<Number>() { match cast!(other) {
-            Number::Ratio(n, d) => Modulo::from_ratio((n, d), self.modulo),
-            Number::Real(_) => return eval_err!(
-                "Can't convert real number to modular"
-            ),
-        }} else { panic!() };
+        let mut m2 = match_cast!(other,
+            m: Modulo => m,
+            num: Number => match num {
+                Number::Ratio(n, d) => Modulo::from_ratio((n, d), self.modulo),
+                Number::Real(_) => return eval_err!(
+                    "Can't convert real number to modular"
+                ),
+            }
+        ).unwrap();
         if rev { swap(&mut m1, &mut m2); }
 
         match op {

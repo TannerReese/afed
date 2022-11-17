@@ -16,7 +16,7 @@ use crate::expr::Bltn;
 use crate::object::{
     Operable, Object,
     Unary, Binary,
-    NamedType, EvalError,
+    NamedType, ErrObject, EvalError,
 };
 use crate::object::array::Array;
 
@@ -58,9 +58,11 @@ impl Operable for Matrix {
         _ => false,
     }}
 
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        if other.is_a::<Matrix>() {
-            let (mut m1, mut m2) = (self, cast!(other));
+    fn binary(
+        self, rev: bool, op: Binary, other: Object
+    ) -> Object { match_cast!(other,
+        m2: Matrix => {
+            let (mut m1, mut m2) = (self, m2);
             if rev { swap(&mut m1, &mut m2); }
 
             match op {
@@ -84,8 +86,9 @@ impl Operable for Matrix {
                 )},
                 _ => panic!(),
             }
-        } else if other.is_a::<Vector>() {
-            let (m, v) = (self, cast!(other => Vector));
+        },
+        v: Vector => {
+            let m = self;
             match op {
                 Binary::Mul => if rev {
                     if v.dims() == m.rows() { (v * m).into() }
@@ -102,7 +105,8 @@ impl Operable for Matrix {
                 },
                 _ => panic!(),
             }
-        } else if rev { match op {
+        },
+        other: Object => if rev { match op {
             Binary::Mul => (other * self).into(),
             _ => panic!(),
         }} else { match op {
@@ -112,7 +116,7 @@ impl Operable for Matrix {
             Binary::FlrDiv => self.flrdiv(other).into(),
             _ => panic!(),
         }}
-    }
+    ).unwrap()}
 
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
