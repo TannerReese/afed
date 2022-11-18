@@ -3,6 +3,10 @@ use std::collections::HashMap;
 use super::expr::Bltn;
 
 macro_rules! def_bltn {
+    (impl type_or_default) => { Object };
+    (impl type_or_default $tp:ty) => { $tp };
+
+
     ($pkg:ident.$name:ident = $val:expr) =>
         { def_bltn!(false, $pkg.$name = $val) };
     (static $pkg:ident.$name:ident = $val:expr) =>
@@ -28,7 +32,7 @@ macro_rules! def_bltn {
         { def_bltn!(true, $pkg($name).$func($($tok)*) = $body) };
 
     ($global:literal, $pkg:ident($name:expr).$func:ident (
-        $($arg:ident : $tp:ty),+
+        $($arg:ident $(: $tp:ty)?),+
     ) = $body:expr) => {
         if $pkg.insert(stringify!($func).to_owned(),
             ($global, Bltn::Const(BltnFunc::new(
@@ -36,10 +40,12 @@ macro_rules! def_bltn {
                 {
                     fn unwrap(
                         arr: [Object; count_tt!($($arg)+)]
-                    ) -> Result<($($tp,)*), Object> {
+                    ) -> Result<($(
+                        def_bltn!(impl type_or_default $($tp)?),
+                    )*), Object> {
                         let [$($arg,)+] = arr;
                         let mut _idx = 0;
-                        Ok(($(match $arg.cast::<$tp>() {
+                        Ok(($(match $arg.cast() {
                             Ok(val) => { _idx += 1; val },
                             Err(err) => return Err(err),
                         },)*))
@@ -71,7 +77,7 @@ macro_rules! def_getter {
         { def_getter!(true, $pkg.$method, $attr) };
 
     ($global:literal, $pkg:ident.$getter:ident, $attr:expr) => {
-        def_bltn!($global, $pkg(stringify!($pkg)).$getter(obj: Object) =
+        def_bltn!($global, $pkg(stringify!($pkg)).$getter(obj) =
             obj.call(Some($attr), Vec::with_capacity(0))
         )
     };

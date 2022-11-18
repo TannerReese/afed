@@ -35,6 +35,9 @@ exp2 (3/2) = ``,
 ln 25 = ``, log10 9 = ``, log2 8.4 = ``,
 log 7 10 = ``,
 
+# Digits in any base
+17493 .digits 13 = ``,
+
 # Combinatorial functions
 gcd (69 / 34) (111 / 106) = ``,
 lcm (6 / 91) (52 / 17) = ``,

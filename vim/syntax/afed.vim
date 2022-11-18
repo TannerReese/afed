@@ -47,7 +47,7 @@ syn match afedLabel /\v(\a\w*|\s|\n|_|\[.{-}\]|\{.{-}\}|#[^\n]*\n|#\{.{-}\}#)*:/
 hi link afedLabel Ignore
 syn keyword afedIgnorePattern _
 hi link afedIgnorePattern Structure
-syn match afedName /\v\a\w*/ contained
+syn match afedName /\v(\a|_)\w*/ contained
 hi link afedName Identifier 
 
 " Single line comments

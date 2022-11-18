@@ -10,7 +10,6 @@ use super::{
     Unary, Binary,
     NamedType, ErrObject, EvalError,
 };
-use super::bool::Bool;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {
@@ -20,147 +19,87 @@ pub enum Number {
 name_type!{number: Number}
 
 impl Operable for Number {
-    fn unary(self, op: Unary) -> Option<Object> { match op {
-        Unary::Neg => Some((-self).into()),
-        _ => None,
-    }}
-
-    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Leq |
-        Binary::Add | Binary::Sub |
-        Binary::Mul | Binary::Div | Binary::Mod | Binary::FlrDiv |
-        Binary::Pow => other.is_a::<Number>(),
-        _ => false,
-    }}
-
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        let (mut num1, mut num2) = (self, cast!(other));
-        if rev { swap(&mut num1, &mut num2); }
-
-        match op {
-            Binary::Leq => return Bool::new(num1 <= num2),
-            Binary::Add => num1 + num2,
-            Binary::Sub => num1 - num2,
-            Binary::Mul => num1 * num2,
-            Binary::Div => num1 / num2,
-            Binary::Mod => num1 % num2,
-            Binary::FlrDiv => num1.flrdiv(num2),
-            Binary::Pow => num1.pow(num2),
-            _ => panic!(),
-        }.into()
+    def_unary!{self, -self = -self}
+    def_binary!{self,
+        self <= other : (Number) = { self <= other },
+        self + other : (Number) = { self + other },
+        self - other : (Number) = { self - other },
+        self * other : (Number) = { self * other },
+        self / other : (Number) = { self / other },
+        self % other : (Number) = { self % other },
+        self "//" other : (Number) = { self.flrdiv(other) },
+        self ^ other : (Number) = { self.pow(other) }
     }
-
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        Some("numer") | Some("denom") => Some(0),
-        Some("has_inv") | Some("inv") => Some(0),
-        Some("abs") | Some("signum") => Some(0),
-        Some("real") => Some(0),
-        Some("floor") | Some("ceil") | Some("round") => Some(0),
-
-        Some("sqrt") | Some("cbrt") => Some(0),
-
-        Some("sin")   | Some("cos")   | Some("tan")   => Some(0),
-        Some("asin")  | Some("acos")  | Some("atan")  => Some(0),
-        Some("sinh")  | Some("cosh")  | Some("tanh")  => Some(0),
-        Some("asinh") | Some("acosh") | Some("atanh") => Some(0),
-        Some("atan2") => Some(1),
-
-        Some("exp") | Some("exp2") => Some(0),
-        Some("ln") | Some("log10") | Some("log2") => Some(0),
-        Some("log") => Some(1),
-
-        Some("gcd") => Some(1),
-        Some("lcm") => Some(1),
-        Some("factorial") => Some(0),
-        Some("choose") => Some(1),
-        _ => None,
-    }}
-
-    fn call<'a>(&self,
-        attr: Option<&str>, mut args: Vec<Object>
-    ) -> Object { match attr {
-        Some("numer") => match self {
-            &Number::Ratio(n, _) => n.into(),
+    def_methods!{&num,
+        numer() = match num {
+            Number::Ratio(n, _) => n.into(),
             Number::Real(_) => eval_err!("Real number has no numerator"),
         },
-        Some("denom") => match self {
-            &Number::Ratio(_, d) => (d as i64).into(),
+        denom() = match num {
+            Number::Ratio(_, d) => (d as i64).into(),
             Number::Real(_) => eval_err!("Real number has no denominator"),
         },
+        digits(base: u64) = num.digits(base).map_or(eval_err!(
+            "Digits of a real number are ambiguous"
+        ), |v| v.into()),
 
-        Some("has_inv") => (*self != Number::Ratio(0, 1)).into(),
-        Some("inv") => (Number::Ratio(1, 1) / *self).into(),
+        has_inv() = (num != Number::Ratio(0, 1)).into(),
+        inv() = (Number::Ratio(1, 1) / num).into(),
+        str() = format!("{}", num).into(),
 
-        Some("abs") => self.abs().into(),
-        Some("signum") => self.signum().into(),
-        Some("real") => f64::from(self).into(),
-        Some("floor") => self.floor().into(),
-        Some("ceil") => self.ceil().into(),
-        Some("round") => self.round().into(),
+        abs() = num.abs().into(),
+        signum() = num.signum().into(),
+        real() = f64::from(num).into(),
+        floor() = num.floor().into(),
+        ceil() = num.ceil().into(),
+        round() = num.round().into(),
 
-        Some("sqrt") => {
-            let r = f64::from(self);
+        sqrt() = {
+            let r = f64::from(num);
             if r < 0.0 { eval_err!("Cannot take square root of negative") }
             else { r.sqrt().into() }
         },
-        Some("cbrt") => f64::from(self).cbrt().into(),
+        cbrt() = f64::from(num).cbrt().into(),
 
-        Some("sin") => f64::from(self).sin().into(),
-        Some("cos") => f64::from(self).cos().into(),
-        Some("tan") => f64::from(self).tan().into(),
-        Some("asin") => f64::from(self).asin().into(),
-        Some("acos") => f64::from(self).acos().into(),
-        Some("atan") => f64::from(self).atan().into(),
-        Some("atan2") => {
-            let other = cast!(args.remove(0));
-            f64::from(self).atan2(other).into()
-        },
+        sin() = f64::from(num).sin().into(),
+        cos() = f64::from(num).cos().into(),
+        tan() = f64::from(num).tan().into(),
+        asin() = f64::from(num).asin().into(),
+        acos() = f64::from(num).acos().into(),
+        atan() = f64::from(num).atan().into(),
+        atan2(other: f64) = f64::from(num).atan2(other).into(),
 
-        Some("sinh") => f64::from(self).sinh().into(),
-        Some("cosh") => f64::from(self).cosh().into(),
-        Some("tanh") => f64::from(self).tanh().into(),
-        Some("asinh") => f64::from(self).asinh().into(),
-        Some("acosh") => f64::from(self).acosh().into(),
-        Some("atanh") => f64::from(self).atanh().into(),
+        sinh() = f64::from(num).sinh().into(),
+        cosh() = f64::from(num).cosh().into(),
+        tanh() = f64::from(num).tanh().into(),
+        asinh() = f64::from(num).asinh().into(),
+        acosh() = f64::from(num).acosh().into(),
+        atanh() = f64::from(num).atanh().into(),
 
-        Some("exp") => f64::from(self).exp().into(),
-        Some("exp2") => f64::from(self).exp2().into(),
-        Some("ln") => f64::from(self).ln().into(),
-        Some("log10") => f64::from(self).log10().into(),
-        Some("log2") => f64::from(self).log2().into(),
-        Some("log") => {
-            let other: f64 = cast!(args.remove(0));
-            other.log(f64::from(self)).into()
-        },
+        exp() = f64::from(num).exp().into(),
+        exp2() = f64::from(num).exp2().into(),
+        ln() = f64::from(num).ln().into(),
+        log10() = f64::from(num).log10().into(),
+        log2() = f64::from(num).log2().into(),
+        log(other: f64) = other.log(f64::from(num)).into(),
 
-        Some("gcd") => {
-            let other = cast!(args.remove(0));
-            Number::gcd(*self, other).map_or(
-                eval_err!("Cannot take GCD of reals"),
-                &Object::new,
-            )
-        },
-        Some("lcm") => {
-            let other = cast!(args.remove(0));
-            Number::lcm(*self, other).map_or(
-                eval_err!("Cannot take LCM of reals"),
-                &Object::new,
-            )
-        },
-        Some("factorial") => {
-            let n = cast!(Object::new(*self));
+        gcd(other: Number) = Number::gcd(num, other).map_or(
+            eval_err!("Cannot take GCD of reals"),
+            &Object::new,
+        ),
+        lcm(other: Number) = Number::lcm(num, other).map_or(
+            eval_err!("Cannot take LCM of reals"),
+            &Object::new,
+        ),
+        factorial() = {
+            let n = cast!(Object::new(num));
             (1..=n).product::<u64>().into()
         },
-        Some("choose") => {
-            let other = cast!(args.remove(0));
-            Number::choose(*self, other).map_or(
-                eval_err!("Second argument to choose must be a positive integer"),
-                &Object::new,
-            )
-        },
-
-        _ => panic!(),
-    }}
+        choose(other: usize) = Number::choose(num, other).map_or(
+            eval_err!("Second argument to choose must be a positive integer"),
+            &Object::new,
+        )
+    }
 }
 
 
@@ -235,6 +174,16 @@ impl Number {
 
 
 impl Number {
+    pub fn digits(self, base: u64) -> Option<Vec<u64>> {
+        let mut num: u64 = self.try_into().ok()?;
+        let mut digs = Vec::new();
+        while num > 0 {
+            digs.push(num % base);
+            num /= base;
+        }
+        Some(digs)
+    }
+
     pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
         (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
             let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);

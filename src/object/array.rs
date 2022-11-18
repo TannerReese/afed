@@ -15,150 +15,93 @@ pub struct Array(pub Vec<Object>);
 name_type!{array: Array}
 
 impl Operable for Array {
-    unary_not_impl!{}
-
-    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Add => other.is_a::<Array>(),
-        Binary::Mul => other.is_a::<Number>(),
-        _ => false,
-    }}
-
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        let Array(mut arr1) = self;
-
-        match op {
-            Binary::Add => {
-                let mut arr2 = cast!(other);
-                if rev { std::mem::swap(&mut arr1, &mut arr2); }
-                arr1.append(&mut arr2);
-                arr1
-            },
-            Binary::Mul => {
-                let idx: usize = cast!(other);
-                repeat(arr1).take(idx).flatten().collect()
-            },
-            _ => panic!(),
-        }.into()
-    }
-
-
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(1),
-        Some("len") => Some(0),
-        Some("fst") | Some("snd") | Some("last") => Some(0),
-        Some("map") => Some(1),
-        Some("filter") => Some(1),
-        Some("fold") => Some(2),
-        Some("all") | Some("any") => Some(1),
-        Some("has") => Some(1),
-
-        Some("sum") | Some("prod") => Some(0),
-        Some("min") | Some("max") => Some(0),
-        Some("rev") => Some(0),
-        _ => None,
-    }}
-
-    fn call<'a>(&self,
-        attr: Option<&str>, mut args: Vec<Object>
-    ) -> Object { match attr {
-        None => {
-            let idx: usize = cast!(args.remove(0));
-            if let Some(obj) = self.0.get(idx) { obj.clone() }
-            else { eval_err!("Index {} is out of bounds", idx) }
+    def_unary!{}
+    def_binary!{self,
+        self + other : (Array => Vec<Object>) = {
+            let (mut s, mut other) = (self, other);
+            s.0.append(&mut other);  s
         },
 
-        Some("len") => self.0.len().into(),
-        Some("fst") => self.0.get(0).cloned().unwrap_or(
+        (self ~) * idx : (Number => usize) =
+            { repeat(self.0).take(idx).flatten().collect::<Object>() }
+    }
+
+    def_methods!{Array(arr),
+        __call(idx: usize) = if let Some(obj) = arr.get(idx) { obj.clone() }
+        else { eval_err!("Index {} is out of bounds", idx) },
+
+        len() = arr.len().into(),
+        fst() = arr.get(0).cloned().unwrap_or(
             eval_err!("Array doesn't have a first element")
         ),
-        Some("snd") => self.0.get(1).cloned().unwrap_or(
+        snd() = arr.get(1).cloned().unwrap_or(
             eval_err!("Array doesn't have a second element")
         ),
-        Some("last") => self.0.last().cloned().unwrap_or(
+        last() = arr.last().cloned().unwrap_or(
             eval_err!("Array doesn't have a last element")
         ),
 
-        Some("map") => {
-            let func = args.remove(0);
-            self.0.iter().cloned().map(|elem|
-                call!(func(elem))
-            ).collect()
+        map(func) = {
+            let mut new_arr = Vec::with_capacity(arr.len());
+            for x in arr.iter() { new_arr.push(call!(func(x.clone()))) }
+            new_arr.into()
         },
-        Some("filter") => {
-            let pred = args.remove(0);
-            let mut new_arr = Vec::with_capacity(self.0.len());
-            for elem in self.0.iter() {
-                if call!(pred(elem.clone()) => bool) {
-                    new_arr.push(elem.clone());
+        filter(pred) = {
+            let mut new_arr = Vec::with_capacity(arr.len());
+            for x in arr.iter() {
+                if call!(pred(x.clone()) => bool) {
+                    new_arr.push(x.clone());
                 }
             }
-            Array(new_arr).into()
+            new_arr.into()
         },
-        Some("fold") => {
-            let init = args.remove(0);
-            let func = args.remove(0);
-            self.clone().fold(init, func)
+        fold(init, func) = {
+            let mut work = init;
+            for x in arr.iter() {
+                work = try_ok!(call!(func(work, x.clone())));
+            }
+            work
         },
+        all(pred) = all_or_any(arr, true, pred),
+        any(pred) = all_or_any(arr, false, pred),
+        has(target) = arr.contains(&target).into(),
 
-        Some("all") => self.clone().all(args.remove(0)),
-        Some("any") => self.clone().any(args.remove(0)),
-        Some("has") => {
-            let target = args.remove(0);
-            self.0.contains(&target).into()
-        },
+        sum() = arr.iter().cloned().sum(),
+        prod() = arr.iter().cloned().product(),
+        max() = extreme(arr, Ordering::Greater),
+        min() = extreme(arr, Ordering::Less),
+        rev() = arr.iter().cloned().rev().collect()
+    }
+}
 
-        Some("sum") => self.0.iter().cloned().sum(),
-        Some("prod") => self.0.iter().cloned().product(),
-        Some("max") => self.extreme(Ordering::Greater),
-        Some("min") => self.extreme(Ordering::Less),
-        Some("rev") => self.0.iter().cloned().rev().collect(),
-        _ => panic!(),
-    }}
+fn all_or_any(objs: &Vec<Object>, is_all: bool, pred: Object) -> Object {
+    for elem in objs.iter() {
+        if is_all != call!(pred(elem.clone()) => bool) {
+            return (!is_all).into();
+        }
+    }
+    return is_all.into();
+}
+
+fn extreme(objs: &Vec<Object>, direc: Ordering) -> Object {
+    if objs.len() == 0 { return eval_err!(
+        "Empty array has no maximum or minimum"
+    )}
+
+    let mut ext_obj = &objs[0];
+    for ob in objs  [1..].iter() {
+        if let Some(ord) = ob.partial_cmp(ext_obj) {
+            if ord == direc { ext_obj = ob; }
+        } else { return eval_err!("Cannot compare all elements in array") }
+    }
+    ext_obj.clone()
 }
 
 impl Array {
-    pub fn fold(self, mut work: Object, func: Object) -> Object {
-        for elem in self.0.into_iter() {
-            work = call!(func(work, elem));
-        }
-        work
-    }
-
-    pub fn all(self, pred: Object) -> Object {
-        let mut is_all = true;
-        for elem in self.0.into_iter() {
-            if !call!(pred(elem) => bool) {
-                is_all = false;
-                break;
-            }
-        }
-        is_all.into()
-    }
-
-    pub fn any(self, pred: Object) -> Object {
-        let mut is_any = false;
-        for elem in self.0.into_iter() {
-            if call!(pred(elem) => bool) {
-                is_any = true;
-                break;
-            }
-        }
-        is_any.into()
-    }
-
-    fn extreme(&self, direc: Ordering) -> Object {
-        if self.0.len() == 0 { return eval_err!(
-            "Empty array has no maximum or minimum"
-        )}
-
-        let mut ext_obj = &self.0[0];
-        for obj in self.0[1..].iter() {
-            if let Some(ord) = obj.partial_cmp(ext_obj) {
-                if ord == direc { ext_obj = obj; }
-            } else { return eval_err!("Cannot compare all elements in array") }
-        }
-        ext_obj.clone()
-    }
+    pub fn all(&self, pred: Object) -> Object
+        { all_or_any(&self.0, true, pred) }
+    pub fn any(&self, pred: Object) -> Object
+        { all_or_any(&self.0, false, pred) }
 }
 
 impl Display for Array {
@@ -248,17 +191,14 @@ where Object: From<T> {
 }
 
 
-
-macro_rules! convert_tuple_helper {
-    ($on_err:expr, $($var:ident : $tp:ty),+) => { $(
+macro_rules! convert_tuple {
+    (impl multicast: $on_err:expr, $($var:ident : $tp:ty),+) => {$(
         let $var = match <$tp>::cast($var) {
             Err(($var, err)) => return Err(($on_err, err)),
             Ok(good) => good,
         };
     )+};
-}
 
-macro_rules! convert_tuple {
     ($($var:ident : $tp:ident),+) => {
         impl<$($tp),+> From<($($tp,)+)> for Object
         where Object: $(From<$tp> +)+ {
@@ -270,7 +210,7 @@ macro_rules! convert_tuple {
         where Object: $(From<$tp> +)+ {
             fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
                 let [$($var),+] = <[Object; count_tt!($($var)+)]>::cast(obj)?;
-                convert_tuple_helper!(
+                convert_tuple!(impl multicast:
                     ($($var,)+).into(),
                     $($var: $tp),+
                 );

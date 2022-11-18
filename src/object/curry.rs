@@ -42,8 +42,8 @@ impl Curry {
 }
 
 impl Operable for Curry {
-    unary_not_impl!{}
-    binary_not_impl!{}
+    def_unary!{}
+    def_binary!{}
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.arity),

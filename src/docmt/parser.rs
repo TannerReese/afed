@@ -204,12 +204,13 @@ impl<'a> Pos<'a> {
 
     fn name(&mut self) -> ParseResult<String> {
         _ = self.skip();
-        if !self.peek().map_or(false, |c| c.is_alphabetic()) {
-            return Err(None)
-        }
+        if !self.peek().map_or(false, |c|
+            c.is_alphabetic() || c == '_'
+        ) { return Err(None) }
 
-        self.while_char(|c| c.is_alphanumeric() || c == '_')
-        .map(|name| name.to_owned())
+        self.while_char(|c| c.is_alphanumeric() || c == '_').and_then(|name|
+            if name == "_" { Err(None) } else { Ok(name.to_owned()) }
+        )
     }
 
     fn string(&mut self) -> ParseResult<String> {

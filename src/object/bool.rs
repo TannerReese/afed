@@ -1,11 +1,9 @@
-use std::mem::swap;
-use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::{
     Operable, Object, CastObject,
     Unary, Binary,
-    NamedType, ErrObject, EvalError,
+    NamedType, ErrObject,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,31 +15,19 @@ impl Bool {
 }
 
 impl Operable for Bool {
-    fn unary(self, op: Unary) -> Option<Object> { match op {
-        Unary::Not | Unary::Neg => Some(Bool::new(!self.0)),
-    }}
-
-    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::And | Binary::Or |
-        Binary::Add | Binary::Sub | Binary::Mul => other.is_a::<Bool>(),
-        _ => false,
-    }}
-
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        let Bool(mut b1) = self;
-        let mut b2 = cast!(other);
-        if rev { swap(&mut b1, &mut b2); }
-
-        Bool::new(match op {
-            Binary::And => b1 && b2,
-            Binary::Or => b1 || b2,
-            Binary::Add | Binary::Sub => b1 ^ b2,
-            Binary::Mul => b1 && b2,
-            _ => panic!(),
-        })
+    def_unary!{self,
+        -self = !self.0,
+        !self = !self.0
     }
+    def_binary!{self,
+        self && other : (Bool => bool) = { self.0 && other },
+        self || other : (Bool => bool) = { self.0 || other },
 
-    call_not_impl!{}
+        self + other : (Bool => bool) = { self.0 ^ other },
+        self - other : (Bool => bool) = { self.0 ^ other },
+        self * other : (Bool => bool) = { self.0 && other }
+    }
+    def_methods!{}
 }
 
 impl Display for Bool {
@@ -70,18 +56,11 @@ pub struct Ternary();
 impl NamedType for Ternary { fn type_name() -> &'static str { "ternary" } }
 
 impl Operable for Ternary {
-    unary_not_impl!{}
-    binary_not_impl!{}
+    def_unary!{}
+    def_binary!{}
 
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(3),
-        _ => None,
-    }}
-
-    fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
-        if attr.is_some() { panic!() }
-        let cond: bool = cast!(args.remove(0));
-        args.remove(if cond { 0 } else { 1 })
+    def_methods!{_, __call(cond: bool, on_true, on_false) =
+        if cond { on_true } else { on_false }
     }
 }
 

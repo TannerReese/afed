@@ -47,10 +47,7 @@ pub struct Modulo {
 name_type!{modulo: Modulo}
 
 impl Operable for Modulo {
-    fn unary(self, op: Unary) -> Option<Object> { match op {
-        Unary::Neg => Some((-self).into()),
-        _ => None,
-    }}
+    def_unary!{self, -self = -self}
 
     fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
         Binary::Add | Binary::Sub |
@@ -87,28 +84,18 @@ impl Operable for Modulo {
     }
 
 
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        Some("resid") | Some("modulo") => Some(0),
-        Some("has_inv") | Some("inv") => Some(0),
-        Some("order") => Some(0),
-        _ => None,
-    }}
+def_methods!{m,
+    resid() = m.residue.into(),
+    modulo() = (m.modulo as i64).into(),
 
-    fn call(&self,
-        attr: Option<&str>, _: Vec<Object>
-    ) -> Object { match attr {
-        Some("resid") => self.residue.into(),
-        Some("modulo") => (self.modulo as i64).into(),
+    has_inv() = (bezout(
+        m.residue.abs() as u64, m.modulo
+    ).0 == 1).into(),
+    inv() = m.inverse().into(),
 
-        Some("has_inv") => (bezout(
-            self.residue.abs() as u64, self.modulo
-        ).0 == 1).into(),
-        Some("inv") => self.inverse().into(),
+    order() = m.order().into()
+}}
 
-        Some("order") => self.order().into(),
-        _ => panic!(),
-    }}
-}
 
 impl Modulo {
     fn from(mut residue: i64, modulo: u64) -> Self {

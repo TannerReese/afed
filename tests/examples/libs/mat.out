@@ -14,7 +14,7 @@ m4 * m1 = `Eval Error: For matrix multiplication, 2 and 3 do not match`,
 m2 * m5 = `Eval Error: For matrix multiplication, 3 and 2 do not match`,
 
 # Matrix Unimplemented operations
-m2 / m3 = `Eval Error: Binary operator / not implemented between types matrix and matrix`,
+m2 / V[1, 0, 1] = `Eval Error: Binary operator / not implemented between types matrix and vector`,
 4 % m3 = `Eval Error: Binary operator % not implemented between types number and matrix`,
 
 # Linear operations
@@ -27,6 +27,7 @@ m3 // 0.3 = `M[[26, 13, -3], [40, 22, 13], [0, 56, 0]]`,
 m1 * m4 = `M[[269 / 13, 339 / 40], [38.61538461538461, 19.05], [20 / 13, 9 / 13]]`,
 m3 * m1 = `M[[2902 / 91, 0], [3342 / 65, -0.839999999999999], [68, -20.4]]`,
 m2 * m3 - m3 * m2 = `M[[21.914285714285715, 17.284285714285716, -34.31428571428572], [-33 / 5, 67.8, -4761 / 70], [234, 128.2, -628 / 7]]`,
+m2 / m3 = `M[[-0.1267605633802817, 0.08450704225352113, 0.06122618061309031], [-203 / 71, 247 / 142, -309 / 24140], [-14 / 71, 61 / 284, 43593 / 48280]]`,
 
 # Application to vectors
 m1 * V[1, 2] = `V[16 / 5, 1.6, 2 / 13]`,

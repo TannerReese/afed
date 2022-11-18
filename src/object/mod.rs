@@ -60,6 +60,13 @@ macro_rules! try_ok {
     }};
 }
 
+macro_rules! guard {
+    ($obj:expr, $cond:expr, $($arg:tt)*) => {
+        if $cond { $obj.into() }
+        else { eval_err!($($arg)*) }
+    };
+}
+
 macro_rules! call {
     (($obj:expr)($($arg:expr),*)) =>
         { $obj.call(None, vec![$($arg.into()),*]) };
@@ -88,29 +95,141 @@ macro_rules! name_type {
     };
 }
 
-macro_rules! unary_not_impl {
-    () => {
-        fn unary(self, _: Unary) -> Option<Object> { None }
+macro_rules! def_unary {
+    () => { def_unary!{self,} };
+    ($self:ident, $($op:tt self = $body:expr),*) => {
+        fn unary($self, _op: Unary) -> Option<Object> {$(
+            if let symb_to_unary!($op) = _op {
+                return Some($body.into());
+            }
+        )* None }
     };
 }
 
-macro_rules! binary_not_impl {
-    () => {
-        fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { false }
-        fn binary(self, _: bool, _: Binary, _: Object) -> Object { panic!() }
-    };
-}
+macro_rules! def_binary {
+    (impl type_override: $recog:ty,) => { $recog };
+    (impl type_override: $recog:ty, $tp:ty) => { $tp };
 
-macro_rules! call_not_impl {
-    () => {
-        fn arity(&self, _: Option<&str>) -> Option<usize> { None }
-        fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
-            eval_err!("Cannot call {}", Self::type_name())
+    (impl check_rev: $rev:expr, (self~) $var:ident) => { true };
+    (impl check_rev: $rev:expr, self $var:ident) => { !$rev };
+    (impl check_rev: $rev:expr, $var:ident self) => {  $rev };
+
+    (impl use_rev: $rev:expr, $other:expr, (self~) $var:ident = $body:expr) =>
+        { let $var = $other; return $body };
+    (impl use_rev: $rev:expr, $other:expr, self $var:ident = $body:expr) =>
+        { if !$rev { let $var = $other; return $body }};
+    (impl use_rev: $rev:expr, $other:expr, $var:ident self = $body:expr) =>
+        { if $rev { let $var = $other; return $body }};
+
+    (impl is_null: {}, $t:expr, $f:expr) => { $t };
+    (impl is_null: $_:tt, $t:expr, $f:expr) => { $f };
+
+
+    () => { def_binary!{self,} };
+    ($self:ident, $(
+        $fst:tt $op:tt $snd:tt
+        $(:($recog:ty $(=> $tp:ty)?))?
+        = $body:tt
+    ),*) => {
+        fn try_binary(
+            &$self, _rev: bool, _op: Binary, _other: &Object
+        ) -> bool {$(
+            if let symb_to_binary!($op) = _op {
+                if def_binary!(impl check_rev: _rev, $fst $snd)
+                $( && _other.is_a::<$recog>() )? {
+                    return def_binary!(impl is_null: $body, false, true);
+                }
+            }
+        )* false }
+
+        fn binary(
+            $self, _rev: bool, _op: Binary, mut _other: Object
+        ) -> Object {
+            let mut _err = None;
+            $( #[allow(unreachable_code)] loop {
+                if let symb_to_binary!($op) = _op {
+                    let other = _other;
+                    $( let other = match <
+                        def_binary!(impl type_override: $recog, $($tp)?)
+                    >::cast(other) {
+                        Ok(good) => good,
+                        Err((val, err)) => {
+                            _other = val;
+                            _err = Some(err);
+                            break
+                        },
+                    }; )?
+                    def_binary!(impl use_rev: _rev, other, $fst $snd =
+                        def_binary!(impl is_null: $body, {
+                            let _p: Object = panic!(); _p
+                        }, $body).into()
+                    );
+                    _other = other.into();
+                }
+                break
+            })*
+            if let Some(err) = _err { err } else { panic!() }
         }
     };
 }
 
+macro_rules! def_methods {
+    (impl to_option __call) => { None };
+    (impl to_option $method:ident) => { Some(stringify!($method)) };
+
+    (impl type_or_default) => { Object };
+    (impl type_or_default $tp:ty) => { $tp };
+
+    (impl multicast: $on_err:expr, $($var:ident $(: $tp:ty)?),*) => {$($(
+        let $var = match <$tp>::cast($var) {
+            Err(($var, err)) => break Err(($on_err, err)),
+            Ok(good) => good,
+        };
+    )?)*};
+
+
+    () => { def_methods!{_,} };
+    ($self:pat, $($func:ident ($(
+        $arg:ident $(: $tp:ty)?
+    ),*) = $body:expr),*) => {
+        fn arity(
+            &self, _attr: Option<&str>
+        ) -> Option<usize> {$(
+            if let def_methods!(impl to_option $func) = _attr {
+                return Some(count_tt!($($arg)*))
+            }
+        )* None }
+
+        fn call(
+            &self, _attr: Option<&str>, _args: Vec<Object>
+        ) -> Object {
+            let $self = self;
+            let mut _err = None;
+            $(let _args =
+            if let def_methods!(impl to_option $func) = _attr {
+                match <[Object; count_tt!($($arg)*)]>::try_from(_args) {
+                    Err(args) => args,
+                    Ok([$($arg),*]) => match loop {
+                        def_methods!(impl multicast:
+                            vec![$($arg.into()),*],
+                            $($arg $(: $tp)?),*
+                        );
+                        break Ok($body);
+                    } {
+                        Ok(res) => return res,
+                        Err((args, err)) => { _err = Some(err);  args },
+                    },
+                }
+            } else { _args };)*
+
+            if let Some(err) = _err { err } else { panic!() }
+        }
+    };
+}
+
+#[macro_use]
 mod opers;
+
 pub mod null;
 pub mod bool;
 pub mod number;

@@ -23,41 +23,25 @@ pub struct Plot {
 name_type!{plot: Plot}
 
 impl Operable for Plot {
-    unary_not_impl!{}
+    def_unary!{}
+    def_binary!{self, (self ~) + other = { self + other }}
+    def_methods!{Plot {
+        width, height, corner,
+        rows, columns, errors, ..
+    },
+        width() = (*width).into(),
+        height() = (*height).into(),
+        corner() = (*corner).into(),
+        center() = (
+            (*corner).0 + *width / 2.0, (*corner).1 - *height / 2.0
+        ).into(),
 
-    fn try_binary(&self, _: bool, op: Binary, _: &Object) -> bool { match op {
-        Binary::Add => true,
-        _ => false,
-    }}
-
-    fn binary(
-        self, _: bool, op: Binary, other: Object
-    ) -> Object { match op {
-        Binary::Add => (self + other).into(),
-        _ => panic!(),
-    }}
-
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        Some("width") | Some("height") => Some(0),
-        Some("center") => Some(0),
-        Some("rows") | Some("cols") => Some(0),
-        Some("errors") => Some(0),
-        _ => None,
-    }}
-
-    fn call(&self,
-        attr: Option<&str>, _: Vec<Object>
-    ) -> Object { match attr {
-        Some("width") => self.width.into(),
-        Some("height") => self.height.into(),
-        Some("center") => vec![self.corner.0, self.corner.1].into(),
-
-        Some("rows") => self.rows.into(),
-        Some("cols") => self.columns.into(),
-        Some("errors") => self.errors.clone().into(),
-        _ => panic!(),
-    }}
+        rows() = (*rows).into(),
+        cols() = (*columns).into(),
+        errors() = errors.clone().into()
+    }
 }
+
 
 
 impl Plot {
@@ -438,7 +422,7 @@ impl Add<Plot> for Object {
 pub fn make_bltns() -> Bltn {
     let mut plt = HashMap::new();
     def_bltn!(plt.Plot(opts: HashMap<String, Object>) = Plot::new(opts));
-    def_bltn!(plt.draw(obj: Object, plot: Plot) = (plot + obj).into());
+    def_bltn!(plt.draw(obj, plot: Plot) = (plot + obj).into());
     Bltn::Map(plt)
 }
 

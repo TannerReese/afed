@@ -3,6 +3,6 @@ line 11, column 18 of "mat.af" Eval Error: Matrix cannot have jagged rows
 line 12, column 11 of "mat.af" Eval Error: Matrix dimensions (3, 3) and (2, 2) do not match
 line 13, column 11 of "mat.af" Eval Error: For matrix multiplication, 2 and 3 do not match
 line 14, column 11 of "mat.af" Eval Error: For matrix multiplication, 3 and 2 do not match
-line 17, column 11 of "mat.af" Eval Error: Binary operator / not implemented between types matrix and matrix
+line 17, column 19 of "mat.af" Eval Error: Binary operator / not implemented between types matrix and vector
 line 18, column 10 of "mat.af" Eval Error: Binary operator % not implemented between types number and matrix
 7 Eval Errors encountered

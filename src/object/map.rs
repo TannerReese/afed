@@ -24,18 +24,12 @@ impl Map {
 }
 
 impl Operable for Map {
-    unary_not_impl!{}
-
-    fn try_binary(&self, _: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Add => other.is_a::<Map>(),
-         _ => false,
-    }}
-
-    fn binary(mut self, _: bool, op: Binary, other: Object) -> Object {
-        if op != Binary::Add { panic!() }
-        let Map(elems) = cast!(other);
-        self.0.extend(elems);
-        self.into()
+    def_unary!{}
+    def_binary!{self,
+        self + other : (Map) = {
+            let mut s = self;
+            s.0.extend(other.0);  s
+        }
     }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {

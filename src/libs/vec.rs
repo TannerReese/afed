@@ -1,5 +1,3 @@
-use std::mem::swap;
-use std::vec::Vec;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
@@ -11,9 +9,9 @@ use super::mat::Matrix;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object,
+    Operable, Object, CastObject,
     Unary, Binary,
-    NamedType, ErrObject, EvalError,
+    NamedType, EvalError,
 };
 use crate::object::array::Array;
 
@@ -33,77 +31,41 @@ pub struct Vector(Vec<Object>);
 name_type!{vector: Vector}
 
 impl Operable for Vector {
-    fn unary(self, op: Unary) -> Option<Object> { match op {
-        Unary::Neg => Some((-self).into()),
-        _ => None,
-    }}
+    def_unary!{self, -self = -self}
+    def_binary!{self,
+        self + v : (Vector) = { guard!(self + v, self.dims() == v.dims(),
+            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
+        )},
+        self - v : (Vector) = { guard!(self - v, self.dims() == v.dims(),
+            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
+        )},
+        self * v : (Vector) = { guard!(self * v, self.dims() == v.dims(),
+            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
+        )},
 
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Add | Binary::Sub => other.is_a::<Vector>(),
-        Binary::Mul => !other.is_a::<Matrix>(),
-        Binary::Div | Binary::Mod | Binary::FlrDiv => {
-            !rev && !other.is_a::<Matrix>()
-        },
-        _ => false,
-    }}
+        (self ~) * _m : (Matrix) = {},
+        self * other = { self * other },
+        other * self = { other * self },
 
-    fn binary(
-        self, rev: bool, op: Binary, other: Object
-    ) -> Object { match_cast!(other,
-        v2: Vector => {
-            let (mut v1, mut v2) = (self, v2);
-            if v1.dims() != v2.dims() { return eval_err!(
-                "Vector dimensions {} and {} do not match",
-                v1.dims(), v2.dims(),
-            )}
-            if rev { swap(&mut v1, &mut v2); }
+        self / _m : (Matrix) = {},
+        self / other = { self / other },
+        self % _m : (Matrix) = {},
+        self % other = { self % other },
+        self "//" _m : (Matrix) = {},
+        self "//" other = { self.flrdiv(other) }
+    }
 
-            match op {
-                Binary::Add => (v1 + v2).into(),
-                Binary::Sub => (v1 - v2).into(),
-                Binary::Mul => v1 * v2,
-                _ => panic!(),
-            }
-        },
+    def_methods!{vec,
+        __call(idx: usize) = if let Some(obj) = vec.0.get(idx) { obj.clone() }
+        else { eval_err!(
+            "Index {} is larger or equal to dimension {}", idx, vec.dims(),
+        )},
 
-        other: Object => if rev { match op {
-            Binary::Mul => other * self,
-            _ => panic!(),
-        }.into()} else { match op {
-            Binary::Mul => self * other,
-            Binary::Div => self / other,
-            Binary::Mod => self % other,
-            Binary::FlrDiv => self.flrdiv(other),
-            _ => panic!(),
-        }.into()}
-    ).unwrap()}
-
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(1),
-        Some("dims") => Some(0),
-        Some("comps") => Some(0),
-        Some("mag") => Some(0),
-        Some("mag2") => Some(0),
-        _ => None,
-    }}
-
-    fn call(&self,
-        attr: Option<&str>, mut args: Vec<Object>
-    ) -> Object { match attr {
-        None => {
-            let idx = cast!(args.remove(0) => usize);
-            if let Some(obj) = self.0.get(idx) { obj.clone() }
-            else { eval_err!(
-                "Index {} is larger or equal to dimension {}", idx, self.dims(),
-            )}
-        },
-
-        Some("dims") => self.dims().into(),
-        Some("comps") => self.0.clone().into(),
-        Some("mag") => self.clone().mag(),
-        Some("mag2") => self.clone().mag2(),
-        _ => panic!(),
-    }}
+        dims() = vec.dims().into(),
+        comps() = vec.0.clone().into(),
+        mag() = vec.clone().mag(),
+        mag2() = vec.clone().mag2()
+    }
 }
 
 

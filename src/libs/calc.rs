@@ -237,38 +237,34 @@ const EXTR_ITERS: usize = 30;
 
 pub fn make_bltns() -> Bltn {
     let mut calc = HashMap::new();
-    def_bltn!(calc.integ_grid(size: u32, bnds: Bounds<f64>, f: Object) = {
+    def_bltn!(calc.integ_grid(size: u32, bnds: Bounds<f64>, f) = {
         let vol = bnds.volume();
         let grid = bnds.grid(size);
         integral(grid, vol, f)
     });
-    def_bltn!(calc.integ_rand(count: usize, bnds: Bounds<f64>, f: Object) = {
+    def_bltn!(calc.integ_rand(count: usize, bnds: Bounds<f64>, f) = {
         let vol = bnds.volume();
         let rnd = bnds.rand(Some(count));
         integral(rnd, vol, f)
     });
 
-    def_bltn!(calc.deriv(f: Object, x: Object) =
-        derivative(1.into(), f, x)
-    );
-    def_bltn!(calc.direc_deriv(direc: Object, f: Object, x: Object) =
-        derivative(direc, f, x)
-    );
+    def_bltn!(calc.deriv(f, x) = derivative(1.into(), f, x));
+    def_bltn!(calc.direc_deriv(direc, f, x) = derivative(direc, f, x));
 
 
-    def_bltn!(calc.max(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.max(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
         }
     );
-    def_bltn!(calc.argmax(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.argmax(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((pt, _)) => pt_to_obj(pt),
         }
     );
-    def_bltn!(calc.max_pt(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.max_pt(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((pt, val)) => vec![pt_to_obj(pt), val].into(),
@@ -276,19 +272,19 @@ pub fn make_bltns() -> Bltn {
     );
 
 
-    def_bltn!(calc.min(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.min(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
         }
     );
-    def_bltn!(calc.argmin(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.argmin(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((pt, _)) => pt_to_obj(pt),
         }
     );
-    def_bltn!(calc.min_pt(bnds: Bounds<f64>, f: Object) =
+    def_bltn!(calc.min_pt(bnds: Bounds<f64>, f) =
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((pt, val)) => vec![pt_to_obj(pt), val].into(),

@@ -31,8 +31,8 @@ impl Func {
 }
 
 impl Operable for Func {
-    unary_not_impl!();
-    binary_not_impl!();
+    def_unary!{}
+    def_binary!{}
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.pats.len()),

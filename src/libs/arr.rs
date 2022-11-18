@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::zip;
 
 use super::bltn_func::BltnFunc;
 
@@ -59,11 +60,13 @@ pub fn make_bltns() -> Bltn {
     def_bltn!(arr.range_step(x: Number, y: Number, step: Number) =
         range(x, y, step));
 
-    def_bltn!(arr.iter(init: Object, times: usize, f: Object) =
-        iter(init, times, f));
+    def_bltn!(arr.iter(init, times: usize, f) = iter(init, times, f));
+    def_bltn!(arr.iter_while(init, pred, f) = iter_while(init, pred, f));
 
-    def_bltn!(arr.iter_while(init: Object, pred: Object, f: Object) =
-        iter_while(init, pred, f));
+    def_bltn!(arr.zip(v1: Vec<Object>, v2: Vec<Object>) =
+        zip(v1, v2).collect());
+    def_bltn!(arr.zip_with(f, v1: Vec<Object>, v2: Vec<Object>) =
+        zip(v1, v2).map(|(x, y)| call!(f(x, y))).collect());
 
     def_bltn!(arr.fst(vc: Vec<Object>) = {
         let mut vc = vc;
@@ -92,12 +95,12 @@ pub fn make_bltns() -> Bltn {
     def_getter!(arr.min);
     def_getter!(arr.rev);
 
-    def_bltn!(arr.map(f: Object, obj: Object) = call!(obj.map(f)));
-    def_bltn!(arr.filter(f: Object, obj: Object) = call!(obj.filter(f)));
-    def_bltn!(arr.fold(init: Object, f: Object, a: Array) = a.fold(init, f));
-    def_bltn!(arr.all(f: Object, a: Array) = a.all(f));
-    def_bltn!(arr.any(f: Object, a: Array) = a.any(f));
-    def_bltn!(arr.has(elm: Object, obj: Object) = call!(obj.has(elm)));
+    def_bltn!(arr.map(f, obj) = call!(obj.map(f)));
+    def_bltn!(arr.filter(f, obj) = call!(obj.filter(f)));
+    def_bltn!(arr.fold(init, f, obj) = call!(obj.fold(init, f)));
+    def_bltn!(arr.all(f, a: Array) = a.all(f));
+    def_bltn!(arr.any(f, a: Array) = a.any(f));
+    def_bltn!(arr.has(elm, obj) = call!(obj.has(elm)));
     Bltn::Map(arr)
 }
 

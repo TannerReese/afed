@@ -19,17 +19,17 @@ pub fn make_bltns() -> Bltn {
     def_getter!(num.sinh);    def_getter!(num.cosh);   def_getter!(num.tanh);
     def_getter!(num.asin);    def_getter!(num.acos);   def_getter!(num.atan);
     def_getter!(num.asinh);   def_getter!(num.acosh);  def_getter!(num.atanh);
-    def_bltn!(num.atan2(y: Object, x: Object) = call!(y.atan2(x)));
+    def_bltn!(num.atan2(y, x) = call!(y.atan2(x)));
 
     def_getter!(num.exp);     def_getter!(num.exp2);
     def_getter!(num.ln);      def_getter!(num.log10);  def_getter!(num.log2);
-    def_bltn!(num.log(base: Object, x: Object) = call!(base.log(x)));
+    def_bltn!(num.log(base, x) = call!(base.log(x)));
 
-    def_bltn!(num.gcd(a: Object, b: Object) = call!(a.gcd(b)));
-    def_bltn!(num.lcm(a: Object, b: Object) = call!(a.lcm(b)));
+    def_bltn!(num.gcd(a, b) = call!(a.gcd(b)));
+    def_bltn!(num.lcm(a, b) = call!(a.lcm(b)));
 
     def_getter!(num.factorial);
-    def_bltn!(num.choose(n: Object, k: Object) = call!(n.choose(k)));
+    def_bltn!(num.choose(n, k) = call!(n.choose(k)));
 
     Bltn::Map(num)
 }

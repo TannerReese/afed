@@ -2,17 +2,17 @@ use std::vec::Vec;
 use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType, EvalError};
+use super::{Operable, Object, NamedType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null();
 name_type!{null: Null}
 
 impl Operable for Null {
-    unary_not_impl!{}
-    binary_not_impl!{}
+    def_unary!{}
+    def_binary!{}
 
-    call_not_impl!{}
+    def_methods!{}
 }
 
 impl Display for Null {

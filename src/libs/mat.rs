@@ -1,5 +1,4 @@
-use std::mem::swap;
-use std::vec::{Vec, IntoIter};
+use std::vec::IntoIter;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Error, Write};
@@ -14,9 +13,9 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object,
+    Operable, Object, CastObject,
     Unary, Binary,
-    NamedType, ErrObject, EvalError,
+    NamedType, EvalError,
 };
 use crate::object::array::Array;
 
@@ -44,132 +43,73 @@ pub struct IntoVectors {
 
 
 impl Operable for Matrix {
-    fn unary(self, op: Unary) -> Option<Object> { match op {
-        Unary::Neg => Some((-self).into()),
-        _ => None,
-    }}
+    def_unary!{self, -self = -self}
+    def_binary!{self,
+        self + m : (Matrix) = { guard!(self + m, self.dims == m.dims,
+            "Matrix dimensions {:?} and {:?} do not match", self.dims, m.dims
+        )},
+        self - m : (Matrix) = { guard!(self - m, self.dims == m.dims,
+            "Matrix dimensions {:?} and {:?} do not match", self.dims, m.dims
+        )},
 
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Add | Binary::Sub => other.is_a::<Matrix>(),
-        Binary::Mul => true,
-        Binary::Div | Binary::Mod | Binary::FlrDiv => {
-            !rev && !other.is_a::<Vector>() && !other.is_a::<Matrix>()
-        },
-        _ => false,
-    }}
+        self * m : (Matrix) = { guard!(self * m, self.dims.1 == m.dims.0,
+            "For matrix multiplication, {} and {} do not match",
+            self.dims.1, m.dims.0,
+        )},
+        self * v : (Vector) = { guard!(self * v, self.dims.1 == v.dims(),
+            "Vector dimension {} does not match column dimension {} in matrix",
+            v.dims(), self.dims.1,
+        )},
+        v * self : (Vector) = { guard!(v * self, self.dims.0 == v.dims(),
+            "Vector dimension {} does not match row dimension {} in matrix",
+            v.dims(), self.dims.0,
+        )},
+        self * other = { self * other },
+        other * self = { other * self },
 
-    fn binary(
-        self, rev: bool, op: Binary, other: Object
-    ) -> Object { match_cast!(other,
-        m2: Matrix => {
-            let (mut m1, mut m2) = (self, m2);
-            if rev { swap(&mut m1, &mut m2); }
+        self / _v : (Vector) = {},
+        self / m : (Matrix) = { Object::new(self) * m.inverse().0 },
+        self / other = { self / other },
 
-            match op {
-                Binary::Add => if m1.dims == m2.dims {
-                    (m1 + m2).into()
-                } else { eval_err!(
-                    "Matrix dimensions {:?} and {:?} do not match",
-                    m1.dims, m2.dims,
-                )},
-                Binary::Sub => if m1.dims == m2.dims {
-                    (m1 - m2).into()
-                } else { eval_err!(
-                    "Matrix dimensions {:?} and {:?} do not match",
-                    m1.dims, m2.dims,
-                )},
-                Binary::Mul => if m1.columns() == m2.rows() {
-                    (m1 * m2).into()
-                } else { eval_err!(
-                    "For matrix multiplication, {} and {} do not match",
-                    m1.columns(), m2.rows(),
-                )},
-                _ => panic!(),
-            }
-        },
-        v: Vector => {
-            let m = self;
-            match op {
-                Binary::Mul => if rev {
-                    if v.dims() == m.rows() { (v * m).into() }
-                    else { eval_err!(
-                        "Vector dimension {} does not match row dimension {} in matrix",
-                        v.dims(), m.rows(),
-                    )}
-                } else {
-                    if m.columns() == v.dims() { (m * v).into() }
-                    else { eval_err!(
-                        "Vector dimension {} does not match column dimension {} in matrix",
-                        v.dims(), m.columns(),
-                    )}
-                },
-                _ => panic!(),
-            }
-        },
-        other: Object => if rev { match op {
-            Binary::Mul => (other * self).into(),
-            _ => panic!(),
-        }} else { match op {
-            Binary::Mul => (self * other).into(),
-            Binary::Div => (self / other).into(),
-            Binary::Mod => (self % other).into(),
-            Binary::FlrDiv => self.flrdiv(other).into(),
-            _ => panic!(),
-        }}
-    ).unwrap()}
+        self % _v : (Vector) = {},
+        self % _m : (Matrix) = {},
+        self % other = { self % other },
 
+        self "//" _v : (Vector) = {},
+        self "//" _m : (Matrix) = {},
+        self "//" other = { self.flrdiv(other) }
+    }
 
-    fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
-        None => Some(1),
-        Some("rows") => Some(0),
-        Some("cols") => Some(0),
-        Some("row_vecs") => Some(0),
-        Some("col_vecs") => Some(0),
-        Some("trsp") => Some(0),
-        Some("inv") => Some(0),
-        Some("deter") => Some(0),
-        _ => None,
-    }}
-
-    fn call(&self,
-        attr: Option<&str>, mut args: Vec<Object>
-    ) -> Object { match attr {
-        None => {
-            let idx: usize = cast!(args.remove(0));
-            if idx >= self.rows() { eval_err!(
-                "Index {} is larger or equal to {} number of rows",
-                idx, self.rows()
-            )} else {
-                let cols = self.columns();
-                self.comps[idx * cols .. (idx + 1) * cols]
-                .iter().cloned().collect::<Vector>().into()
-            }
+    def_methods!{mat,
+       __call(idx: usize) = if idx >= mat.rows() { eval_err!(
+            "Index {} is larger or equal to {} number of rows",
+            idx, mat.rows()
+        )} else {
+            let cols = mat.columns();
+            mat.comps[idx * cols .. (idx + 1) * cols]
+            .iter().cloned().collect::<Vector>().into()
         },
 
-        Some("rows") => self.rows().into(),
-        Some("cols") => self.columns().into(),
-        Some("row_vecs") =>
-            self.clone().into_rows().collect(),
-        Some("col_vecs") =>
-            self.clone().into_columns().collect(),
-        Some("trsp") => {
-            let mut m = self.clone();
+        rows() = mat.rows().into(),
+        cols() = mat.columns().into(),
+        row_vecs() = mat.clone().into_rows().collect(),
+        col_vecs() = mat.clone().into_columns().collect(),
+        trsp() = {
+            let mut m = mat.clone();
             m.transpose();
             m.into()
         },
-        Some("inv") => {
-            let (inv, det) = self.clone().inverse();
-            if let Some(det) = det { self.deter.set(Some(det)); }
+
+        has_inv() = call!((mat.determinant()).has_inv()),
+        inv() = {
+            let (inv, det) = mat.clone().inverse();
+            if let Some(det) = det { mat.deter.set(Some(det)); }
             inv
         },
-        Some("deter") => {
-            let det = self.clone().determinant();
-            self.deter.set(Some(det.clone()));
-            det
-        },
-        _ => panic!(),
-    }}
+        deter() = mat.determinant()
+    }
 }
+
 
 
 impl Matrix {
@@ -282,7 +222,14 @@ impl Matrix {
         } else { (eval_err!("Matrix is singular"), None) }
     }
 
-    pub fn determinant(self) -> Object {
+    pub fn determinant(&self) -> Object {
+        let det = if let Some(det) = self.deter.take() { det }
+        else { self.clone().determinant() };
+        self.deter.set(Some(det.clone()));
+        det
+    }
+
+    pub fn into_determinant(self) -> Object {
         if let Some(deter) = self.deter.take() { return deter }
 
         if self.dims.0 != self.dims.1 {
@@ -507,7 +454,7 @@ pub fn make_bltns() -> Bltn {
         m.transpose(); m.into()
     });
     def_bltn!(mat.inv(m: Matrix) = m.inverse().0);
-    def_bltn!(mat.deter(m: Matrix) = m.determinant());
+    def_bltn!(mat.deter(m: Matrix) = m.into_determinant());
     Bltn::Map(mat)
 }
 
