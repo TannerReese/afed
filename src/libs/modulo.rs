@@ -49,38 +49,36 @@ name_type!{modulo: Modulo}
 impl Operable for Modulo {
     def_unary!{self, -self = -self}
 
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool { match op {
-        Binary::Add | Binary::Sub |
-        Binary::Mul | Binary::Div | Binary::Mod => {
-            other.is_a::<Modulo>() || other.is_a::<Number>()
-        },
-        Binary::Pow => !rev && other.is_a::<Number>(),
-        _ => false,
-    }}
-
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object {
-        if op == Binary::Pow { return self.pow(cast!(other)).into() }
+    fn binary(self,
+        rev: bool, op: Binary, other: Object
+    ) -> Result<Object, (Object, Object)> {
+        if op == Binary::Pow {
+            return Ok(match other.cast() {
+                Ok(other) => self.pow(other).into(),
+                Err(err) => err,
+            })
+        }
 
         let mut m1 = self;
         let mut m2 = match_cast!(other,
             m: Modulo => m,
             num: Number => match num {
                 Number::Ratio(n, d) => Modulo::from_ratio((n, d), self.modulo),
-                Number::Real(_) => return eval_err!(
+                Number::Real(_) => return Ok(eval_err!(
                     "Can't convert real number to modular"
-                ),
+                )),
             }
         ).unwrap();
         if rev { swap(&mut m1, &mut m2); }
 
-        match op {
+        Ok(match op {
             Binary::Add => m1 + m2,
             Binary::Sub => m1 - m2,
             Binary::Mul => m1 * m2,
             Binary::Div => m1 / m2,
             Binary::Mod => m1 % m2,
-            _ => panic!(),
-        }.into()
+            _ => return Err((m1.into(), m2.into())),
+        }.into())
     }
 
 

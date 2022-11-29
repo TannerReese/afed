@@ -6,7 +6,6 @@ use super::{
     Operable, Object, CastObject,
     NamedType, ErrObject, EvalError,
 };
-use super::number::Number;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Str(pub String);

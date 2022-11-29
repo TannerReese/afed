@@ -115,7 +115,7 @@ macro_rules! def_binary {
     (impl check_rev: $rev:expr, $var:ident self) => {  $rev };
 
     (impl use_rev: $rev:expr, $other:expr, (self~) $var:ident = $body:expr) =>
-        { let $var = $other; return $body };
+        {{ let $var = $other; return $body }};
     (impl use_rev: $rev:expr, $other:expr, self $var:ident = $body:expr) =>
         { if !$rev { let $var = $other; return $body }};
     (impl use_rev: $rev:expr, $other:expr, $var:ident self = $body:expr) =>
@@ -131,44 +131,28 @@ macro_rules! def_binary {
         $(:($recog:ty $(=> $tp:ty)?))?
         = $body:tt
     ),*) => {
-        fn try_binary(
-            &$self, _rev: bool, _op: Binary, _other: &Object
-        ) -> bool {$(
-            if let symb_to_binary!($op) = _op {
-                if def_binary!(impl check_rev: _rev, $fst $snd)
-                $( && _other.is_a::<$recog>() )? {
-                    return def_binary!(impl is_null: $body, false, true);
-                }
-            }
-        )* false }
-
         fn binary(
             $self, _rev: bool, _op: Binary, mut _other: Object
-        ) -> Object {
-            let mut _err = None;
+        ) -> Result<Object, (Object, Object)> {
             $( #[allow(unreachable_code)] loop {
                 if let symb_to_binary!($op) = _op {
                     let other = _other;
-                    $( let other = match <
+                    $( let other = match other.try_cast::<
                         def_binary!(impl type_override: $recog, $($tp)?)
-                    >::cast(other) {
+                    >() {
                         Ok(good) => good,
-                        Err((val, err)) => {
-                            _other = val;
-                            _err = Some(err);
-                            break
-                        },
+                        Err(val) => { _other = val; break },
                     }; )?
-                    def_binary!(impl use_rev: _rev, other, $fst $snd =
-                        def_binary!(impl is_null: $body, {
-                            let _p: Object = panic!(); _p
-                        }, $body).into()
-                    );
+                    def_binary!(impl is_null: $body, {
+                        return Err((Object::new($self), other.into()))
+                    }, def_binary!{impl use_rev: _rev, other,
+                        $fst $snd = Ok($body.into())
+                    });
                     _other = other.into();
                 }
                 break
             })*
-            if let Some(err) = _err { err } else { panic!() }
+            Err((Object::new($self), _other))
         }
     };
 }
@@ -241,8 +225,9 @@ pub mod curry;
 
 pub trait Operable {
     fn unary(self, op: Unary) -> Option<Object>;
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
-    fn binary(self, rev: bool, op: Binary, other: Object) -> Object;
+    fn binary(
+        self, rev: bool, op: Binary, other: Object
+    ) -> Result<Object, (Object, Object)>;
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>;
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
@@ -275,8 +260,9 @@ trait ObjectishSafe {
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
 
     fn unary(&mut self, op: Unary) -> Option<Object>;
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool;
-    fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object;
+    fn binary(&mut self,
+        rev: bool, op: Binary, other: Object
+    ) -> Result<Object, (Object, Object)>;
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>;
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
@@ -304,9 +290,9 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
 
     fn unary(&mut self, op: Unary) -> Option<Object>
         { to_obj(self).unary(op) }
-    fn try_binary(&self, rev: bool, op: Binary, other: &Object) -> bool
-        { to_ref(self).try_binary(rev, op, other) }
-    fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Object
+    fn binary(&mut self,
+        rev: bool, op: Binary, other: Object
+    ) -> Result<Object, (Object, Object)>
         { to_obj(self).binary(rev, op, other) }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>
@@ -402,15 +388,23 @@ impl Object {
         )}
     }
 
-    fn binary_help(mut self, op: Binary, mut other: Object) -> Object {
-        if (*self.0).try_binary(false, op, &other) {
-            (*self.0).binary(false, op, other)
-        } else if (*other.0).try_binary(true, op, &self) {
-            (*other.0).binary(true, op, self)
-        } else { eval_err!(
+    fn binary_raw(mut self, op: Binary, other: Object) -> Object {
+        let self_type = (*self.0).type_name_dyn();
+        let other_type = (*other.0).type_name_dyn();
+
+        match (*self.0).binary(false, op, other) {
+            Ok(result) => return result,
+            Err((self_, mut other)) => {
+                if let Ok(result) = (*other.0).binary(true, op, self_) {
+                    return result;
+                }
+            },
+        }
+
+        eval_err!(
             "Binary operator {} not implemented between types {} and {}",
-            op.symbol(), (*self.0).type_name_dyn(), (*other.0).type_name_dyn(),
-        )}
+            op.symbol(), self_type, other_type,
+        )
     }
 
     pub fn binary(self, op: Binary, other: Object) -> Object {
@@ -418,15 +412,15 @@ impl Object {
         Binary::Apply => self.call(None, vec![other]),
         Binary::Eq => Bool::new(self == other),
         Binary::Neq => Bool::new(self != other),
-        Binary::Leq => self.binary_help(Binary::Leq, other),
-        Binary::Geq => other.binary_help(Binary::Leq, self),
+        Binary::Leq => self.binary_raw(Binary::Leq, other),
+        Binary::Geq => other.binary_raw(Binary::Leq, self),
         Binary::Lt => if self == other { Bool::new(false) } else {
-            self.binary_help(Binary::Leq, other)
+            self.binary_raw(Binary::Leq, other)
         },
         Binary::Gt => if self == other { Bool::new(false) } else {
-            other.binary_help(Binary::Leq, self)
+            other.binary_raw(Binary::Leq, self)
         },
-        _ => self.binary_help(op, other),
+        _ => self.binary_raw(op, other),
     }}
 
     pub fn arity(&self, attr: Option<&str>) -> Option<usize>
@@ -631,8 +625,9 @@ impl EvalError {
 
 impl Operable for EvalError {
     fn unary(self, _: Unary) -> Option<Object> { Some(Object::new(self)) }
-    fn try_binary(&self, _: bool, _: Binary, _: &Object) -> bool { true }
-    fn binary(self, _: bool, _: Binary, _: Object) -> Object { Object::new(self) }
+    fn binary(self,
+        _: bool, _: Binary, _: Object
+    ) -> Result<Object, (Object, Object)> { Ok(Object::new(self)) }
 
     fn arity(&self, _: Option<&str>) -> Option<usize> { Some(0) }
     fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
