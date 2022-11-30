@@ -1,6 +1,6 @@
-line 19, column 16 of "bool.af" Eval Error: Binary operator % not implemented between types boolean and boolean
-line 20, column 17 of "bool.af" Eval Error: Binary operator // not implemented between types boolean and boolean
-line 21, column 15 of "bool.af" Eval Error: Binary operator ^ not implemented between types boolean and boolean
-line 28, column 11 of "bool.af" Eval Error: Binary operator + not implemented between types ternary and ternary
-line 29, column 10 of "bool.af" Eval Error: Binary operator * not implemented between types ternary and number
+line 19, column 16 of "bool.af" Eval Error: Binary operator % not implemented between true and false
+line 20, column 17 of "bool.af" Eval Error: Binary operator // not implemented between false and true
+line 21, column 15 of "bool.af" Eval Error: Binary operator ^ not implemented between true and true
+line 28, column 11 of "bool.af" Eval Error: Binary operator + not implemented between if and if
+line 29, column 10 of "bool.af" Eval Error: Binary operator * not implemented between if and 3
 5 Eval Errors encountered

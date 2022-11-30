@@ -13,11 +13,11 @@ arr + ["Hell"] + arr = `[1, 2, 3, "Hell", 1, 2, 3]`,
 [] = `[]`,
 
 # Array unimplemented operators
-[1, 1] + "This" = `Eval Error: Binary operator + not implemented between types array and string`,
+[1, 1] + "This" = `Eval Error: Binary operator + not implemented between [1, 1] and "This"`,
 -[null] = `Eval Error: Unary operator - not implemented for type array`,
 !["h"] = `Eval Error: Unary operator ! not implemented for type array`,
-[0] * [9, 3] = `Eval Error: Binary operator * not implemented between types array and array`,
-[2, 3] % 8 = `Eval Error: Binary operator % not implemented between types array and number`,
+[0] * [9, 3] = `Eval Error: Binary operator * not implemented between [0] and [9, 3]`,
+[2, 3] % 8 = `Eval Error: Binary operator % not implemented between [2, 3] and 8`,
 
 # Not a method
 arr.njfd = `Eval Error: Cannot call method njfd on type array`,

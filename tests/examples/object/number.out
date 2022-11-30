@@ -34,8 +34,8 @@ x: 2 ^ 1.1 ^ 1.01 ^ (23 % 2.1) = `2.1466832429584723`,
 2.3 - 4 ^ 2 < -2 * 5 ^ 1.2 = `false`,
 
 # Number unimplemented operators
-2 && 3 = `Eval Error: Binary operator && not implemented between types number and number`,
--7 || 2.3 = `Eval Error: Binary operator || not implemented between types number and number`,
+2 && 3 = `Eval Error: Binary operator && not implemented between 2 and 3`,
+-7 || 2.3 = `Eval Error: Binary operator || not implemented between -7 and 2.3`,
 !3 = `Eval Error: Unary operator ! not implemented for type number`,
 4 $ "a" = `Eval Error: Cannot call type number`,
 

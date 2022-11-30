@@ -13,7 +13,7 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     Unary, Binary,
     NamedType, EvalError,
 };

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Error};
 
 use super::opers::{Unary, Binary};
 use super::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     NamedType, ErrObject, EvalError,
 };
 
@@ -28,16 +28,31 @@ impl Operable for Str {
     }
 }
 
+impl From<Str> for String {
+    fn from(s: Str) -> Self { s.0 }
+}
 
 impl From<Str> for Object {
     fn from(s: Str) -> Self { Object::new(s) }
+}
+
+impl From<String> for Str {
+    fn from(s: String) -> Self { Str(s) }
 }
 
 impl From<String> for Object {
     fn from(s: String) -> Self { Object::new(Str(s)) }
 }
 
-impl CastObject for String {
+impl From<&str> for Str {
+    fn from(s: &str) -> Self { Str(s.to_owned()) }
+}
+
+impl From<&str> for Object {
+    fn from(s: &str) -> Self { Object::new(Str::from(s)) }
+}
+
+impl Castable for String {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>
         { Ok(Str::cast(obj)?.0) }
 }

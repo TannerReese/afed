@@ -11,7 +11,7 @@ use rand::{
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Object, CastObject, ErrObject, EvalError};
+use crate::object::{Object, ErrObject, Castable, EvalError};
 
 macro_rules! dim_check {
     ($d1:expr, $d2:expr) => {
@@ -73,7 +73,7 @@ impl<
     }
 }
 
-impl<T: PartialOrd + CastObject> CastObject for Bounds<T>
+impl<T: PartialOrd + Castable> Castable for Bounds<T>
 where Object: From<T> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         let mut is_single: bool = false;

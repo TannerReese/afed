@@ -26,22 +26,6 @@ macro_rules! count_tt {
 }
 
 
-macro_rules! match_cast {
-    ($obj:expr, $($var:ident $(: $tp:ty)? => $body:expr),+) => { loop {
-        let _obj = $obj;
-        $(
-            let res $(
-                : Result<$tp, (Object, ErrObject)>
-            )? = _obj.cast_with_err();
-            let (_obj, _err) = match res {
-                Ok($var) => break Ok($body),
-                Err((obj, err)) => (obj, err),
-            };
-        )+
-        break Err(_err);
-    }};
-}
-
 macro_rules! cast {
     ($obj:expr) => { match $obj.cast() {
         Ok(val) => val,
@@ -52,6 +36,7 @@ macro_rules! cast {
         Err(err) => return err,
     }};
 }
+
 
 macro_rules! try_ok {
     ($obj:expr) => {{
@@ -137,11 +122,11 @@ macro_rules! def_binary {
             $( #[allow(unreachable_code)] loop {
                 if let symb_to_binary!($op) = _op {
                     let other = _other;
-                    $( let other = match other.try_cast::<
+                    $( let other = match <
                         def_binary!(impl type_override: $recog, $($tp)?)
-                    >() {
+                    >::cast(other) {
                         Ok(good) => good,
-                        Err(val) => { _other = val; break },
+                        Err((val, _)) => { _other = val; break },
                     }; )?
                     def_binary!(impl is_null: $body, {
                         return Err((Object::new($self), other.into()))
@@ -327,13 +312,12 @@ impl Object {
         self.0 = func(owned).0;
     }
 
-    pub fn cast<T: CastObject>(self) -> Result<T, ErrObject>
+    pub fn cast<T: Castable>(self) -> Result<T, ErrObject>
         { T::cast(self).map_err(|(_, err)| err) }
-    pub fn try_cast<T: CastObject>(self) -> Result<T, ErrObject>
+    pub fn try_cast<T: Castable>(self) -> Result<T, Object>
         { T::cast(self).map_err(|(obj, _)| obj) }
-    pub fn cast_with_err<T: CastObject>(self) -> Result<T, (Object, ErrObject)>
-        { T::cast(self) }
-
+    pub fn cast_with_err<T: Castable>(self)
+        -> Result<T, (Object, ErrObject)> { T::cast(self) }
 
     pub fn get<B>(&self, key: &B) -> Option<&Object>
     where
@@ -357,15 +341,17 @@ impl Object {
     }
 }
 
-pub trait CastObject: Sized {
+
+// Don't try to replace with TryFrom<Object>
+pub trait Castable: Sized {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>;
 }
 
-impl CastObject for Object {
+impl Castable for Object {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> { Ok(obj) }
 }
 
-impl<T> CastObject for T where T: Objectish {
+impl<T> Castable for T where T: Objectish {
     fn cast(mut obj: Object) -> Result<T, (Object, ErrObject)> {
         let given_type = (*obj.0).type_name_dyn();
         let any_ref = (*obj.0).as_any_opt();
@@ -378,7 +364,6 @@ impl<T> CastObject for T where T: Objectish {
 }
 
 
-
 impl Object {
     pub fn unary(mut self, op: Unary) -> Object {
         if let Some(obj) = (*self.0).unary(op) { obj }
@@ -389,21 +374,19 @@ impl Object {
     }
 
     fn binary_raw(mut self, op: Binary, other: Object) -> Object {
-        let self_type = (*self.0).type_name_dyn();
-        let other_type = (*other.0).type_name_dyn();
-
-        match (*self.0).binary(false, op, other) {
+        let (self_, mut other) = match (*self.0).binary(false, op, other) {
             Ok(result) => return result,
-            Err((self_, mut other)) => {
-                if let Ok(result) = (*other.0).binary(true, op, self_) {
-                    return result;
-                }
-            },
-        }
+            Err(args) => args,
+        };
+
+        let (other, self_) = match (*other.0).binary(true, op, self_) {
+            Ok(result) => return result,
+            Err(args) => args,
+        };
 
         eval_err!(
-            "Binary operator {} not implemented between types {} and {}",
-            op.symbol(), self_type, other_type,
+            "Binary operator {} not implemented between {} and {}",
+            op.symbol(), self_, other,
         )
     }
 
@@ -507,9 +490,9 @@ impl PartialOrd for Object {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self == other { return Some(Ordering::Equal) }
         let leq = self.clone().binary(Binary::Leq, other.clone());
-        match leq.cast::<Bool>() {
-            Ok(Bool(true)) => Some(Ordering::Less),
-            Ok(Bool(false)) => Some(Ordering::Greater),
+        match leq.cast() {
+            Ok(true) => Some(Ordering::Less),
+            Ok(false) => Some(Ordering::Greater),
             Err(_) => None,
         }
     }
@@ -638,5 +621,17 @@ impl Operable for EvalError {
 impl Display for EvalError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
         { write!(f, "Eval Error: {}", self.msg) }
+}
+
+impl<T: Into<Object>> From<Result<T, Object>> for Object {
+    fn from(res: Result<T, Object>) -> Self { match res {
+        Ok(x) => x.into(),
+        Err(err) => err,
+    }}
+}
+
+impl<T: Into<Object>> From<Result<T, String>> for Object {
+    fn from(res: Result<T, String>) -> Self
+        { res.map_err(&EvalError::new).into() }
 }
 

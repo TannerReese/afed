@@ -6,7 +6,7 @@ use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::cmp::Ordering;
 
 use super::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     Unary, Binary,
     NamedType, ErrObject, EvalError,
 };
@@ -91,9 +91,9 @@ impl Operable for Number {
             eval_err!("Cannot take LCM of reals"),
             &Object::new,
         ),
-        factorial() = {
-            let n = cast!(Object::new(num));
-            (1..=n).product::<u64>().into()
+        factorial() = match num.try_into() {
+            Ok(n) => (1..=n).product::<u64>().into(),
+            Err((_, err)) => err,
         },
         choose(other: usize) = Number::choose(num, other).map_or(
             eval_err!("Second argument to choose must be a positive integer"),
@@ -223,19 +223,21 @@ macro_rules! convert_integral { ($tp:ty) => {
     }
 
     impl TryFrom<Number> for $tp {
-        type Error = Object;
-        fn try_from(num: Number) -> Result<$tp, Object> {
+        type Error = (Number, Object);
+        fn try_from(num: Number) -> Result<$tp, Self::Error> {
             if let Number::Ratio(n, 1) = num {
                 if let Ok(n) = n.try_into() { return Ok(n) }
             }
-            Err(eval_err!("Cannot cast number to integer type"))
+            Err((num, eval_err!("Cannot cast number to integer type")))
         }
     }
 
-    impl CastObject for $tp {
+    impl Castable for $tp {
         fn cast(obj: Object) -> Result<$tp, (Object, ErrObject)> {
-            let num = Number::cast(obj)?;
-            num.try_into().map_err(|err| (num.into(), err))
+            match Number::cast(obj)?.try_into() {
+                Ok(val) => Ok(val),
+                Err((num, err)) => Err((Object::new(num), err))
+            }
         }
     }
 };}
@@ -269,7 +271,7 @@ impl From<&Number> for f64 {
     fn from(num: &Number) -> f64 { f64::from(*num) }
 }
 
-impl CastObject for f64 {
+impl Castable for f64 {
     fn cast(obj: Object) -> Result<f64, (Object, ErrObject)>
         { Ok(Number::cast(obj)?.into()) }
 }

@@ -1,9 +1,9 @@
 line 6, column 10 of "array.af" Eval Error: Index 50 is out of bounds
-line 16, column 19 of "array.af" Eval Error: Binary operator + not implemented between types array and string
+line 16, column 19 of "array.af" Eval Error: Binary operator + not implemented between [1, 1] and "This"
 line 17, column 11 of "array.af" Eval Error: Unary operator - not implemented for type array
 line 18, column 10 of "array.af" Eval Error: Unary operator ! not implemented for type array
-line 19, column 16 of "array.af" Eval Error: Binary operator * not implemented between types array and array
-line 20, column 14 of "array.af" Eval Error: Binary operator % not implemented between types array and number
+line 19, column 16 of "array.af" Eval Error: Binary operator * not implemented between [0] and [9, 3]
+line 20, column 14 of "array.af" Eval Error: Binary operator % not implemented between [2, 3] and 8
 line 23, column 12 of "array.af" Eval Error: Cannot call method njfd on type array
 line 26, column 23 of "array.af" Eval Error: Cannot compare all elements in array
 8 Eval Errors encountered

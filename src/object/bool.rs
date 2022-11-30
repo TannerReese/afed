@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Error};
 
 use super::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     Unary, Binary,
     NamedType, ErrObject,
 };
@@ -44,7 +44,7 @@ impl From<bool> for Object {
     fn from(b: bool) -> Object { Object::new(Bool(b)) }
 }
 
-impl CastObject for bool {
+impl Castable for bool {
     fn cast(obj: Object) -> Result<bool, (Object, ErrObject)>
         { Ok(Bool::cast(obj)?.0) }
 }

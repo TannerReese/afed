@@ -16,5 +16,5 @@ foo2 4 = `"v"`,
 
 # Unimplemented operators
 -"Hello" = `Eval Error: Unary operator - not implemented for type string`,
-"a" * "b" = `Eval Error: Binary operator * not implemented between types string and string`,
+"a" * "b" = `Eval Error: Binary operator * not implemented between "a" and "b"`,
 

@@ -6,7 +6,7 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, CastObject,
+    Operable, Object,
     Unary, Binary,
     NamedType, ErrObject, EvalError,
 };
@@ -42,6 +42,14 @@ impl Operable for Plot {
     }
 }
 
+
+impl Plot {
+    pub fn record_error(&mut self, err: ErrObject) {
+        if let Ok(err) = err.cast::<EvalError>() {
+            self.errors.push(err.msg)
+        }
+    }
+}
 
 
 impl Plot {
@@ -379,17 +387,28 @@ impl Plot {
         plot.into()
     }
 
-    pub fn draw_obj(&mut self, obj: Object) { _ = match_cast!(obj,
-        err: EvalError => self.errors.push(err.msg),
-        pt => { self.draw_char(pt, 'O'); },
-        elems: Vec<Object> => for obj in elems {
-            self.draw_obj(obj);
-        },
-        obj: Object => match call!(obj.arity())
-        .ok_or_err().and_then(|obj| obj.cast()) {
-            Err(err) => self.errors.push(
-                EvalError::cast(err).unwrap().msg
-            ),
+    pub fn draw_obj(&mut self, mut obj: Object) {
+        if obj.is_err() { self.record_error(obj); return }
+
+        match obj.try_cast() {
+            Err(val) => { obj = val },
+            Ok(pt) => {
+                self.draw_char(pt, 'O');
+                return
+            },
+        }
+
+        match obj.try_cast::<Vec<Object>>() {
+            Err(val) => { obj = val },
+            Ok(elems) => {
+                for x in elems { self.draw_obj(x) }
+                return
+            },
+        }
+
+        let arity = call!(obj.arity());
+        match arity.ok_or_err().and_then(|a| a.cast()) {
+            Err(err) => self.record_error(err),
             Ok(1) => self.plot(|x|
                 call!(obj(x)).ok_or_err()?.cast()
             ),
@@ -398,7 +417,7 @@ impl Plot {
             ),
             _ => {},
         }
-    );}
+    }
 }
 
 

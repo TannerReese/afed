@@ -2,7 +2,7 @@
 
 # Erroneous cases
 Mod 0 = `Eval Error: Modulo can't be zero`,
-(3 * Mod 13) ^ (4 / 3) = `Eval Error: Cannot cast number to integer type`,
+(3 * Mod 13) ^ (4 / 3) = `Eval Error: Binary operator ^ not implemented between 3 (mod 13) and 4 / 3`,
 
 # Standard Arithmetic
 43 * (mod.Mod 91 / 43) = `1 (mod 91)`,

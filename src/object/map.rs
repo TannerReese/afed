@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 
 use super::opers::{Unary, Binary};
 use super::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     NamedType, ErrObject, EvalError,
 };
 
@@ -40,7 +40,7 @@ impl Operable for Map {
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         let s: String;
         let key = if let Some(key) = attr { key }
-        else { s = cast!(args.remove(0)); s.as_str() };
+        else { s = cast!(args.remove(0));  s.as_str() };
         self.0.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )
@@ -83,14 +83,8 @@ impl From<HashMap<String, Object>> for Object {
     fn from(map: HashMap<String, Object>) -> Object { Map(map).into() }
 }
 
-impl CastObject for HashMap<String, Object> {
+impl Castable for HashMap<String, Object> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>
         { Ok(Map::cast(obj)?.0) }
-}
-
-impl<const N: usize> From<[(&str, Object); N]> for Object {
-    fn from(arr: [(&str, Object); N]) -> Object {
-        Map(arr.map(|(key, obj)| (key.to_owned(), obj)).into()).into()
-    }
 }
 

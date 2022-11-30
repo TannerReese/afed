@@ -1,5 +1,5 @@
-line 37, column 10 of "number.af" Eval Error: Binary operator && not implemented between types number and number
-line 38, column 13 of "number.af" Eval Error: Binary operator || not implemented between types number and number
+line 37, column 10 of "number.af" Eval Error: Binary operator && not implemented between 2 and 3
+line 38, column 13 of "number.af" Eval Error: Binary operator || not implemented between -7 and 2.3
 line 39, column 6 of "number.af" Eval Error: Unary operator ! not implemented for type number
 line 40, column 11 of "number.af" Eval Error: Cannot call type number
 4 Eval Errors encountered

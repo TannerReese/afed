@@ -9,7 +9,7 @@ use super::mat::Matrix;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     Unary, Binary,
     NamedType, EvalError,
 };

@@ -26,8 +26,8 @@ other + v1 = `Eval Error: Vector dimensions 4 and 3 do not match`,
 v2 * other = `Eval Error: Vector dimensions 3 and 4 do not match`,
 
 # Vector Unimplemented operations
-v1 ^ 2 = `Eval Error: Binary operator ^ not implemented between types vector and number`,
-1.1 ^ v2 = `Eval Error: Binary operator ^ not implemented between types number and vector`,
-3 / v3 = `Eval Error: Binary operator / not implemented between types number and vector`,
-5 % v1 = `Eval Error: Binary operator % not implemented between types number and vector`,
+v1 ^ 2 = `Eval Error: Binary operator ^ not implemented between V[1, 2.5, -3 / 13] and 2`,
+1.1 ^ v2 = `Eval Error: Binary operator ^ not implemented between 1.1 and V[0, -7.234, 57 / 7]`,
+3 / v3 = `Eval Error: Binary operator / not implemented between 3 and V[12, 9.35, 23 / 27]`,
+5 % v1 = `Eval Error: Binary operator % not implemented between 5 and V[1, 2.5, -3 / 13]`,
 

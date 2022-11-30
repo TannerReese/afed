@@ -14,8 +14,8 @@ m4 * m1 = `Eval Error: For matrix multiplication, 2 and 3 do not match`,
 m2 * m5 = `Eval Error: For matrix multiplication, 3 and 2 do not match`,
 
 # Matrix Unimplemented operations
-m2 / V[1, 0, 1] = `Eval Error: Binary operator / not implemented between types matrix and vector`,
-4 % m3 = `Eval Error: Binary operator % not implemented between types number and matrix`,
+m2 / V[1, 0, 1] = `Eval Error: Binary operator / not implemented between M[[0, 1.1, 3 / 7], [-2, 0, 9], [1, 16, 1]] and V[1, 0, 1]`,
+4 % m3 = `Eval Error: Binary operator % not implemented between 4 and M[[8, 4, -5 / 7], [12, 67 / 10, 4], [0, 17, 0]]`,
 
 # Linear operations
 -m2 + 3 * m3 = `M[[24, 10.9, -18 / 7], [38, 201 / 10, 3], [-1, 35, -1]]`,

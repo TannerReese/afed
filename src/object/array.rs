@@ -5,7 +5,7 @@ use std::iter::repeat;
 
 use super::opers::{Unary, Binary};
 use super::{
-    Operable, Object, CastObject,
+    Operable, Object, Castable,
     NamedType, ErrObject, EvalError,
 };
 
@@ -157,7 +157,7 @@ impl<T, const N: usize> From<[T; N]> for Object where Object: From<T> {
 
 
 
-impl<T: CastObject> CastObject for Vec<T> where Object: From<T> {
+impl<T: Castable> Castable for Vec<T> where Object: From<T> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         let mut elems: VecDeque<Object> = Array::cast(obj)?.0.into();
 
@@ -176,7 +176,7 @@ impl<T: CastObject> CastObject for Vec<T> where Object: From<T> {
     }
 }
 
-impl<T: CastObject, const N: usize> CastObject for [T; N]
+impl<T: Castable, const N: usize> Castable for [T; N]
 where Object: From<T> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         Vec::<T>::cast(obj)?.try_into().map_err(|v: Vec<T>| {
@@ -189,9 +189,8 @@ where Object: From<T> {
     }
 }
 
-
 macro_rules! convert_tuple {
-    (impl multicast: $on_err:expr, $($var:ident : $tp:ty),+) => {$(
+    (@multicast $on_err:expr, $($var:ident : $tp:ty),+) => {$(
         let $var = match <$tp>::cast($var) {
             Err(($var, err)) => return Err(($on_err, err)),
             Ok(good) => good,
@@ -205,11 +204,11 @@ macro_rules! convert_tuple {
                { vec![$(Object::from($var)),+].into() }
         }
 
-        impl<$($tp: CastObject),+> CastObject for ($($tp,)+)
+        impl<$($tp: Castable),+> Castable for ($($tp,)+)
         where Object: $(From<$tp> +)+ {
             fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
                 let [$($var),+] = <[Object; count_tt!($($var)+)]>::cast(obj)?;
-                convert_tuple!(impl multicast:
+                convert_tuple!(@multicast
                     ($($var,)+).into(),
                     $($var: $tp),+
                 );

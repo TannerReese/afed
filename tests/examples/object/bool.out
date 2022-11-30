@@ -16,15 +16,15 @@ false && false || true = `true`,
 false && false + true = `false`,
 
 # Boolean unimplemented operators
-true % false = `Eval Error: Binary operator % not implemented between types boolean and boolean`,
-false // true = `Eval Error: Binary operator // not implemented between types boolean and boolean`,
-true ^ true = `Eval Error: Binary operator ^ not implemented between types boolean and boolean`,
+true % false = `Eval Error: Binary operator % not implemented between true and false`,
+false // true = `Eval Error: Binary operator // not implemented between false and true`,
+true ^ true = `Eval Error: Binary operator ^ not implemented between true and true`,
 
 # Ternary
 if true 3 4 = `3`,
 if false (if true 1 2) (if true 3 4) + 2 = `5`,
 
 # Ternary unimplemented operators
-if + if = `Eval Error: Binary operator + not implemented between types ternary and ternary`,
-if * 3 = `Eval Error: Binary operator * not implemented between types ternary and number`,
+if + if = `Eval Error: Binary operator + not implemented between if and if`,
+if * 3 = `Eval Error: Binary operator * not implemented between if and 3`,
 

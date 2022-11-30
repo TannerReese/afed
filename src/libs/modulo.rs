@@ -7,9 +7,9 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object,
+    Operable, Object, Castable,
     Unary, Binary,
-    NamedType, ErrObject, EvalError,
+    NamedType, EvalError,
 };
 use crate::object::number::Number;
 
@@ -48,51 +48,34 @@ name_type!{modulo: Modulo}
 
 impl Operable for Modulo {
     def_unary!{self, -self = -self}
+    def_binary!{self,
+        self ^ other : (Number => i64) = { self.pow(other) },
 
-    fn binary(self,
-        rev: bool, op: Binary, other: Object
-    ) -> Result<Object, (Object, Object)> {
-        if op == Binary::Pow {
-            return Ok(match other.cast() {
-                Ok(other) => self.pow(other).into(),
-                Err(err) => err,
-            })
-        }
+        self + other : (Modulo) = { self + other },
+        self - other : (Modulo) = { self - other },
+        self * other : (Modulo) = { self * other },
+        self / other : (Modulo) = { self / other },
+        self % other : (Modulo) = { self % other },
 
-        let mut m1 = self;
-        let mut m2 = match_cast!(other,
-            m: Modulo => m,
-            num: Number => match num {
-                Number::Ratio(n, d) => Modulo::from_ratio((n, d), self.modulo),
-                Number::Real(_) => return Ok(eval_err!(
-                    "Can't convert real number to modular"
-                )),
-            }
-        ).unwrap();
-        if rev { swap(&mut m1, &mut m2); }
-
-        Ok(match op {
-            Binary::Add => m1 + m2,
-            Binary::Sub => m1 - m2,
-            Binary::Mul => m1 * m2,
-            Binary::Div => m1 / m2,
-            Binary::Mod => m1 % m2,
-            _ => return Err((m1.into(), m2.into())),
-        }.into())
+        (self ~) + other : (Number) = { self + other },
+        (self ~) - other : (Number) = { self - other },
+        (self ~) * other : (Number) = { self * other },
+        (self ~) / other : (Number) = { self / other },
+        (self ~) % other : (Number) = { self % other }
     }
 
+    def_methods!{m,
+        resid() = m.residue.into(),
+        modulo() = (m.modulo as i64).into(),
 
-def_methods!{m,
-    resid() = m.residue.into(),
-    modulo() = (m.modulo as i64).into(),
+        has_inv() = (bezout(
+            m.residue.abs() as u64, m.modulo
+        ).0 == 1).into(),
+        inv() = m.inverse().into(),
 
-    has_inv() = (bezout(
-        m.residue.abs() as u64, m.modulo
-    ).0 == 1).into(),
-    inv() = m.inverse().into(),
-
-    order() = m.order().into()
-}}
+        order() = m.order().into()
+    }
+}
 
 
 impl Modulo {
@@ -104,9 +87,15 @@ impl Modulo {
         Modulo { residue, modulo }
     }
 
-    fn from_ratio((numer, denom): (i64, u64), modulo: u64) -> Self {
-        Modulo::from(numer, modulo) / Modulo::from(denom as i64, modulo)
-    }
+    fn from_number(&self, num: Number) -> Result<Self, String> { match num {
+        Number::Ratio(n, d) => Ok(
+            Modulo::from(n, self.modulo) /
+            Modulo::from(d as i64, self.modulo)
+        ),
+        Number::Real(_) => Err(
+            "Cannot convert real number to Modulo".to_owned()
+        ),
+    }}
 
     pub fn inverse(self) -> Self {
         if self.residue == 1 || self.residue == -1 { self }
@@ -165,11 +154,23 @@ impl Add for Modulo {
     )}
 }
 
+impl Add<Number> for Modulo {
+    type Output = Result<Modulo, String>;
+    fn add(self, rhs: Number) -> Self::Output
+        { self.from_number(rhs).map(|n| self + n) }
+}
+
 impl Sub for Modulo {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self { Modulo::from(
         self.residue - rhs.residue, bezout(self.modulo, rhs.modulo).0,
     )}
+}
+
+impl Sub<Number> for Modulo {
+    type Output = Result<Modulo, String>;
+    fn sub(self, rhs: Number) -> Self::Output
+        { self.from_number(rhs).map(|n| self - n) }
 }
 
 impl Mul for Modulo {
@@ -179,9 +180,21 @@ impl Mul for Modulo {
     )}
 }
 
+impl Mul<Number> for Modulo {
+    type Output = Result<Modulo, String>;
+    fn mul(self, rhs: Number) -> Self::Output
+        { self.from_number(rhs).map(|n| self * n) }
+}
+
 impl Div for Modulo {
     type Output = Self;
     fn div(self, rhs: Self) -> Self { self * rhs.inverse() }
+}
+
+impl Div<Number> for Modulo {
+    type Output = Result<Modulo, String>;
+    fn div(self, rhs: Number) -> Self::Output
+        { self.from_number(rhs).map(|n| self / n) }
 }
 
 impl Rem for Modulo {
@@ -191,6 +204,12 @@ impl Rem for Modulo {
             bezout(rhs.residue.abs() as u64, rhs.modulo).0
         ).0,
     )}
+}
+
+impl Rem<Number> for Modulo {
+    type Output = Result<Modulo, String>;
+    fn rem(self, rhs: Number) -> Self::Output
+        { self.from_number(rhs).map(|n| self % n) }
 }
 
 

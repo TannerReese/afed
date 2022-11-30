@@ -25,19 +25,21 @@ impl Curry {
             args.len(), arity,
         )}
 
-        if func.is_a::<Curry>() {
-            if let Some(name) = attr { panic!(
-                "Curry object has no method {}", name
-            )}
+        match func.try_cast::<Curry>() {
+            Ok(mut curry) => {
+                if let Some(name) = attr { panic!(
+                    "Curry object has no method {}", name
+                )}
 
-            let mut curry = cast!(func => Curry);
-            curry.arity -= args.len();
-            curry.args.append(&mut args);
-            curry
-        } else { Curry {
-            arity: arity - args.len(),
-            attr, func, args,
-        }}.into()
+                curry.arity -= args.len();
+                curry.args.append(&mut args);
+                curry
+            },
+            Err(func) => Curry {
+                arity: arity - args.len(),
+                attr, func, args,
+            },
+        }.into()
     }
 }
 

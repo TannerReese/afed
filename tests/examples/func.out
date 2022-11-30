@@ -43,8 +43,8 @@ scope.f 4 = `7.5600000000000005`,
 # Function unimplemented operations
 {
 	f x: \y: x + 1 / y,
-	f + 3 = `Eval Error: Binary operator + not implemented between types function and number`,
-	4 * f = `Eval Error: Binary operator * not implemented between types number and function`,
+	f + 3 = `Eval Error: Binary operator + not implemented between Func<name='f', id=11, arity=1> and 3`,
+	4 * f = `Eval Error: Binary operator * not implemented between 4 and Func<name='f', id=11, arity=1>`,
 	f 4 3 = `13 / 3`, # Works afterwards
 },
 
