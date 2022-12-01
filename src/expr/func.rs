@@ -31,8 +31,10 @@ impl Func {
 }
 
 impl Operable for Func {
-    def_unary!{}
-    def_binary!{}
+    fn unary(self, _: Unary) -> Option<Object> { None }
+    fn binary(self,
+        _: bool, _: Binary, other: Object
+    ) -> Result<Object, (Object, Object)> { Err((self.into(), other)) }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.pats.len()),
@@ -75,4 +77,8 @@ impl PartialEq for Func {
 }
 
 impl Eq for Func {}
+
+impl From<Func> for Object {
+    fn from(f: Func) -> Self { Object::new(f) }
+}
 

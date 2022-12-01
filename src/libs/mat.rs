@@ -13,9 +13,9 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, Castable,
+    Operable, Object,
     Unary, Binary,
-    NamedType, EvalError,
+    NamedType, EvalError, ErrObject,
 };
 use crate::object::array::Array;
 
@@ -41,102 +41,127 @@ pub struct IntoVectors {
     comps: IntoIter<Object>,
 }
 
+impl_operable!{Matrix:
+    #[unary(Neg)] fn _(m: Self) -> Self { -m }
 
-impl Operable for Matrix {
-    def_unary!{self, -self = -self}
-    def_binary!{self,
-        self + m : (Matrix) = { guard!(self + m, self.dims == m.dims,
-            "Matrix dimensions {:?} and {:?} do not match", self.dims, m.dims
-        )},
-        self - m : (Matrix) = { guard!(self - m, self.dims == m.dims,
-            "Matrix dimensions {:?} and {:?} do not match", self.dims, m.dims
-        )},
-
-        self * m : (Matrix) = { guard!(self * m, self.dims.1 == m.dims.0,
-            "For matrix multiplication, {} and {} do not match",
-            self.dims.1, m.dims.0,
-        )},
-        self * v : (Vector) = { guard!(self * v, self.dims.1 == v.dims(),
-            "Vector dimension {} does not match column dimension {} in matrix",
-            v.dims(), self.dims.1,
-        )},
-        v * self : (Vector) = { guard!(v * self, self.dims.0 == v.dims(),
-            "Vector dimension {} does not match row dimension {} in matrix",
-            v.dims(), self.dims.0,
-        )},
-        self * other = { self * other },
-        other * self = { other * self },
-
-        self / _v : (Vector) = {},
-        self / m : (Matrix) = { Object::new(self) * m.inverse().0 },
-        self / other = { self / other },
-
-        self % _v : (Vector) = {},
-        self % _m : (Matrix) = {},
-        self % other = { self % other },
-
-        self "//" _v : (Vector) = {},
-        self "//" _m : (Matrix) = {},
-        self "//" other = { self.flrdiv(other) }
+    #[binary(Add)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
+        if m1.dims == m2.dims { Ok(m1 + m2) } else { Err(format!(
+            "Matrix dimensions {:?} and {:?} do not match", m1.dims, m2.dims
+        ))}
     }
 
-    def_methods!{mat,
-       __call(idx: usize) = if idx >= mat.rows() { eval_err!(
+    #[binary(Sub)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
+        if m1.dims == m2.dims { Ok(m1 - m2) } else { Err(format!(
+            "Matrix dimensions {:?} and {:?} do not match", m1.dims, m2.dims
+        ))}
+    }
+
+    #[binary(Mul)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
+        if m1.dims.1 == m2.dims.0 { Ok(m1 * m2) } else { Err(format!(
+            "For matrix multiplication, {} and {} do not match",
+            m1.dims.1, m2.dims.0,
+        ))}
+    }
+
+    #[binary(Mul)] fn _(m: Self, v: Vector) -> Result<Vector, String> {
+        if m.dims.1 == v.dims() { Ok(m * v) } else { Err(format!(
+            "Vector dimension {} does not match column dimension {} in matrix",
+            v.dims(), m.dims.1,
+        ))}
+    }
+
+    #[binary(Mul, rev)] fn _(m: Self, v: Vector) -> Result<Vector, String> {
+        if m.dims.0 == v.dims() { Ok(v * m) } else { Err(format!(
+            "Vector dimension {} does not match row dimension {} in matrix",
+            v.dims(), m.dims.0,
+        ))}
+    }
+
+    #[binary(Mul)] fn _(m: Self, scalar: Object) -> Self { m * scalar }
+    #[binary(Mul, rev)] fn _(m: Self, scalar: Object) -> Self { scalar * m }
+
+    #[binary(Div)]
+    #[exclude(Vector)]
+    fn _(m1: Self, m2: Matrix) -> Object { Object::new(m1) * m2.inverse().0 }
+    #[binary(Div)]
+    fn _(m: Self, scalar: Object) -> Self { m / scalar }
+
+    #[binary(Mod)]
+    #[exclude(Vector, Matrix)]
+    fn _(m: Self, scalar: Object) -> Self { m % scalar }
+
+    #[binary(FlrDiv)]
+    #[exclude(Vector, Matrix)]
+    fn _(m: Self, scalar: Object) -> Self { m.flrdiv(scalar) }
+
+
+    #[call]
+    fn __call(&self, idx: usize) -> Result<Vector, String> {
+        if idx >= self.rows() { Err(format!(
             "Index {} is larger or equal to {} number of rows",
-            idx, mat.rows()
-        )} else {
-            let cols = mat.columns();
-            mat.comps[idx * cols .. (idx + 1) * cols]
-            .iter().cloned().collect::<Vector>().into()
-        },
+            idx, self.rows()
+        ))} else {
+            let cols = self.cols();
+            Ok(self.comps[idx * cols .. (idx + 1) * cols]
+                .iter().cloned().collect())
+        }
+    }
 
-        rows() = mat.rows().into(),
-        cols() = mat.columns().into(),
-        row_vecs() = mat.clone().into_rows().collect(),
-        col_vecs() = mat.clone().into_columns().collect(),
-        trsp() = {
-            let mut m = mat.clone();
-            m.transpose();
-            m.into()
-        },
+    pub fn rows(&self) -> usize { self.dims.0 }
+    pub fn cols(&self) -> usize { self.dims.1 }
+    pub fn row_vecs(self) -> Vec<Vector> { self.into_rows().collect() }
+    pub fn col_vecs(self) -> Vec<Vector> { self.into_columns().collect() }
 
-        has_inv() = call!((mat.determinant()).has_inv()),
-        inv() = {
-            let (inv, det) = mat.clone().inverse();
-            if let Some(det) = det { mat.deter.set(Some(det)); }
-            inv
-        },
-        deter() = mat.determinant()
+    pub fn trsp(self) -> Self {
+        let mut m = self;
+        m.transpose();  m
+    }
+
+    pub fn has_inv(&self) -> bool {
+        call!((self.deter()).has_inv())
+        .try_cast().unwrap_or(false)
+    }
+
+    pub fn inv(&self) -> Object {
+        let (inv, det) = self.clone().inverse();
+        if let Some(det) = det { self.deter.set(Some(det)); }
+        inv
+    }
+
+    pub fn deter(&self) -> Object {
+        let det = if let Some(det) = self.deter.take() { det }
+        else { self.clone().into_determinant() };
+        self.deter.set(Some(det.clone()));
+        det
     }
 }
 
 
-
 impl Matrix {
-    pub fn new(rows: Vec<Vec<Object>>) -> Object {
+    pub fn new(rows: Vec<Vec<Object>>) -> Result<Matrix, &'static str> {
         let row_dim = rows.len();
         if row_dim == 0 {
-            return eval_err!("Matrix cannot be zero-dimensional");
+            return Err("Matrix cannot be zero-dimensional");
         }
 
         let col_dim = rows[0].len();
         if rows.iter().any(|r| r.len() != col_dim) {
-            return eval_err!("Matrix cannot have jagged rows");
+            return Err("Matrix cannot have jagged rows");
         }
 
         let comps = rows.into_iter().flatten().collect();
-        Matrix {
+        Ok(Matrix {
             dims: (row_dim, col_dim), comps,
             deter: Cell::new(None),
-        }.into()
+        })
     }
 
-    pub fn from_array(arr: Array) -> Object {
+    pub fn from_array(arr: Array) -> Result<Matrix, ErrObject> {
         let mut comps = Vec::new();
         for row in arr.0.into_iter() {
-            comps.push(cast!(row))
+            comps.push(row.cast()?)
         }
-        Matrix::new(comps)
+        Matrix::new(comps).map_err(|msg| EvalError::new(msg.to_owned()))
     }
 
     pub fn build<F>((rows, cols): (usize, usize), mut gen: F) -> Self
@@ -156,10 +181,7 @@ impl Matrix {
         ident
     }
 
-    pub fn rows(&self) -> usize { self.dims.0 }
-    pub fn columns(&self) -> usize { self.dims.1 }
-
-    pub fn transpose(&mut self){
+    pub fn transpose(&mut self) {
         let (rows, cols) = self.dims;
         let comps = &mut self.comps;
         let prev = |idx: usize| {
@@ -187,7 +209,7 @@ impl Matrix {
     }
 
     pub fn into_rows(self) -> IntoVectors {
-        IntoVectors {dims: self.columns(), comps: self.comps.into_iter()}
+        IntoVectors {dims: self.cols(), comps: self.comps.into_iter()}
     }
 
     pub fn into_columns(mut self) -> IntoVectors {
@@ -222,12 +244,6 @@ impl Matrix {
         } else { (eval_err!("Matrix is singular"), None) }
     }
 
-    pub fn determinant(&self) -> Object {
-        let det = if let Some(det) = self.deter.take() { det }
-        else { self.clone().determinant() };
-        self.deter.set(Some(det.clone()));
-        det
-    }
 
     pub fn into_determinant(self) -> Object {
         if let Some(deter) = self.deter.take() { return deter }
@@ -275,12 +291,12 @@ impl Eq for Matrix {}
 impl Index<(usize, usize)> for Matrix {
     type Output = Object;
     fn index(&self, (r, c): (usize, usize)) -> &Object
-        { let cols = self.columns(); &self.comps[c + r * cols] }
+        { let cols = self.cols(); &self.comps[c + r * cols] }
 }
 
 impl IndexMut<(usize, usize)> for Matrix {
     fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut Object
-        { let cols = self.columns(); &mut self.comps[c + r * cols] }
+        { let cols = self.cols(); &mut self.comps[c + r * cols] }
 }
 
 impl Iterator for IntoVectors {
@@ -383,12 +399,12 @@ impl Mul<Matrix> for Vector {
 impl Mul<Matrix> for Matrix {
     type Output = Matrix;
     fn mul(self, rhs: Matrix) -> Self::Output {
-        if self.columns() != rhs.rows() { panic!(
+        if self.cols() != rhs.rows() { panic!(
             "For matrix multiplication, {} and {} do not match",
-            self.columns(), rhs.rows(),
+            self.cols(), rhs.rows(),
         )}
-        Matrix::build((self.rows(), rhs.columns()), |i, j|
-            (0..self.columns()).map(|k|
+        Matrix::build((self.rows(), rhs.cols()), |i, j|
+            (0..self.cols()).map(|k|
                 self[(i, k)].clone() * rhs[(k, j)].clone()
             ).sum()
         )

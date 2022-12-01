@@ -20,8 +20,10 @@ impl<const N: usize> BltnFunc<N> {
 }
 
 impl<const N: usize> Operable for BltnFunc<N> {
-    def_unary!{}
-    def_binary!{}
+    fn unary(self, _: Unary) -> Option<Object> { None }
+    fn binary(self,
+        _: bool, _: Binary, other: Object
+    ) -> Result<Object, (Object, Object)> { Err((self.into(), other)) }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(N),

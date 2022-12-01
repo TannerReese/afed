@@ -18,90 +18,135 @@ pub enum Number {
 }
 name_type!{number: Number}
 
-impl Operable for Number {
-    def_unary!{self, -self = -self}
-    def_binary!{self,
-        self <= other : (Number) = { self <= other },
-        self + other : (Number) = { self + other },
-        self - other : (Number) = { self - other },
-        self * other : (Number) = { self * other },
-        self / other : (Number) = { self / other },
-        self % other : (Number) = { self % other },
-        self "//" other : (Number) = { self.flrdiv(other) },
-        self ^ other : (Number) = { self.pow(other) }
+impl_operable!{Number:
+    #[unary(Neg)] fn _(num: Number) -> Number { -num }
+
+    #[binary(Leq)] fn _(n1: Self, n2: Self) -> bool { n1 <= n2 }
+    #[binary(Add)] fn _(n1: Self, n2: Self) -> Self { n1 + n2 }
+    #[binary(Sub)] fn _(n1: Self, n2: Self) -> Self { n1 - n2 }
+    #[binary(Mul)] fn _(n1: Self, n2: Self) -> Self { n1 * n2 }
+    #[binary(Div)] fn _(n1: Self, n2: Self) -> Self { n1 / n2 }
+    #[binary(Mod)] fn _(n1: Self, n2: Self) -> Self { n1 % n2 }
+    #[binary(FlrDiv)] fn _(n1: Self, n2: Self) -> Self { n1.flrdiv(n2) }
+    #[binary(Pow)] fn _(n1: Self, n2: Self) -> Self { n1.pow(n2) }
+
+    pub fn numer(self) -> Result<i64, &'static str> { match self {
+        Number::Ratio(n, _) => Ok(n),
+        Number::Real(_) => Err("Real number has no numerator"),
+    }}
+
+    pub fn denom(self) -> Result<u64, &'static str> { match self {
+        Number::Ratio(_, d) => Ok(d),
+        Number::Real(_) => Err("Real number has no denominator"),
+    }}
+
+    pub fn digits(self, base: u64) -> Result<Vec<u64>, &'static str> {
+        let mut num: u64 = self.try_into()
+            .map_err(|_| "Digits of a non-integer are ambiguous")?;
+        let mut digs = Vec::new();
+        while num > 0 {
+            digs.push(num % base);
+            num /= base;
+        }
+        Ok(digs)
     }
-    def_methods!{&num,
-        numer() = match num {
-            Number::Ratio(n, _) => n.into(),
-            Number::Real(_) => eval_err!("Real number has no numerator"),
+
+    pub fn has_inv(self) -> bool { self != Number::Ratio(0, 1) }
+    pub fn inv(self) -> Self { Number::Ratio(1, 1) / self }
+    pub fn str(self) -> String { format!("{}", self) }
+
+    pub fn abs(self) -> Self { match self {
+        Number::Ratio(n, d) => Number::Ratio(n.abs(), d),
+        Number::Real(r) => Number::Real(r.abs()),
+    }}
+
+    pub fn signum(self) -> i8 { match self {
+        Number::Ratio(n, _) => n.signum() as i8,
+        Number::Real(r) => r.signum() as i8
+    }}
+
+    pub fn real(self) -> f64 { f64::from(self) }
+
+    pub fn floor(self) -> i64 { match self {
+        Number::Ratio(n, d) => if n < 0 {
+            (n + 1) / d as i64 - 1
+        } else {
+            n / d as i64
         },
-        denom() = match num {
-            Number::Ratio(_, d) => (d as i64).into(),
-            Number::Real(_) => eval_err!("Real number has no denominator"),
-        },
-        digits(base: u64) = num.digits(base).map_or(eval_err!(
-            "Digits of a real number are ambiguous"
-        ), |v| v.into()),
+        Number::Real(r) => r.floor() as i64,
+    }}
 
-        has_inv() = (num != Number::Ratio(0, 1)).into(),
-        inv() = (Number::Ratio(1, 1) / num).into(),
-        str() = format!("{}", num).into(),
+    pub fn ceil(self) -> i64 { -(-self).floor() }
+    pub fn round(self) -> i64 { (self + Number::Ratio(1, 2)).floor() }
 
-        abs() = num.abs().into(),
-        signum() = num.signum().into(),
-        real() = f64::from(num).into(),
-        floor() = num.floor().into(),
-        ceil() = num.ceil().into(),
-        round() = num.round().into(),
+    pub fn sqrt(self) -> Result<f64, &'static str> {
+        let r = self.real();
+        if r < 0.0 { Err("Cannot take square root of negative") }
+        else { Ok(r.sqrt()) }
+    }
 
-        sqrt() = {
-            let r = f64::from(num);
-            if r < 0.0 { eval_err!("Cannot take square root of negative") }
-            else { r.sqrt().into() }
-        },
-        cbrt() = f64::from(num).cbrt().into(),
+    pub fn cbrt(self) -> f64 { self.real().cbrt() }
 
-        sin() = f64::from(num).sin().into(),
-        cos() = f64::from(num).cos().into(),
-        tan() = f64::from(num).tan().into(),
-        asin() = f64::from(num).asin().into(),
-        acos() = f64::from(num).acos().into(),
-        atan() = f64::from(num).atan().into(),
-        atan2(other: f64) = f64::from(num).atan2(other).into(),
+    pub fn sin(self) -> f64 { self.real().sin() }
+    pub fn cos(self) -> f64 { self.real().cos() }
+    pub fn tan(self) -> f64 { self.real().tan() }
+    pub fn asin(self) -> f64 { self.real().asin() }
+    pub fn acos(self) -> f64 { self.real().acos() }
+    pub fn atan(self) -> f64 { self.real().atan() }
+    pub fn atan2(self, other: f64) -> f64
+        { self.real().atan2(other) }
 
-        sinh() = f64::from(num).sinh().into(),
-        cosh() = f64::from(num).cosh().into(),
-        tanh() = f64::from(num).tanh().into(),
-        asinh() = f64::from(num).asinh().into(),
-        acosh() = f64::from(num).acosh().into(),
-        atanh() = f64::from(num).atanh().into(),
+    pub fn sinh(self) -> f64 { self.real().sinh() }
+    pub fn cosh(self) -> f64 { self.real().cosh() }
+    pub fn tanh(self) -> f64 { self.real().tanh() }
+    pub fn asinh(self) -> f64 { self.real().asinh() }
+    pub fn acosh(self) -> f64 { self.real().acosh() }
+    pub fn atanh(self) -> f64 { self.real().atanh() }
 
-        exp() = f64::from(num).exp().into(),
-        exp2() = f64::from(num).exp2().into(),
-        ln() = f64::from(num).ln().into(),
-        log10() = f64::from(num).log10().into(),
-        log2() = f64::from(num).log2().into(),
-        log(other: f64) = other.log(f64::from(num)).into(),
+    pub fn exp(self) -> f64 { self.real().exp() }
+    pub fn exp2(self) -> f64 { self.real().exp2() }
+    pub fn ln(self) -> f64 { self.real().ln() }
+    pub fn log10(self) -> f64 { self.real().log10() }
+    pub fn log2(self) -> f64 { self.real().log2() }
+    pub fn log(self, other: f64) -> f64 { other.log(self.real()) }
 
-        gcd(other: Number) = Number::gcd(num, other).map_or(
-            eval_err!("Cannot take GCD of reals"),
-            &Object::new,
-        ),
-        lcm(other: Number) = Number::lcm(num, other).map_or(
-            eval_err!("Cannot take LCM of reals"),
-            &Object::new,
-        ),
-        factorial() = match num.try_into() {
-            Ok(n) => (1..=n).product::<u64>().into(),
-            Err((_, err)) => err,
-        },
-        choose(other: usize) = Number::choose(num, other).map_or(
-            eval_err!("Second argument to choose must be a positive integer"),
-            &Object::new,
+
+    pub fn gcd(self, other: Self) -> Result<Self, &'static str> {
+        match (self, other) {
+            (Number::Ratio(na, da), Number::Ratio(nb, db)) => Ok({
+                let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+                Number::Ratio(g as i64, da * db)
+            }.simplify()),
+            _ => Err("Cannot take GCD of reals"),
+        }
+    }
+
+    pub fn lcm(self, other: Self) -> Result<Self, &'static str> {
+        match (self, other) {
+            (Number::Ratio(na, da), Number::Ratio(nb, db)) => Ok({
+                let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
+                Number::Ratio(na * nb, g)
+            }.simplify()),
+            _ => Err("Cannot take LCM of reals"),
+        }
+    }
+
+    pub fn factorial(self) -> Result<Self, &'static str> {
+        match (self).try_into() {
+            Ok(n) => Ok((1..=n).product::<u64>().into()),
+            Err(_) => Err("Cannot take factorial of non-integer"),
+        }
+    }
+
+    pub fn choose(self, k: usize) -> Self {
+        let one = Number::Ratio(1, 1);
+        (0..k).map(|i| (i as i64).into())
+        .fold(one, |accum, i: Number|
+            accum * (self - i) / (i + one)
         )
     }
-}
 
+}
 
 pub fn gcd<T>(a: T, b: T) -> T where T: Eq + Copy + Ord + Default + RemAssign {
     let (mut a, mut b) = if a > b { (b, a) } else { (a, b) };
@@ -131,7 +176,7 @@ impl Number {
             } else { (n1, d1, n2 as u32) };
             Number::Ratio(n1.pow(n2), d1.pow(n2))
         },
-        (num1, num2) => f64::from(num1).powf(f64::from(num2)).into(),
+        (num1, num2) => num1.real().powf(num2.real()).into(),
     }}
 
     pub fn flrdiv(self, rhs: Self) -> Self { match (self, rhs) {
@@ -144,74 +189,11 @@ impl Number {
                 (-(n as i64)).into()
             }
         },
-        (num1, num2) => f64::from(num1).div_euclid(f64::from(num2)).into(),
+        (num1, num2) => num1.real().div_euclid(num2.real()).into(),
     }}
-
-
-    pub fn abs(self) -> Self { match self {
-        Number::Ratio(n, d) => Number::Ratio(n.abs(), d),
-        Number::Real(r) => Number::Real(r.abs()),
-    }}
-
-    pub fn signum(self) -> Self { Number::Ratio(match self {
-        Number::Ratio(n, _) => n.signum(),
-        Number::Real(r) => r.signum() as i64
-    }, 1)}
-
-    pub fn floor(self) -> Self { match self {
-        Number::Ratio(n, d) => Number::Ratio(if n < 0 {
-            (n + 1) / d as i64 - 1
-        } else {
-            n / d as i64
-        }, 1),
-        Number::Real(r) => Number::Ratio(r.floor() as i64, 1),
-    }}
-
-    pub fn ceil(self) -> Self { -(-self).floor() }
-    pub fn round(self) -> Self { (self + Number::Ratio(1, 2)).floor() }
 }
 
 
-
-impl Number {
-    pub fn digits(self, base: u64) -> Option<Vec<u64>> {
-        let mut num: u64 = self.try_into().ok()?;
-        let mut digs = Vec::new();
-        while num > 0 {
-            digs.push(num % base);
-            num /= base;
-        }
-        Some(digs)
-    }
-
-    pub fn gcd(a: Self, b: Self) -> Option<Self> { match (a, b) {
-        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
-            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
-            Number::Ratio(g as i64, da * db)
-        }.simplify()),
-        _ => None
-    }}
-
-    pub fn lcm(a: Self, b: Self) -> Option<Self> { match (a, b) {
-        (Number::Ratio(na, da), Number::Ratio(nb, db)) => Some({
-            let g = gcd(na.abs() as u64 * db, nb.abs() as u64 * da);
-            Number::Ratio(na * nb, g)
-        }.simplify()),
-        _ => None,
-    }}
-
-    pub fn factorial(n: u64) -> u64 {
-        (1..n + 1).product::<u64>().into()
-    }
-
-    pub fn choose(n: Number, k: usize) -> Option<Self> {
-        let one = Number::Ratio(1, 1);
-        Some((0..k).map(|i| (i as i64).into())
-        .fold(one, |accum, i|
-            accum * (n - i) / (i + one)
-        ))
-    }
-}
 
 macro_rules! convert_integral { ($tp:ty) => {
     impl From<$tp> for Number {
@@ -223,12 +205,12 @@ macro_rules! convert_integral { ($tp:ty) => {
     }
 
     impl TryFrom<Number> for $tp {
-        type Error = (Number, Object);
+        type Error = Number;
         fn try_from(num: Number) -> Result<$tp, Self::Error> {
             if let Number::Ratio(n, 1) = num {
                 if let Ok(n) = n.try_into() { return Ok(n) }
             }
-            Err((num, eval_err!("Cannot cast number to integer type")))
+            Err(num)
         }
     }
 
@@ -236,7 +218,9 @@ macro_rules! convert_integral { ($tp:ty) => {
         fn cast(obj: Object) -> Result<$tp, (Object, ErrObject)> {
             match Number::cast(obj)?.try_into() {
                 Ok(val) => Ok(val),
-                Err((num, err)) => Err((Object::new(num), err))
+                Err(num) => Err((Object::new(num),
+                    eval_err!("Cannot cast number to integer type")
+                )),
             }
         }
     }
@@ -267,10 +251,6 @@ impl From<Number> for f64 {
     }}
 }
 
-impl From<&Number> for f64 {
-    fn from(num: &Number) -> f64 { f64::from(*num) }
-}
-
 impl Castable for f64 {
     fn cast(obj: Object) -> Result<f64, (Object, ErrObject)>
         { Ok(Number::cast(obj)?.into()) }
@@ -289,7 +269,7 @@ impl PartialEq for Number {
                 n1 * d2 as i64 == n2 * d1 as i64
             },
             (num1, num2) => {
-                let (r1, r2) = (f64::from(num1), f64::from(num2));
+                let (r1, r2) = (num1.real(), num2.real());
                 if r1.is_infinite() && r2.is_infinite() { true }
                 else { (r1 - r2).abs() < 1e-10 }
             },
@@ -304,7 +284,7 @@ impl PartialOrd for Number {
         (&Number::Ratio(n1, d1), &Number::Ratio(n2, d2)) => {
             Some((n1 * d2 as i64).cmp(&(n2 * d1 as i64)))
         },
-        (num1, num2) => f64::from(num1).partial_cmp(&f64::from(num2)),
+        (num1, num2) => num1.real().partial_cmp(&num2.real()),
     }}
 }
 

@@ -1,28 +1,5 @@
 use std::str::FromStr;
 
-macro_rules! symb_to_unary {
-    ( - ) => { Unary::Neg };
-    ( ! ) => { Unary::Not };
-}
-
-macro_rules! symb_to_binary {
-    (  $   ) => { Binary::Apply  };
-    (  &&  ) => { Binary::And    };
-    (  ||  ) => { Binary::Or     };
-    (  ==  ) => { Binary::Eq     };
-    (  !=  ) => { Binary::Neq    };
-    (  <   ) => { Binary::Lt     };
-    (  <=  ) => { Binary::Leq    };
-    (  >   ) => { Binary::Gt     };
-    (  >=  ) => { Binary::Geq    };
-    (  +   ) => { Binary::Add    };
-    (  -   ) => { Binary::Sub    };
-    (  *   ) => { Binary::Mul    };
-    (  /   ) => { Binary::Div    };
-    ( "//" ) => { Binary::FlrDiv };
-    (  %   ) => { Binary::Mod    };
-    (  ^   ) => { Binary::Pow    };
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unary { Neg, Not }

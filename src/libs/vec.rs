@@ -9,18 +9,17 @@ use super::mat::Matrix;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, Castable,
+    Operable, Object,
     Unary, Binary,
     NamedType, EvalError,
 };
 use crate::object::array::Array;
 
-macro_rules! check_dims {
+macro_rules! check_dims_panic {
     ($a:expr, $b:expr) => {
         let (adims, bdims) = ($a.dims(), $b.dims());
         if adims != bdims { panic!(
-            "Vector dimensions {} and {} do not match",
-            adims, bdims,
+            "Dimension {} and {} don't match", adims, bdims
         )}
     };
 }
@@ -30,47 +29,64 @@ macro_rules! check_dims {
 pub struct Vector(Vec<Object>);
 name_type!{vector: Vector}
 
-impl Operable for Vector {
-    def_unary!{self, -self = -self}
-    def_binary!{self,
-        self + v : (Vector) = { guard!(self + v, self.dims() == v.dims(),
-            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
-        )},
-        self - v : (Vector) = { guard!(self - v, self.dims() == v.dims(),
-            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
-        )},
-        self * v : (Vector) = { guard!(self * v, self.dims() == v.dims(),
-            "Vector dimensions {} and {} do not match", self.dims(), v.dims()
-        )},
+impl_operable!{Vector:
+    #[unary(Neg)] fn _(v: Self) -> Self { -v }
+    #[binary(Add)] fn _(v1: Self, v2: Self) -> Result<Self, String>
+        { Self::check_dims(v1, v2).map(|(v1, v2)| v1 + v2) }
+    #[binary(Sub)] fn _(v1: Self, v2: Self) -> Result<Self, String>
+        { Self::check_dims(v1, v2).map(|(v1, v2)| v1 - v2) }
 
-        (self ~) * _m : (Matrix) = {},
-        self * other = { self * other },
-        other * self = { other * self },
+    #[binary(Mul)] fn _(v1: Self, v2: Self) -> Result<Object, String>
+        { Self::check_dims(v1, v2).map(|(v1, v2)| v1 * v2) }
 
-        self / _m : (Matrix) = {},
-        self / other = { self / other },
-        self % _m : (Matrix) = {},
-        self % other = { self % other },
-        self "//" _m : (Matrix) = {},
-        self "//" other = { self.flrdiv(other) }
+    #[binary(Mul)]
+    #[exclude(Matrix)]
+    fn _(v: Self, scalar: Object) -> Self { v * scalar }
+
+    #[binary(rev, Mul)]
+    #[exclude(Matrix)]
+    fn _(v: Self, scalar: Object) -> Self { scalar * v }
+
+    #[binary(Div)]
+    #[binary(Matrix)]
+    fn _(v: Self, scalar: Object) -> Self { v / scalar }
+
+    #[binary(Mod)]
+    #[exclude(Matrix)]
+    fn _(v: Self, scalar: Object) -> Self { v % scalar }
+
+    #[binary(FlrDiv)]
+    #[exclude(Matrix)]
+    fn _(v: Self, scalar: Object) -> Self { v.flrdiv(scalar) }
+
+    #[call]
+    fn __call(&self, idx: usize) -> Result<Object, String> {
+        if let Some(obj) = self.0.get(idx) { Ok(obj.clone()) }
+        else { Err(format!(
+            "Index {} is larger or equal to dimension {}", idx, self.dims()
+        ))}
     }
 
-    def_methods!{vec,
-        __call(idx: usize) = if let Some(obj) = vec.0.get(idx) { obj.clone() }
-        else { eval_err!(
-            "Index {} is larger or equal to dimension {}", idx, vec.dims(),
-        )},
+    pub fn dims(&self) -> usize { self.0.len() }
+    pub fn comps(self) -> Vec<Object> { self.0 }
 
-        dims() = vec.dims().into(),
-        comps() = vec.0.clone().into(),
-        mag() = vec.clone().mag(),
-        mag2() = vec.clone().mag2()
-    }
+    pub fn mag2(self) -> Object
+        { self.0.into_iter().map(|x| x.clone() * x).sum() }
+    pub fn mag(self) -> Object
+        { call!((self.mag2()).sqrt()) }
 }
 
 
 
 impl Vector {
+    fn check_dims(v1: Self, v2: Self) -> Result<(Self, Self), String> {
+        if v1.dims() == v2.dims() { Ok((v1, v2)) }
+        else { Err(format!(
+            "Vector dimensions {} and {} do not match",
+            v1.dims(), v2.dims(),
+        ))}
+    }
+
     pub fn check_errs(self) -> Result<Self, Object> {
         if self.0.iter().any(|c| c.is_err()) {
             Err(self.0.into_iter()
@@ -78,15 +94,6 @@ impl Vector {
             .next().unwrap())
         } else { Ok(self) }
     }
-
-    pub fn dims(&self) -> usize { self.0.len() }
-
-    pub fn mag2(self) -> Object
-        { self.0.into_iter().map(|x| x.clone() * x).sum() }
-    pub fn mag(self) -> Object {
-        call!((self.mag2()).sqrt())
-    }
-
 
     pub fn flrdiv_assign(&mut self, rhs: Object)
         { self.0.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
@@ -104,7 +111,7 @@ impl Neg for Vector {
 
 impl AddAssign for Vector {
     fn add_assign(&mut self, rhs: Self) {
-        check_dims!(self, rhs);
+        check_dims_panic!(self, rhs);
         zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a += b);
     }
 }
@@ -116,7 +123,7 @@ impl Add for Vector {
 
 impl SubAssign for Vector {
     fn sub_assign(&mut self, rhs: Self) {
-        check_dims!(self, rhs);
+        check_dims_panic!(self, rhs);
         zip(self.0.iter_mut(), rhs.0).for_each(|(a, b)| *a -= b);
     }
 }
@@ -129,7 +136,7 @@ impl Sub for Vector {
 impl Mul<Vector> for Vector {
     type Output = Object;
     fn mul(self, rhs: Vector) -> Object {
-        check_dims!(self, rhs);
+        check_dims_panic!(self, rhs);
         zip(self.0, rhs.0).map(|(a, b)| a * b).sum()
     }
 }

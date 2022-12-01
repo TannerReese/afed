@@ -4,7 +4,7 @@ use std::iter::zip;
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Object, EvalError};
+use crate::object::{Object, EvalError, ErrObject};
 use crate::object::number::Number;
 use crate::object::array::Array;
 
@@ -43,14 +43,16 @@ pub fn iter(init: Object, times: usize, func: Object) -> Object {
     elems.into()
 }
 
-pub fn iter_while(init: Object, pred: Object, func: Object) -> Object {
+pub fn iter_while(
+    init: Object, pred: Object, func: Object
+) -> Result<Vec<Object>, ErrObject> {
     let mut elems = Vec::new();
     let mut work = init;
-    while call!(pred(work.clone()) => bool) {
+    while call!(pred(work.clone())).ok_or_err()?.cast()? {
         elems.push(work.clone());
         work = call!(func(work));
     }
-    elems.into()
+    Ok(elems)
 }
 
 
@@ -61,7 +63,8 @@ pub fn make_bltns() -> Bltn {
         range(x, y, step));
 
     def_bltn!(arr.iter(init, times: usize, f) = iter(init, times, f));
-    def_bltn!(arr.iter_while(init, pred, f) = iter_while(init, pred, f));
+    def_bltn!(arr.iter_while(init, pred, f) =
+        iter_while(init, pred, f).into());
 
     def_bltn!(arr.zip(v1: Vec<Object>, v2: Vec<Object>) =
         zip(v1, v2).collect());
@@ -95,12 +98,12 @@ pub fn make_bltns() -> Bltn {
     def_getter!(arr.min);
     def_getter!(arr.rev);
 
-    def_bltn!(arr.map(f, obj) = call!(obj.map(f)));
-    def_bltn!(arr.filter(f, obj) = call!(obj.filter(f)));
-    def_bltn!(arr.fold(init, f, obj) = call!(obj.fold(init, f)));
-    def_bltn!(arr.all(f, a: Array) = a.all(f));
-    def_bltn!(arr.any(f, a: Array) = a.any(f));
-    def_bltn!(arr.has(elm, obj) = call!(obj.has(elm)));
+    def_bltn!(arr.map(f, a: Array) = a.map(f).into());
+    def_bltn!(arr.filter(f, a: Array) = a.filter(f).into());
+    def_bltn!(arr.fold(init, f, a: Array) = a.fold(init, f).into());
+    def_bltn!(arr.all(f, a: Array) = a.all(f).into());
+    def_bltn!(arr.any(f, a: Array) = a.any(f).into());
+    def_bltn!(arr.has(elm, a: Array) = a.has(elm).into());
     Bltn::Map(arr)
 }
 

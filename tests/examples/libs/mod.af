@@ -7,6 +7,7 @@ Mod 0 = ``,
 # Standard Arithmetic
 43 * (mod.Mod 91 / 43) = ``,
 8 + 4 * Mod 7 - 10 = ``,
+8 / (22 - 9 * Mod 36) = ``,
 (101 * Mod 1427) ^ 72 = ``,
 -(5 * Mod 7) = ``,
 

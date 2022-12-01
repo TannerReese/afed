@@ -44,8 +44,11 @@ impl Curry {
 }
 
 impl Operable for Curry {
-    def_unary!{}
-    def_binary!{}
+    fn unary(self, _: Unary) -> Option<Object> { None }
+    fn binary(self,
+        _: bool, _: Binary, other: Object
+    ) -> Result<Object, (Object, Object)> { Err((self.into(), other)) }
+
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(self.arity),

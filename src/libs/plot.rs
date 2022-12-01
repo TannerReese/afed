@@ -22,26 +22,22 @@ pub struct Plot {
 }
 name_type!{plot: Plot}
 
-impl Operable for Plot {
-    def_unary!{}
-    def_binary!{self, (self ~) + other = { self + other }}
-    def_methods!{Plot {
-        width, height, corner,
-        rows, columns, errors, ..
-    },
-        width() = (*width).into(),
-        height() = (*height).into(),
-        corner() = (*corner).into(),
-        center() = (
-            (*corner).0 + *width / 2.0, (*corner).1 - *height / 2.0
-        ).into(),
+impl_operable!{Plot:
+    #[binary(comm, Add)]
+    fn _(plt: Self, other: Object) -> Plot { plt + other }
 
-        rows() = (*rows).into(),
-        cols() = (*columns).into(),
-        errors() = errors.clone().into()
-    }
+    pub fn width(&self) -> f64 { self.width }
+    pub fn height(&self) -> f64 { self.height }
+    pub fn corner(&self) -> (f64, f64) { self.corner }
+
+    pub fn center(&self) -> (f64, f64) {(
+        self.corner.0 + self.width / 2.0, self.corner.1 - self.height / 2.0
+    )}
+
+    pub fn rows(&self) -> usize { self.rows }
+    pub fn cols(&self) -> usize { self.columns }
+    pub fn errors(&self) -> Vec<String> { self.errors.clone() }
 }
-
 
 impl Plot {
     pub fn record_error(&mut self, err: ErrObject) {
@@ -341,12 +337,14 @@ impl Iterator for LinSpace {
 
 
 impl Plot {
-    pub fn new(mut options: HashMap<String, Object>) -> Object {
+    pub fn new(
+        mut options: HashMap<String, Object>
+    ) -> Result<Plot, ErrObject> {
         macro_rules! get_params {
             ($($prm:ident : $tp:ty = $def:expr),*) => { $(
                 let $prm: $tp;
                 if let Some(x) = options.remove(stringify!($prm)) {
-                    $prm = cast!(x);
+                    $prm = x.cast()?;
                 } else { $prm = $def; }
             )*};
         }
@@ -365,15 +363,15 @@ impl Plot {
             rows: usize = 40, cols: usize = 100
         );
         let keys: Vec<String> = options.into_keys().collect();
-        if !keys.is_empty() { return eval_err!(
+        if !keys.is_empty() { return Err(eval_err!(
             "Unknown options '{:?}'", keys,
-        )}
+        ))}
 
         let width = xmax - xmin;
         let height = ymax - ymin;
-        if width <= 0.0 || height <= 0.0 { return eval_err!(
+        if width <= 0.0 || height <= 0.0 { return Err(eval_err!(
             "Width and Height of plot must be positive"
-        )}
+        ))}
 
         let mut plot = Plot {
             corner: (xmin, ymax), width, height,
@@ -384,7 +382,7 @@ impl Plot {
 
         let cell_size = plot.good_cell_size(divs);
         plot.draw_gridlines(labels, cell_size);
-        plot.into()
+        Ok(plot)
     }
 
     pub fn draw_obj(&mut self, mut obj: Object) {
@@ -440,7 +438,7 @@ impl Add<Plot> for Object {
 
 pub fn make_bltns() -> Bltn {
     let mut plt = HashMap::new();
-    def_bltn!(plt.Plot(opts: HashMap<String, Object>) = Plot::new(opts));
+    def_bltn!(plt.Plot(opts: HashMap<String, Object>) = Plot::new(opts).into());
     def_bltn!(plt.draw(obj, plot: Plot) = (plot + obj).into());
     Bltn::Map(plt)
 }

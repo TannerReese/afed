@@ -10,7 +10,7 @@ pub struct AugMatrix {
 
 impl Matrix {
     fn swap_rows(&mut self, r1: usize, r2: usize) {
-        let cols = self.columns();
+        let cols = self.cols();
         let (r1, r2) = (r1 * cols, r2 * cols);
         for c in 0..cols {
             self.comps.swap(r1 + c, r2 + c);
@@ -18,15 +18,15 @@ impl Matrix {
     }
 
     fn scale_row(&mut self, r: usize, scalar: &Object) {
-        let cols = self.columns();
+        let cols = self.cols();
         let r = r * cols;
-        for c in 0..self.columns() {
+        for c in 0..self.cols() {
             self.comps[r + c] *= scalar.clone();
         }
     }
 
     fn add_rows(&mut self, src: usize, tgt: usize, scalar: &Object) {
-        let cols = self.columns();
+        let cols = self.cols();
         let (src, tgt) = (src * cols, tgt * cols);
         for c in 0..cols {
             let mut elem = self.comps[src + c].clone();
@@ -78,7 +78,7 @@ impl AugMatrix {
         }
 
         let rows = self.rows;
-        let cols = self.matrices[target].columns();
+        let cols = self.matrices[target].cols();
         let mut pivot_row = 0;
         for c in 0..cols {
             let mat = &self.matrices[target];

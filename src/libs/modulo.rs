@@ -7,7 +7,7 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object, Castable,
+    Operable, Object,
     Unary, Binary,
     NamedType, EvalError,
 };
@@ -30,11 +30,10 @@ fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
 fn largest_coprime(mut x: u64, mut reducer: u64) -> u64 {
     if reducer == 0 { return 1 }
 
+    reducer = bezout(x, reducer).0;
     while reducer != 1 {
-        let div = x / reducer;
-        let res = x - div * reducer;
-        if res == 0 { x = div; }
-        else { reducer = res; }
+        while x % reducer == 0 { x /= reducer; }
+        reducer = bezout(x, reducer).0;
     }
     return x
 }
@@ -46,36 +45,66 @@ pub struct Modulo {
 }
 name_type!{modulo: Modulo}
 
-impl Operable for Modulo {
-    def_unary!{self, -self = -self}
-    def_binary!{self,
-        self ^ other : (Number => i64) = { self.pow(other) },
+impl_operable!{Modulo:
+    #[unary(Neg)] fn _(m: Self) -> Self { -m }
 
-        self + other : (Modulo) = { self + other },
-        self - other : (Modulo) = { self - other },
-        self * other : (Modulo) = { self * other },
-        self / other : (Modulo) = { self / other },
-        self % other : (Modulo) = { self % other },
+    #[binary(Add)] fn _(m1: Self, m2: Self) -> Self { m1 + m2 }
+    #[binary(Sub)] fn _(m1: Self, m2: Self) -> Self { m1 - m2 }
+    #[binary(Mul)] fn _(m1: Self, m2: Self) -> Self { m1 * m2 }
+    #[binary(Div)] fn _(m1: Self, m2: Self) -> Self { m1 / m2 }
+    #[binary(Mod)] fn _(m1: Self, m2: Self) -> Self { m1 % m2 }
+    #[binary(Pow)] fn _(m: Self, k: i64) -> Self { m.pow(k) }
 
-        (self ~) + other : (Number) = { self + other },
-        (self ~) - other : (Number) = { self - other },
-        (self ~) * other : (Number) = { self * other },
-        (self ~) / other : (Number) = { self / other },
-        (self ~) % other : (Number) = { self % other }
+    #[binary(comm, Add)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { m + n }
+    #[binary(Sub)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { m - n }
+    #[binary(Sub, rev)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { n - m }
+    #[binary(comm, Mul)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { m * n }
+    #[binary(Div)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { m / n }
+    #[binary(Div, rev)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { n / m }
+    #[binary(Mod)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { m % n }
+    #[binary(Mod, rev)]
+    fn _(m: Self, n: Number) -> Result<Self, String> { n % m }
+
+    pub fn resid(self) -> i64 { self.residue }
+    pub fn modulo(self) -> u64 { self.modulo }
+
+    pub fn has_inv(self) -> bool
+        { bezout(self.residue.abs() as u64, self.modulo).0 == 1 }
+    pub fn inv(self) -> Self {
+        if self.residue == 1 || self.residue == -1 { self }
+        else if self.modulo > 0 {
+            let (sign, res) = (self.residue.signum(), self.residue.abs());
+            let new_mod = largest_coprime(self.modulo, res as u64);
+            let (inv, _) = bezout(res as u64, new_mod).1;
+            Modulo::from(sign * inv, new_mod)
+        } else { Modulo::from(0, 1) }
     }
 
-    def_methods!{m,
-        resid() = m.residue.into(),
-        modulo() = (m.modulo as i64).into(),
+    pub fn order(self) -> u64 {
+        if bezout(self.residue.abs() as u64, self.modulo).0 > 1 {
+            return 0;
+        }
 
-        has_inv() = (bezout(
-            m.residue.abs() as u64, m.modulo
-        ).0 == 1).into(),
-        inv() = m.inverse().into(),
-
-        order() = m.order().into()
+        use super::prs::{prime_factors, euler_totient};
+        let max_order = euler_totient(self.modulo);
+        let mut ord = max_order;
+        for (p, _) in prime_factors(max_order) {
+            while ord % p == 0
+            && self.pow((ord / p) as i64).residue == 1 {
+                ord /= p;
+            }
+        }
+        ord
     }
 }
+
 
 
 impl Modulo {
@@ -97,21 +126,12 @@ impl Modulo {
         ),
     }}
 
-    pub fn inverse(self) -> Self {
-        if self.residue == 1 || self.residue == -1 { self }
-        else if self.modulo > 0 {
-            let (sign, res) = (self.residue.signum(), self.residue.abs());
-            let new_mod = largest_coprime(self.modulo, res as u64);
-            let (inv, _) = bezout(res as u64, new_mod).1;
-            Modulo::from(sign * inv, new_mod)
-        } else { Modulo::from(0, 1) }
-    }
 
     pub fn pow(mut self, rhs: i64) -> Self {
         let mut exp;
         if rhs == 0 { return self }
         else if rhs < 0 {
-            self = self.inverse();
+            self = self.inv();
             exp = (-rhs) as u64;
         } else { exp = rhs as u64; }
 
@@ -122,23 +142,6 @@ impl Modulo {
             exp >>= 1;
         }
         accum
-    }
-
-    pub fn order(self) -> u64 {
-        if bezout(self.residue.abs() as u64, self.modulo).0 > 1 {
-            return 0;
-        }
-
-        use super::prs::{prime_factors, euler_totient};
-        let max_order = euler_totient(self.modulo);
-        let mut ord = max_order;
-        for (p, _) in prime_factors(max_order) {
-            while ord % p == 0
-            && self.pow((ord / p) as i64).residue == 1 {
-                ord /= p;
-            }
-        }
-        ord
     }
 }
 
@@ -173,6 +176,12 @@ impl Sub<Number> for Modulo {
         { self.from_number(rhs).map(|n| self - n) }
 }
 
+impl Sub<Modulo> for Number {
+    type Output = Result<Modulo, String>;
+    fn sub(self, rhs: Modulo) -> Self::Output
+        { rhs.from_number(self).map(|n| n - rhs) }
+}
+
 impl Mul for Modulo {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self { Modulo::from(
@@ -188,13 +197,19 @@ impl Mul<Number> for Modulo {
 
 impl Div for Modulo {
     type Output = Self;
-    fn div(self, rhs: Self) -> Self { self * rhs.inverse() }
+    fn div(self, rhs: Self) -> Self { self * rhs.inv() }
 }
 
 impl Div<Number> for Modulo {
     type Output = Result<Modulo, String>;
     fn div(self, rhs: Number) -> Self::Output
         { self.from_number(rhs).map(|n| self / n) }
+}
+
+impl Div<Modulo> for Number {
+    type Output = Result<Modulo, String>;
+    fn div(self, rhs: Modulo) -> Self::Output
+        { rhs.from_number(self).map(|n| n / rhs) }
 }
 
 impl Rem for Modulo {
@@ -210,6 +225,12 @@ impl Rem<Number> for Modulo {
     type Output = Result<Modulo, String>;
     fn rem(self, rhs: Number) -> Self::Output
         { self.from_number(rhs).map(|n| self % n) }
+}
+
+impl Rem<Modulo> for Number {
+    type Output = Result<Modulo, String>;
+    fn rem(self, rhs: Modulo) -> Self::Output
+        { rhs.from_number(self).map(|n| n % rhs) }
 }
 
 

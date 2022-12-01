@@ -24,13 +24,16 @@ impl Map {
 }
 
 impl Operable for Map {
-    def_unary!{}
-    def_binary!{self,
-        self + other : (Map) = {
-            let mut s = self;
-            s.0.extend(other.0);  s
-        }
+    fn unary(self, _: Unary) -> Option<Object> { None }
+    fn binary(mut self,
+        _: bool, op: Binary, other: Object
+    ) -> Result<Object, (Object, Object)> {
+        if Binary::Add == op { match other.try_cast::<Map>() {
+            Ok(other) => { self.0.extend(other.0); Ok(self.into()) },
+            Err(other) => Err((self.into(), other)),
+        }} else { Err((self.into(), other)) }
     }
+
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> { match attr {
         None => Some(1),
@@ -39,8 +42,13 @@ impl Operable for Map {
 
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         let s: String;
-        let key = if let Some(key) = attr { key }
-        else { s = cast!(args.remove(0));  s.as_str() };
+        let key = if let Some(key) = attr { key } else {
+            match args.remove(0).cast() {
+                Ok(arg) => { s = arg; s.as_str() },
+                Err(err) => return err,
+            }
+        };
+
         self.0.get(key).map(|obj| obj.clone()).unwrap_or(
             eval_err!("Key {} is not contained in map", key)
         )

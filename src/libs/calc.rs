@@ -73,8 +73,7 @@ impl<
     }
 }
 
-impl<T: PartialOrd + Castable> Castable for Bounds<T>
-where Object: From<T> {
+impl<T: PartialOrd + Into<Object> + Castable> Castable for Bounds<T> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         let mut is_single: bool = false;
         let mut bounds = match obj.try_cast() {
@@ -225,7 +224,7 @@ pub fn extremum_grid(
     Ok((max_pt.unwrap(), max_val.unwrap()))
 }
 
-fn pt_to_obj<T>(mut pt: Point<T>) -> Object where Object: From<T> {
+fn pt_to_obj<T: Into<Object>>(mut pt: Point<T>) -> Object {
     if pt.len() == 0 { eval_err!("Point cannot have zero dimension")}
     else if pt.len() == 1 { pt.remove(0).into() }
     else { pt.into() }

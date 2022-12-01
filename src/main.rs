@@ -4,6 +4,7 @@ use std::fs::{File, canonicalize};
 use std::path::PathBuf;
 
 #[macro_use]
+pub mod macros;
 pub mod object;
 pub mod libs;
 pub mod expr;

@@ -16,28 +16,6 @@ use std::borrow::Borrow;
 pub use opers::{Unary, Binary, Assoc};
 use self::bool::Bool;
 
-macro_rules! eval_err {
-    ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
-}
-
-macro_rules! count_tt {
-    () => { 0 };
-    ($fst:tt $($item:tt)*) => {1 + count_tt!($($item)*)};
-}
-
-
-macro_rules! cast {
-    ($obj:expr) => { match $obj.cast() {
-        Ok(val) => val,
-        Err(err) => return err,
-    }};
-    ($obj:expr => $type:ty) => { match $obj.cast::<$type>() {
-        Ok(val) => val,
-        Err(err) => return err,
-    }};
-}
-
-
 macro_rules! try_ok {
     ($obj:expr) => {{
         let obj = $obj;
@@ -45,158 +23,8 @@ macro_rules! try_ok {
     }};
 }
 
-macro_rules! guard {
-    ($obj:expr, $cond:expr, $($arg:tt)*) => {
-        if $cond { $obj.into() }
-        else { eval_err!($($arg)*) }
-    };
-}
-
-macro_rules! call {
-    (($obj:expr)($($arg:expr),*)) =>
-        { $obj.call(None, vec![$($arg.into()),*]) };
-    (($obj:expr)($($arg:expr),*) => $tp:ty) =>
-        { cast!(call!(($obj)($($arg),*)) => $tp) };
-    ($obj:ident ($($arg:expr),*)) =>
-        { $obj.call(None, vec![$($arg.into()),*]) };
-    ($obj:ident ($($arg:expr),*) => $tp:ty) =>
-        { cast!(call!($obj($($arg),*)) => $tp) };
-
-    (($obj:expr).$method:ident ($($arg:expr),*)) =>
-        { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
-    (($obj:expr).$method:ident ($($arg:expr),*) => $tp:ty) =>
-        { cast!(call!(($obj).$method($($arg),*)) => $tp) };
-    ($obj:ident.$method:ident ($($arg:expr),*)) =>
-        { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
-    ($obj:ident.$method:ident ($($arg:expr),*) => $tp:ty) =>
-        { cast!(call!($obj.$method($($arg),*)) => $tp) };
-}
-
-macro_rules! name_type {
-    ($name:ident: $tp:ty) => { name_type!{stringify!($name), $tp} };
-    ($name:literal: $tp:ty) => { name_type!{$name, $tp} };
-    ($name:expr, $tp:ty) =>{
-        impl NamedType for $tp { fn type_name() -> &'static str { $name }}
-    };
-}
-
-macro_rules! def_unary {
-    () => { def_unary!{self,} };
-    ($self:ident, $($op:tt self = $body:expr),*) => {
-        fn unary($self, _op: Unary) -> Option<Object> {$(
-            if let symb_to_unary!($op) = _op {
-                return Some($body.into());
-            }
-        )* None }
-    };
-}
-
-macro_rules! def_binary {
-    (impl type_override: $recog:ty,) => { $recog };
-    (impl type_override: $recog:ty, $tp:ty) => { $tp };
-
-    (impl check_rev: $rev:expr, (self~) $var:ident) => { true };
-    (impl check_rev: $rev:expr, self $var:ident) => { !$rev };
-    (impl check_rev: $rev:expr, $var:ident self) => {  $rev };
-
-    (impl use_rev: $rev:expr, $other:expr, (self~) $var:ident = $body:expr) =>
-        {{ let $var = $other; return $body }};
-    (impl use_rev: $rev:expr, $other:expr, self $var:ident = $body:expr) =>
-        { if !$rev { let $var = $other; return $body }};
-    (impl use_rev: $rev:expr, $other:expr, $var:ident self = $body:expr) =>
-        { if $rev { let $var = $other; return $body }};
-
-    (impl is_null: {}, $t:expr, $f:expr) => { $t };
-    (impl is_null: $_:tt, $t:expr, $f:expr) => { $f };
 
 
-    () => { def_binary!{self,} };
-    ($self:ident, $(
-        $fst:tt $op:tt $snd:tt
-        $(:($recog:ty $(=> $tp:ty)?))?
-        = $body:tt
-    ),*) => {
-        fn binary(
-            $self, _rev: bool, _op: Binary, mut _other: Object
-        ) -> Result<Object, (Object, Object)> {
-            $( #[allow(unreachable_code)] loop {
-                if let symb_to_binary!($op) = _op {
-                    let other = _other;
-                    $( let other = match <
-                        def_binary!(impl type_override: $recog, $($tp)?)
-                    >::cast(other) {
-                        Ok(good) => good,
-                        Err((val, _)) => { _other = val; break },
-                    }; )?
-                    def_binary!(impl is_null: $body, {
-                        return Err((Object::new($self), other.into()))
-                    }, def_binary!{impl use_rev: _rev, other,
-                        $fst $snd = Ok($body.into())
-                    });
-                    _other = other.into();
-                }
-                break
-            })*
-            Err((Object::new($self), _other))
-        }
-    };
-}
-
-macro_rules! def_methods {
-    (impl to_option __call) => { None };
-    (impl to_option $method:ident) => { Some(stringify!($method)) };
-
-    (impl type_or_default) => { Object };
-    (impl type_or_default $tp:ty) => { $tp };
-
-    (impl multicast: $on_err:expr, $($var:ident $(: $tp:ty)?),*) => {$($(
-        let $var = match <$tp>::cast($var) {
-            Err(($var, err)) => break Err(($on_err, err)),
-            Ok(good) => good,
-        };
-    )?)*};
-
-
-    () => { def_methods!{_,} };
-    ($self:pat, $($func:ident ($(
-        $arg:ident $(: $tp:ty)?
-    ),*) = $body:expr),*) => {
-        fn arity(
-            &self, _attr: Option<&str>
-        ) -> Option<usize> {$(
-            if let def_methods!(impl to_option $func) = _attr {
-                return Some(count_tt!($($arg)*))
-            }
-        )* None }
-
-        fn call(
-            &self, _attr: Option<&str>, _args: Vec<Object>
-        ) -> Object {
-            let $self = self;
-            let mut _err = None;
-            $(let _args =
-            if let def_methods!(impl to_option $func) = _attr {
-                match <[Object; count_tt!($($arg)*)]>::try_from(_args) {
-                    Err(args) => args,
-                    Ok([$($arg),*]) => match loop {
-                        def_methods!(impl multicast:
-                            vec![$($arg.into()),*],
-                            $($arg $(: $tp)?),*
-                        );
-                        break Ok($body);
-                    } {
-                        Ok(res) => return res,
-                        Err((args, err)) => { _err = Some(err);  args },
-                    },
-                }
-            } else { _args };)*
-
-            if let Some(err) = _err { err } else { panic!() }
-        }
-    };
-}
-
-#[macro_use]
 mod opers;
 
 pub mod null;
@@ -362,6 +190,7 @@ impl<T> Castable for T where T: Objectish {
         )))}
     }
 }
+
 
 
 impl Object {
@@ -633,5 +462,10 @@ impl<T: Into<Object>> From<Result<T, Object>> for Object {
 impl<T: Into<Object>> From<Result<T, String>> for Object {
     fn from(res: Result<T, String>) -> Self
         { res.map_err(&EvalError::new).into() }
+}
+
+impl<T: Into<Object>> From<Result<T, &str>> for Object {
+    fn from(res: Result<T, &str>) -> Self
+        { res.map_err(|s| s.to_owned()).into() }
 }
 
