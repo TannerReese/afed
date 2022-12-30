@@ -30,8 +30,8 @@ macro_rules! name_type {
 
 
 macro_rules! impl_operable {
-    (@una #[unary($name:ident)] $(#$m:tt)*, (), $vars:tt) =>
-        { impl_operable!{@una $(#$m)*, ($name), $vars} };
+    (@una #[unary($name:ident)] $(#$meta:tt)*, (), $vars:tt) =>
+        { impl_operable!{@una $(#$meta)*, ($name), $vars} };
     (@una #[$_:meta] $(#$meta:tt)*, $una:tt, $vars:tt) =>
         { impl_operable!{@una $(#$meta)*, $una, $vars} };
     (@una , (), $vars:tt) => {};
@@ -96,10 +96,10 @@ macro_rules! impl_operable {
 
     (@method #[call] $(#$meta:tt)*, (), $vars:tt) =>
         { impl_operable!{@method $(#$meta)*, (call), $vars} };
-    (@method #[unary $_:tt] $(#[$m:meta])*, $c:tt, $vs:tt) => {};
-    (@method #[binary $_:tt] $(#[$m:meta])*, $c:tt, $vs:tt) => {};
-    (@method #[exclude $_:tt] $(#[$m:meta])*, $c:tt, $vs:tt) => {};
-    (@method #[$_:meta] $(#$meta:tt)*, $is_call:tt, $vars:tt) =>
+    (@method #[unary $_:tt] $(#$meta:tt)*, $c:tt, $vs:tt) => {};
+    (@method #[binary $_:tt] $(#$meta:tt)*, $c:tt, $vs:tt) => {};
+    (@method #[exclude $_:tt] $(#$meta:tt)*, $c:tt, $vs:tt) => {};
+    (@method #$_:tt $(#$meta:tt)*, $is_call:tt, $vars:tt) =>
         { impl_operable!{@method $(#$meta)*, $is_call, $vars} };
     (@method , (), (@$method:ident $func:ident, $vars:tt)) =>
         { impl_operable!{@$method Some(stringify!($func)), $vars} };
@@ -128,30 +128,63 @@ macro_rules! impl_operable {
     }};
 
 
-    (@strip #[call]) => {};
-    (@strip #[unary $_:tt]) => {};
-    (@strip #[binary $_:tt]) => {};
-    (@strip #[exclude $_:tt]) => {};
-    (@strip #[$meta:meta]) => { #[$meta] };
-    (@method_impl $_:pat, (
-        $(#$meta:tt)*
-        $vis:vis $func:ident $args:tt -> $ret:ty $block:block
+    (@help #[doc=$doc:literal] $(#$meta:tt)*,
+        $is_oper:tt, ($help:expr), $vars:tt
+    ) => { impl_operable!{@help $(#$meta)*,
+        $is_oper, (concat!($help, "\n", $doc)), $vars
+    }};
+    (@help #[call] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+        { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
+    (@help #[unary $_:tt] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+        { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
+    (@help #[binary $_:tt] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+        { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
+    (@help #$_:tt $(#$meta:tt)*, $is_oper:tt, $help:tt, $vars:tt) =>
+        { impl_operable!{@help $(#$meta)*, $is_oper, $help, $vars} };
+    (@help , (), ($help:expr), (
+        $opers:ident, $methods:ident, $attr:ident, $func:tt
     )) => {
-        $(impl_operable!{@strip #$meta})*
-        $vis fn $func $args -> $ret $block
+        if $attr == None { if let Some(sig) = $help.trim().lines().next() {
+            if sig.trim().len() > 0 {
+                $methods += "\n";  $methods += sig;
+            }
+        }}
+
+        if $attr == Some(stringify!($func)) {
+            return Some($help.trim().to_owned());
+        }
     };
+    (@help , (oper), ($help:expr), (
+        $opers:ident, $methods:ident, $attr:ident, $func:tt
+    )) => { if $attr == None { if $help.trim().len() > 0 {
+        $opers += "\n";  $opers += $help;
+    }}};
 
 
-    ($Self:ty : $(
+
+    (@method_impl #[call] $(#$meta:tt)*, $mlist:tt, $vars:tt) =>
+        { impl_operable!{@method_impl $(#$meta)*, $mlist, $vars} };
+    (@method_impl #[unary $_:tt] $(#$meta:tt)*, $mlist:tt, $vars:tt) => {};
+    (@method_impl #[binary $_:tt] $(#$meta:tt)*, $mlist:tt, $vars:tt) => {};
+    (@method_impl #[exclude $_:tt] $(#$meta:tt)*, $mlist:tt, $vars:tt) => {};
+    (@method_impl #$any:tt $(#$meta:tt)*, $mlist:tt, $vars:tt) =>
+        { impl_operable!{@method_impl $(#$meta)*, (#$any $mlist), $vars} };
+    (@method_impl , (#$next:tt $mlist:tt), ($decl:tt $(#$meta:tt)*)) =>
+        { impl_operable!{@method_impl , $mlist, ($decl $(#$meta)* #$next)} };
+    (@method_impl , (), (
+        ( $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block )
+        $(#$meta:tt)*
+    )) => { $(#$meta)* $vis fn $func $args -> $ret $block };
+
+
+
+    ($Self:ty , $desc:expr , $(
         $(#$meta:tt)*
         $vis:vis fn $func:tt $args:tt -> $ret:ty $block:block
     )*) => {
-        impl $Self { $(impl_operable!{@method $(#$meta)*, (), (
-            @method_impl $func, (
-                $(#$meta)*
-                $vis $func $args -> $ret $block
-            )
-        )})* }
+        impl $Self { $(impl_operable!{@method_impl $(#$meta)*, (), ((
+            $vis fn $func $args -> $ret $block
+        ))})* }
 
         impl From<::std::convert::Infallible> for $Self {
             fn from(_: ::std::convert::Infallible) -> Self { panic!() }
@@ -163,6 +196,19 @@ macro_rules! impl_operable {
                     @arity $func, (_attr, $args)
                 )})*
                 return None
+            }
+
+            fn help(&self, attr: Option<&str>) -> Option<String> {
+                let mut _methods = String::new();
+                let mut _opers = String::new();
+
+                $(impl_operable!{@help $(#$meta)*, (), (""),
+                    (_opers, _methods, attr, $func)
+                })*
+
+                return if let None = attr { Some(format!(concat!(
+                    "{}:\n", $desc, "\n\nOperators:{}\n\nMethods:{}"
+                ), <$Self>::type_name(), _opers, _methods))} else { None }
             }
 
             #[allow(unused_mut)]
@@ -199,5 +245,16 @@ macro_rules! impl_operable {
             }
         }
     };
+
+    ($Self:ty: #![doc=$desc:expr] $($rest:tt)*) =>
+        { impl_operable!{$Self, $desc, $($rest)*} };
+    ($Self:ty, $desc:expr, #![doc=$desc2:expr] $($rest:tt)*) =>
+        { impl_operable!{$Self, concat!($desc, "\n", $desc2), $($rest)*} };
+
+    ($Self:ty : $($(#$meta:tt)*
+        $vis:vis fn $func:tt $args:tt -> $ret:ty $block:block
+    )*) => { impl_operable!{$Self, "", $(
+        $(#$meta)* $vis fn $func $args -> $ret $block
+    )*} };
 }
 

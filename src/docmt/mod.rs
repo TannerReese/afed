@@ -147,7 +147,7 @@ impl Display for Docmt {
             if let Some(obj) = value {
                 let sub = obj.to_string();
                 let sub = sub.chars().flat_map(|c|
-                    if c == '`' { vec!['\\', '`'] }
+                    if c == '`' || c == '?' { vec!['?', c] }
                     else { vec![c] }
                 ).collect::<String>();
                 write!(f, "{}", sub)?;

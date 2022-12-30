@@ -18,7 +18,8 @@ x   : {
 },
 
 # Escaping of delimiter and special characters
-"`\\'\n" = ``,
+"`\\'\"\n" = ``,
+"?\\?".print = ``,
 # Erasure of substitution
 0 = `Things
 to

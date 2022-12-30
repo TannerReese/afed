@@ -66,6 +66,7 @@ macro_rules! test_file {
 
 test_file!{parse, "parse.af"}
 test_file!{parse_errors, "parse_errors.af"}
+test_file!{help, "help.af"}
 test_file!{func, "func.af"}
 
 test_file!{use_stmt, "parent_use.af"}

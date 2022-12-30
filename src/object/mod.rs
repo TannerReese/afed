@@ -43,6 +43,7 @@ pub trait Operable {
     ) -> Result<Object, (Object, Object)>;
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>;
+    fn help(&self, attr: Option<&str>) -> Option<String>;
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
@@ -78,6 +79,7 @@ trait ObjectishSafe {
     ) -> Result<Object, (Object, Object)>;
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>;
+    fn help(&self, attr: Option<&str>) -> Option<String>;
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
@@ -110,6 +112,8 @@ impl<T> ObjectishSafe for Option<T> where T: Objectish + 'static {
 
     fn arity(&self, attr: Option<&str>) -> Option<usize>
         { to_ref(self).arity(attr) }
+    fn help(&self, attr: Option<&str>) -> Option<String>
+        { to_ref(self).help(attr) }
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object
         { to_ref(self).call(attr, args) }
 }
@@ -237,6 +241,8 @@ impl Object {
 
     pub fn arity(&self, attr: Option<&str>) -> Option<usize>
         { (*self.0).arity(attr) }
+    pub fn help(&self, attr: Option<&str>) -> Option<String>
+        { (*self.0).help(attr) }
 
     pub fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object {
         let arity: usize;
@@ -442,9 +448,10 @@ impl Operable for EvalError {
     ) -> Result<Object, (Object, Object)> { Ok(Object::new(self)) }
 
     fn arity(&self, _: Option<&str>) -> Option<usize> { Some(0) }
-    fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
-        Object::new(self.clone())
-    }
+    fn help(&self, _: Option<&str>) -> Option<String>
+        { Some(self.to_string()) }
+    fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object
+        { Object::new(self.clone()) }
 }
 
 impl Display for EvalError {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter, Error};
 use id_arena::{Arena, Id};
 
-use super::object::{Object, Unary, Binary, Objectish, EvalError};
+use super::object::{Object, Unary, Binary, EvalError};
 use super::object::array::Array;
 use super::object::map::Map;
 
@@ -299,9 +299,8 @@ impl ExprArena {
         })
     }
 
-    pub fn create_obj<T>(&mut self, obj: T) -> ExprId where T: Objectish {
-        self.from_obj(Object::new(obj))
-    }
+    pub fn create_obj<T>(&mut self, obj: T) -> ExprId where T: Into<Object>
+        { self.from_obj(obj.into()) }
 
     pub fn set_saved(&mut self, exp: ExprId) { self.0[exp].saved = true; }
 }

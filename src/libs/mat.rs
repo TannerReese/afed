@@ -42,20 +42,30 @@ pub struct IntoVectors {
 }
 
 impl_operable!{Matrix:
+    //! Matrix with arbitrary size and heterogeneous components
+
+    /// -matrix -> matrix
+    /// Negation of matrix
     #[unary(Neg)] fn _(m: Self) -> Self { -m }
 
+    /// matrix + matrix -> matrix
+    /// Add matrices with the same number of rows and columns
     #[binary(Add)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
         if m1.dims == m2.dims { Ok(m1 + m2) } else { Err(format!(
             "Matrix dimensions {:?} and {:?} do not match", m1.dims, m2.dims
         ))}
     }
 
+    /// matrix - matrix -> matrix
+    /// Subtract matrices with the same number of rows and columns
     #[binary(Sub)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
         if m1.dims == m2.dims { Ok(m1 - m2) } else { Err(format!(
             "Matrix dimensions {:?} and {:?} do not match", m1.dims, m2.dims
         ))}
     }
 
+    /// (a: matrix) * (b: matrix) -> matrix
+    /// Multiply matrices as long as 'a.cols == b.rows'
     #[binary(Mul)] fn _(m1: Self, m2: Self) -> Result<Self, String> {
         if m1.dims.1 == m2.dims.0 { Ok(m1 * m2) } else { Err(format!(
             "For matrix multiplication, {} and {} do not match",
@@ -63,6 +73,9 @@ impl_operable!{Matrix:
         ))}
     }
 
+    /// matrix * vector -> vector
+    /// vector * matrix -> vector
+    /// Apply 'matrix' to a row or column vector of appropriate dimension
     #[binary(Mul)] fn _(m: Self, v: Vector) -> Result<Vector, String> {
         if m.dims.1 == v.dims() { Ok(m * v) } else { Err(format!(
             "Vector dimension {} does not match column dimension {} in matrix",
@@ -77,24 +90,37 @@ impl_operable!{Matrix:
         ))}
     }
 
+    /// (scalar: any) * matrix -> matrix
+    /// matrix * (scalar: any) -> matrix
+    /// Multiply each component of 'matrix' by 'vector'
     #[binary(Mul)] fn _(m: Self, scalar: Object) -> Self { m * scalar }
     #[binary(Mul, rev)] fn _(m: Self, scalar: Object) -> Self { scalar * m }
 
+    /// matrix / matrix -> matrix
+    /// Divide matrices by multiplying by the inverse
     #[binary(Div)]
     #[exclude(Vector)]
     fn _(m1: Self, m2: Matrix) -> Object { Object::new(m1) * m2.inverse().0 }
+    /// matrix / (scalar: any) -> matrix
+    /// Divide each component of 'matrix' by 'scalar'
     #[binary(Div)]
     fn _(m: Self, scalar: Object) -> Self { m / scalar }
 
+    /// matrix % (mod: any) -> matrix
+    /// Reduce each component of 'matrix' modulo 'mod'
     #[binary(Mod)]
     #[exclude(Vector, Matrix)]
     fn _(m: Self, scalar: Object) -> Self { m % scalar }
 
+    /// matrix // (divisor: any) -> matrix
+    /// Floor divide each component of 'matrix' by 'divisor'
     #[binary(FlrDiv)]
     #[exclude(Vector, Matrix)]
     fn _(m: Self, scalar: Object) -> Self { m.flrdiv(scalar) }
 
 
+    /// matrix (i: natural) -> vector
+    /// Get the 'i'th row vector of 'matrix'
     #[call]
     fn __call(&self, idx: usize) -> Result<Vector, String> {
         if idx >= self.rows() { Err(format!(
@@ -107,27 +133,43 @@ impl_operable!{Matrix:
         }
     }
 
+    /// matrix.rows -> natural
+    /// Number of rows in 'matrix'
     pub fn rows(&self) -> usize { self.dims.0 }
+    /// matrix.cols -> natural
+    /// Number of columns in 'matrix'
     pub fn cols(&self) -> usize { self.dims.1 }
+    /// matrix.row_vecs -> array of vectors
+    /// Array of row vectors in 'matrix'
     pub fn row_vecs(self) -> Vec<Vector> { self.into_rows().collect() }
+    /// matrix.col_vecs -> array of vectors
+    /// Array of column vectors in 'matrix'
     pub fn col_vecs(self) -> Vec<Vector> { self.into_columns().collect() }
 
+    /// matrix.trsp -> matrix
+    /// Transpose of 'matrix' where the rows are swapped for columns
     pub fn trsp(self) -> Self {
         let mut m = self;
         m.transpose();  m
     }
 
+    /// matrix.has_inv -> bool
+    /// True if 'matrix' has a multiplicative inverse
     pub fn has_inv(&self) -> bool {
         call!((self.deter()).has_inv())
         .try_cast().unwrap_or(false)
     }
 
+    /// matrix.inv -> matrix
+    /// Multiplicative inverse of 'matrix'
     pub fn inv(&self) -> Object {
         let (inv, det) = self.clone().inverse();
         if let Some(det) = det { self.deter.set(Some(det)); }
         inv
     }
 
+    /// matrix.deter -> any
+    /// Determinant of 'matrix'
     pub fn deter(&self) -> Object {
         let det = if let Some(det) = self.deter.take() { det }
         else { self.clone().into_determinant() };

@@ -1,0 +1,127 @@
+# Test help messages
+
+# Help message of error
+help (null + null) = `Eval Error: Binary operator + not implemented between null and null`,
+
+# Help messages of methods
+help [1, 2].len = `array.len -> natural
+ Number of elements in 'array'`,
+help 3.gcd = `a.gcd (b: number) -> rational
+ Greatest commmon divisor of 'a' and 'b'`,
+help ([1] + ["a"]).map = `array.map (f: (x: any) -> any) -> array
+ Apply function 'func' to every element of 'array'`,
+
+# Help messages of objects
+help (1.2 + 2.3) = `number:
+ Real or rational number. A real is stored in 64-bit floating point.
+ A rational is a 64-bit signed numerator with a 64-bit unsigned denominator.
+ All operations convert rationals to reals when operating with reals.
+
+Operators:
+
+ -number -> number
+ Negation of 'number'
+
+ number <= number -> bool
+ Implements standard ordering of reals
+
+ number + number -> number
+ Add numbers
+
+ number - number -> number
+ Subtract numbers
+
+ number * number -> number
+ Multiply numbers
+
+ number / number -> number
+ Divide numbers
+
+ number % number -> number
+ Get remainder after dividing
+
+ number // number -> number
+ Get greatest integer less than or equal to the quotient
+
+Methods:
+rational.numer -> number
+rational.denom -> number
+integer.digits (b: natural) -> array of integers
+number.has_inv -> bool
+number.inv -> number
+number.str -> string
+number.abs -> number
+number.signum -> number
+number.real -> real
+number.floor -> integer
+number.ceil -> integer
+number.round -> integer
+number.sqrt -> real
+number.cbrt -> real
+number.sin -> real
+number.cos -> real
+number.tan -> real
+number.asin -> real
+number.acos -> real
+number.atan -> real
+y.atan2 (x: number) -> real
+number.sinh -> real
+number.cosh -> real
+number.tanh -> real
+number.asinh -> real
+number.acosh -> real
+number.atanh -> real
+number.exp -> real
+number.exp2 -> real
+number.ln -> real
+number.log10 -> real
+number.log2 -> real
+b.log (x: number) -> number
+a.gcd (b: number) -> rational
+a.lcm (b: number) -> rational
+natural.factorial -> natural
+number.choose (k: natural) -> number`,
+help [] = `array:
+ Dynamically sized heterogeneous list of objects
+
+Operators:
+
+ array + array -> array
+ Concatentate two arrays
+
+ array * (n: natural) -> array
+ (n: natural) * array -> array
+ Concatenate 'n' copies of 'array' together
+
+ array (i: natural) -> any
+ Return element of 'array' at index 'i'
+
+Methods:
+array.len -> natural
+array.fst -> any
+array.snd -> any
+array.last -> any
+array.map (f: (x: any) -> any) -> array
+array.filter (pred: (x: any) -> bool) -> array
+array.fold (init: any) (f: (accum: any) (x: any) -> any) -> any
+array.all (pred: (x: any) -> bool) -> bool
+array.any (pred: (x: any) -> bool) -> bool
+array.has (target: any) -> bool
+array.sum -> any
+array.prod -> any
+array.max -> any
+array.min -> any
+array.rev -> array`,
+
+# Help messages of attributes of maps
+m: {a: 2, b: true, c: null},
+help m.c = `null:
+ Null value. Exists for compatability with JSON
+
+Operators:
+
+Methods:`,
+
+# Test manipulation of help message
+(help null).as_string + "   Extra..." = `"null:\n Null value. Exists for compatability with JSON\n\nOperators:\n\nMethods:   Extra..."`,
+

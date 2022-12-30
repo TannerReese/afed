@@ -6,11 +6,15 @@ use std::ffi::OsString;
 
 use crate::expr::{ExprId, Pattern, Bltn};
 
-use crate::object::{Object, Unary, Binary, Assoc};
+use crate::object::{
+    Object, Operable,
+    Unary, Binary, Assoc,
+    NamedType
+};
 use crate::object::null::Null;
 use crate::object::bool::{Bool, Ternary};
 use crate::object::number::Number;
-use crate::object::string::Str;
+use crate::object::string::PrintStr;
 
 use super::{Docmt, Subst};
 
@@ -46,6 +50,30 @@ impl Display for ParseError {
 
 macro_rules! parse_err {
     ($pos:expr, $($arg:tt)+) => { $pos.error(format!($($arg)+)) }
+}
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Help();
+name_type!{help: Help}
+
+impl_operable!{Help:
+    #[call]
+    fn __call(&self, attr: String, obj: Object) -> Result<PrintStr, String> {
+        obj.help(if attr == "" { None } else { Some(attr.as_str()) })
+        .map(&PrintStr)
+        .ok_or_else(|| format!("No help exists for attribute '{}'", attr))
+    }
+}
+
+impl Display for Help {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>
+        { write!(f, "help") }
+}
+
+impl From<Help> for Object {
+    fn from(h: Help) -> Self { Object::new(h) }
 }
 
 
@@ -188,18 +216,23 @@ impl<'a> Pos<'a> {
     }
 
     fn number(&mut self) -> ParseResult<Number> {
-        seq!(self:
-            self.skip(),
-            self.while_char(|c| c.is_ascii_digit() || c == '.')
-            .and_then(|numstr|
-                if let Ok(n) = numstr.parse::<i64>() {
-                    Ok(Number::Ratio(n, 1))
-                } else if let Ok(f) = numstr.parse::<f64>() {
-                    Ok(Number::Real(f))
-                } else { Err(Some(parse_err!(self, "Invalid Number"))) }
-
+        let (intstr, fracstr) = seq!(self: self.skip(),
+            tuple!(self:
+                self.while_char(|c| c.is_ascii_digit()),
+                opt!(seq!(self:
+                    self.char('.'), self.while_char(|c| c.is_ascii_digit())
+                ))
             )
-        )
+        )?;
+
+        if let Some(fracstr) = fracstr {
+            if let Ok(f) = format!("{}.{}", intstr, fracstr).parse::<f64>() {
+                return Ok(Number::Real(f))
+            }
+        } else if let Ok(n) = intstr.parse::<i64>() {
+            return Ok(Number::Ratio(n, 1))
+        }
+        Err(Some(parse_err!(self, "Invalid Number")))
     }
 
     fn name(&mut self) -> ParseResult<String> {
@@ -333,7 +366,7 @@ impl<'a> Pos<'a> {
                 let arg = self.expr(doc, min_prec)?;
                 Ok(doc.arena.create_unary(op, arg))
             })),
-            self.call(doc)
+            alt!(self.help(doc), self.call(doc))
         )?;
 
         _ = many0!(revert!(self: self.binary().and_then(|op| {
@@ -365,9 +398,21 @@ impl<'a> Pos<'a> {
         many0!(seq!(self: self.char('.'), self.name()))
     )}
 
+    fn help(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
+        let (mut tgt, mut attrs) = seq!(self:
+            self.tag("help"), self.access(doc)
+        )?;
+        let last = attrs.pop().unwrap_or(String::new());
+        if attrs.len() > 0 { tgt = doc.arena.create_access(tgt, attrs); }
+
+        let help = doc.arena.create_obj(Help());
+        let last = doc.arena.create_obj(last);
+        Ok(doc.arena.create_call(help, vec![], vec![last, tgt]))
+    }
+
     fn single(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
         seq!(self: self.skip(), alt!(
-            self.string().map(|s| doc.arena.create_obj(Str(s))),
+            self.string().map(|s| doc.arena.create_obj(s)),
             seq!(self:
                 self.char('('), self.defn(doc), self.char(')')
             ),

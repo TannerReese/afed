@@ -40,6 +40,17 @@ impl Operable for Map {
         Some(_) => Some(0),
     }}
 
+    fn help(&self, attr: Option<&str>) -> Option<String> {
+        if let Some(key) = attr {
+            self.0.get(key).and_then(|obj| obj.help(None))
+        } else {
+            let mut msg = "map:\nCollection of key-value pairs".to_owned();
+            msg += "\n\nKeys:";
+            for key in self.0.keys() { msg = msg + " " + key; }
+            Some(msg)
+        }
+    }
+
     fn call(&self, attr: Option<&str>, mut args: Vec<Object>) -> Object {
         let s: String;
         let key = if let Some(key) = attr { key } else {

@@ -23,19 +23,47 @@ pub struct Plot {
 name_type!{plot: Plot}
 
 impl_operable!{Plot:
+    //! Grid of ASCII characters on which points and curves can be drawn.
+    //! Points are represented by an array of two numbers.
+    //!     plot + [0, 1]
+    //! draws a point at (0, 1).
+    //! Functional curves are represented by one-variable functions
+    //!     plot + (\x: x^2 + 1)
+    //! draws the graph of the function f(x) = x^2 + 1.
+    //! Implicit curves are represented by two-variable functions
+    //!     plot + (\x y: x^2 - y^3)
+    //! draws the locus of points fulfilling x^2 = y^3.
+
+    /// plot + (object: any) -> plot
+    /// (object: any) + plot -> plot
+    /// Draw 'object' onto 'plot'
     #[binary(comm, Add)]
     fn _(plt: Self, other: Object) -> Plot { plt + other }
 
+    /// plot.width -> real
+    /// Width of viewport in plane
     pub fn width(&self) -> f64 { self.width }
+    /// plot.height -> real
+    /// Height of viewport in plane
     pub fn height(&self) -> f64 { self.height }
+    /// plot.corner -> [real, real]
+    /// Coordinates of the upper left corner of the viewport
     pub fn corner(&self) -> (f64, f64) { self.corner }
 
+    /// plot.center -> [real, real]
+    /// Coordinates of the center of the viewport
     pub fn center(&self) -> (f64, f64) {(
         self.corner.0 + self.width / 2.0, self.corner.1 - self.height / 2.0
     )}
 
+    /// plot.rows -> natural
+    /// Number of rows of characters in the grid
     pub fn rows(&self) -> usize { self.rows }
+    /// plot.cols -> natural
+    /// Number of columns of characters in the grid
     pub fn cols(&self) -> usize { self.columns }
+    /// plot.errors -> array of strings
+    /// Array of error messages
     pub fn errors(&self) -> Vec<String> { self.errors.clone() }
 }
 

@@ -30,15 +30,27 @@ pub struct Vector(Vec<Object>);
 name_type!{vector: Vector}
 
 impl_operable!{Vector:
+    //! Vector of any dimension containing heterogeneous components.
+
+    /// -vector -> vector
+    /// Negation of vectors
     #[unary(Neg)] fn _(v: Self) -> Self { -v }
+    /// vector + vector -> vector
+    /// Addition of vectors
     #[binary(Add)] fn _(v1: Self, v2: Self) -> Result<Self, String>
         { Self::check_dims(v1, v2).map(|(v1, v2)| v1 + v2) }
+    /// vector - vector -> vector
+    /// Subtraction of vectors
     #[binary(Sub)] fn _(v1: Self, v2: Self) -> Result<Self, String>
         { Self::check_dims(v1, v2).map(|(v1, v2)| v1 - v2) }
-
+    /// vector * vector -> any
+    /// Dot product of vectors
     #[binary(Mul)] fn _(v1: Self, v2: Self) -> Result<Object, String>
         { Self::check_dims(v1, v2).map(|(v1, v2)| v1 * v2) }
 
+    /// (scalar: any) * vector -> vector
+    /// vector * (scalar: any) -> vector
+    /// Scale vector by 'scalar' (which cannot be a matrix)
     #[binary(Mul)]
     #[exclude(Matrix)]
     fn _(v: Self, scalar: Object) -> Self { v * scalar }
@@ -47,18 +59,26 @@ impl_operable!{Vector:
     #[exclude(Matrix)]
     fn _(v: Self, scalar: Object) -> Self { scalar * v }
 
+    /// vector / (scalar: any) -> vector
+    /// Scale vector by inverse of 'scalar' (which cannot be a matrix)
     #[binary(Div)]
-    #[binary(Matrix)]
+    #[exclude(Matrix)]
     fn _(v: Self, scalar: Object) -> Self { v / scalar }
 
+    /// vector % (mod: any) -> vector
+    /// Reduce each component of 'vector' with modulo 'mod'
     #[binary(Mod)]
     #[exclude(Matrix)]
     fn _(v: Self, scalar: Object) -> Self { v % scalar }
 
+    /// vector // (divisor: any) -> vector
+    /// Floor divide each component of 'vector' by 'divisor'
     #[binary(FlrDiv)]
     #[exclude(Matrix)]
     fn _(v: Self, scalar: Object) -> Self { v.flrdiv(scalar) }
 
+    /// vector (i: natural) -> any
+    /// Get the 'i'th component of 'vector'
     #[call]
     fn __call(&self, idx: usize) -> Result<Object, String> {
         if let Some(obj) = self.0.get(idx) { Ok(obj.clone()) }
@@ -67,11 +87,21 @@ impl_operable!{Vector:
         ))}
     }
 
+    /// vector.dims -> natural
+    /// Dimension of 'vector' which is the number of components
     pub fn dims(&self) -> usize { self.0.len() }
+    /// vector.comps -> array
+    /// Array containing the components of 'vector'
     pub fn comps(self) -> Vec<Object> { self.0 }
 
+    /// vector.mag2 -> any
+    /// Dot product of 'vector' with itself
+    /// which is the squared magnitude of 'vector'
     pub fn mag2(self) -> Object
         { self.0.into_iter().map(|x| x.clone() * x).sum() }
+    /// vector.mag -> any
+    /// Square root of the dot product of 'vector' with itself.
+    /// Requires dot product to have 'sqrt' method
     pub fn mag(self) -> Object
         { call!((self.mag2()).sqrt()) }
 }

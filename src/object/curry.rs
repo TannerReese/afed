@@ -56,6 +56,18 @@ impl Operable for Curry {
         _ => None,
     }}
 
+    fn help(&self, attr: Option<&str>) -> Option<String> { match attr {
+        None => Some(concat!("Partial Evaluation:\n",
+            "Function or Method with some of the arguments already given",
+            "\n\nMethods:\narity -> usize"
+        ).to_owned()),
+        Some("arity") => Some(concat!("arity -> usize\n",
+            "Number of further arguments that need to be provided\n",
+            "before the function or method can be fully evaluated."
+        ).to_owned()),
+        _ => None,
+    }}
+
     fn call(&self,
         attr: Option<&str>, mut new_args: Vec<Object>
     ) -> Object { match attr {

@@ -42,6 +42,17 @@ impl Operable for Func {
         _ => None,
     }}
 
+    fn help(&self, attr: Option<&str>) -> Option<String> { match attr {
+        None => Some(concat!("user-defined function:\n",
+            "Lambda or Function defined by user",
+            "\n\nMethods:\narity -> usize"
+        ).to_owned()),
+        Some("arity") => Some(concat!("arity -> usize\n",
+            "Number of arguments to function or lambda"
+        ).to_owned()),
+        _ => None,
+    }}
+
     fn call(&self,
         attr: Option<&str>, args: Vec<Object>
     ) -> Object { match attr {

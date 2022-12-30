@@ -46,13 +46,33 @@ pub struct Modulo {
 name_type!{modulo: Modulo}
 
 impl_operable!{Modulo:
+    //! Residue class of a modular ring or an integer.
+    //! Stored as a 64-bit signed residue and a 64-bit unsigned modulo.
+    //! All operations convert integers to the appropriate modulo.
+    //! When operators have arguments with different modulos,
+    //! the GCD of the modulos is used.
+
+    /// -modulo -> modulo
+    /// Negation in modular ring
     #[unary(Neg)] fn _(m: Self) -> Self { -m }
 
+    /// modulo + modulo -> modulo
+    /// Add residue classes
     #[binary(Add)] fn _(m1: Self, m2: Self) -> Self { m1 + m2 }
+    /// modulo - modulo -> modulo
+    /// Subtract residue classes
     #[binary(Sub)] fn _(m1: Self, m2: Self) -> Self { m1 - m2 }
+    /// modulo * modulo -> modulo
+    /// Multiply residue classes
     #[binary(Mul)] fn _(m1: Self, m2: Self) -> Self { m1 * m2 }
+    /// modulo / modulo -> modulo
+    /// Divide residue classes by multiplying by the inverse
     #[binary(Div)] fn _(m1: Self, m2: Self) -> Self { m1 / m2 }
+    /// modulo % modulo -> modulo
+    /// Reduce residue class further to smaller modulo
     #[binary(Mod)] fn _(m1: Self, m2: Self) -> Self { m1 % m2 }
+    /// modulo ^ integer -> modulo
+    /// Raise residue class to an integer power
     #[binary(Pow)] fn _(m: Self, k: i64) -> Self { m.pow(k) }
 
     #[binary(comm, Add)]
@@ -72,11 +92,20 @@ impl_operable!{Modulo:
     #[binary(Mod, rev)]
     fn _(m: Self, n: Number) -> Result<Self, String> { n % m }
 
+    /// modulo.resid -> integer
+    /// Smallest positive integer representation of residue class
+    /// or integer itself if modulo is an integer
     pub fn resid(self) -> i64 { self.residue }
+    /// modulo.modulo -> natural
+    /// Modulo for modular ring or zero if 'modulo' is an integer
     pub fn modulo(self) -> u64 { self.modulo }
 
+    /// modulo.has_inv -> bool
+    /// True when residue class has a multiplicative inverse
     pub fn has_inv(self) -> bool
         { bezout(self.residue.abs() as u64, self.modulo).0 == 1 }
+    /// modulo.inv -> modulo
+    /// Multiplicative inverse of residue class
     pub fn inv(self) -> Self {
         if self.residue == 1 || self.residue == -1 { self }
         else if self.modulo > 0 {
@@ -87,6 +116,9 @@ impl_operable!{Modulo:
         } else { Modulo::from(0, 1) }
     }
 
+    /// modulo.order -> natural
+    /// Smallest positive integer 'k' such that 'modulo ^ k == 1'
+    /// or zero if 'modulo' is not invertible
     pub fn order(self) -> u64 {
         if bezout(self.residue.abs() as u64, self.modulo).0 > 1 {
             return 0;

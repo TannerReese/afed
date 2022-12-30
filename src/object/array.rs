@@ -15,34 +15,56 @@ name_type!{array: Array}
 
 
 impl_operable!{Array:
+    //! Dynamically sized heterogeneous list of objects
+
+    /// array + array -> array
+    /// Concatentate two arrays
     #[binary(Add)]
     fn _(arr1: Self, arr2: Vec<Object>) -> Self {
         let (mut arr1, mut arr2) = (arr1, arr2);
         arr1.0.append(&mut arr2);  arr1
     }
 
+    /// array * (n: natural) -> array
+    /// (n: natural) * array -> array
+    /// Concatenate 'n' copies of 'array' together
     #[binary(Mul, comm)]
     fn _(arr: Vec<Object>, times: usize) -> Vec<Object>
         { repeat(arr).take(times).flatten().collect() }
 
+    /// array (i: natural) -> any
+    /// Return element of 'array' at index 'i'
     #[call]
     fn __call(&self, idx: usize) -> Result<Object, String> {
         if let Some(obj) = self.0.get(idx) { Ok(obj.clone()) }
         else { Err(format!("Index {} is out of bounds", idx)) }
     }
 
+    /// array.len -> natural
+    /// Number of elements in 'array'
     pub fn len(&self) -> usize { self.0.len() }
 
+    /// array.fst -> any
+    /// First element of 'array'
     pub fn fst(&self) -> Result<Object, &str>
         { self.0.get(0).cloned().ok_or("Array has no first element") }
+    /// array.snd -> any
+    /// Second element of 'array'
     pub fn snd(&self) -> Result<Object, &str>
         { self.0.get(1).cloned().ok_or("Array has no second element") }
+    /// array.last -> any
+    /// Last element of 'array'
     pub fn last(&self) -> Result<Object, &str>
         { self.0.last().cloned().ok_or("Array has no last element") }
 
+    /// array.map (f: (x: any) -> any) -> array
+    /// Apply function 'func' to every element of 'array'
     pub fn map(self, func: Object) -> Self
         { self.0.into_iter().map(|x| call!(func(x))).collect() }
 
+    /// array.filter (pred: (x: any) -> bool) -> array
+    /// Apply 'pred' to every element of 'array'.
+    /// Creates new array containing elements that return true
     pub fn filter(self, pred: Object) -> Result<Self, ErrObject> {
         let mut new_arr = Vec::with_capacity(self.0.len());
         for x in self.0.into_iter() {
@@ -53,6 +75,10 @@ impl_operable!{Array:
         Ok(new_arr.into())
     }
 
+    /// array.fold (init: any) (f: (accum: any) (x: any) -> any) -> any
+    /// Fold values into accumulator starting with 'init'.
+    /// 'f' takes the accumulator 'accum' and
+    /// the next element 'x' of 'array' as arguments
     pub fn fold(self,
         init: Object, func: Object
     ) -> Result<Object, ErrObject> {
@@ -63,19 +89,35 @@ impl_operable!{Array:
         Ok(work)
     }
 
+    /// array.all (pred: (x: any) -> bool) -> bool
+    /// Check if all the elements fulfill 'pred'
     pub fn all(&self, pred: Object) -> bool { self.all_or_any(true, pred) }
+    /// array.any (pred: (x: any) -> bool) -> bool
+    /// Check if any element fulfills 'pred'
     pub fn any(&self, pred: Object) -> bool { self.all_or_any(false, pred) }
 
+    /// array.has (target: any) -> bool
+    /// Check if 'array' contains the element 'target'
     pub fn has(&self, target: Object) -> bool { self.0.contains(&target) }
 
+    /// array.sum -> any
+    /// Sum all of the elements in the 'array'
     pub fn sum(self) -> Object { self.0.into_iter().sum() }
+    /// array.prod -> any
+    /// Multiply all of the elements in the 'array'
     pub fn prod(self) -> Object { self.0.into_iter().product() }
 
+    /// array.max -> any
+    /// Maximum of the elements in the 'array'
     pub fn max(&self) -> Result<Object, &'static str>
         { self.extreme(Ordering::Greater) }
+    /// array.min -> any
+    /// Minimum of the elements in the 'array'
     pub fn min(&self) -> Result<Object, &'static str>
         { self.extreme(Ordering::Less) }
 
+    /// array.rev -> array
+    /// Reverse the order of elements in the 'array'
     pub fn rev(self) -> Self { self.0.into_iter().rev().collect() }
 }
 

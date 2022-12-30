@@ -31,6 +31,17 @@ impl<const N: usize> Operable for BltnFunc<N> {
         _ => None,
     }}
 
+    fn help(&self, attr: Option<&str>) -> Option<String> { match attr {
+        None => Some(concat!("builtin function:\n",
+            "Function implemented by backend and exposed to users",
+            "\n\nMethods:\narity -> usize"
+        ).to_owned()),
+        Some("arity") => Some(concat!("arity -> usize\n",
+            "Number of arguments to builtin function"
+        ).to_owned()),
+        _ => None,
+    }}
+
     fn call(&self,
         attr: Option<&str>, args: Vec<Object>
     ) -> Object { match attr {

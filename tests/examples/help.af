@@ -1,0 +1,21 @@
+# Test help messages
+
+# Help message of error
+help (null + null) = ``,
+
+# Help messages of methods
+help [1, 2].len = ``,
+help 3.gcd = ``,
+help ([1] + ["a"]).map = ``,
+
+# Help messages of objects
+help (1.2 + 2.3) = ``,
+help [] = ``,
+
+# Help messages of attributes of maps
+m: {a: 2, b: true, c: null},
+help m.c = ``,
+
+# Test manipulation of help message
+(help null).as_string + "   Extra..." = ``,
+
