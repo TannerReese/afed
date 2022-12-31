@@ -1,109 +1,163 @@
-use std::collections::HashMap;
-use std::iter::zip;
-
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Object, EvalError, ErrObject};
+use crate::object::{Object, ErrObject};
 use crate::object::number::Number;
 use crate::object::array::Array;
 
-pub fn range(mut start: Number, end: Number, step: Number) -> Object {
-    let zero = 0.into();
-    if step == zero {
-        return eval_err!("Cannot have a step of zero")
-    }
+create_bltns!{arr:
+    /// arr.range (start: number) (end: number) -> array of numbers
+    /// Generate sequence of numbers starting at 'start'
+    /// increasing by one up to and potentially including 'end'
+    fn range(start: Number, end: Number) -> Result<Vec<Number>, &'static str>
+        { range_step(start, end, 1.into()) }
 
-    let is_desc = step < zero;
-    if is_desc && start <= end {
-        return eval_err!("When descending, the start must be greater than the end")
-    } else if !is_desc && end <= start {
-        return eval_err!("When ascending, the start must be less than the end")
-    }
+    /// arr.range_step (start: number) (end: number) (step: number) -> array of numbers
+    /// Generate sequence of numbers starting at 'start'
+    /// increasing by 'step' up to and potentially including 'end'
+    pub fn range_step(
+        start: Number, end: Number, step: Number
+    ) -> Result<Vec<Number>, &'static str> {
+        let mut start = start;
+        let zero = 0.into();
+        if step == zero { return Err("Cannot have a step of zero") }
 
-    let mut elems = Vec::new();
-    let is_desc = if is_desc { -1 } else { 1 }.into();
-    while (end - start) * is_desc >= zero {
-        elems.push(start);
-        start += step;
-    }
-    elems.into()
-}
+        let is_desc = step < zero;
+        if is_desc && start <= end { return Err(
+            "When descending, the start must be greater than the end"
+        )} else if !is_desc && end <= start { return Err(
+            "When ascending, the start must be less than the end"
+        )}
 
-pub fn iter(init: Object, times: usize, func: Object) -> Object {
-    if times == 0 { return Vec::<Object>::new().into() }
-
-    let mut elems = Vec::new();
-    let mut work = init;
-    for _ in 1..times {
-        elems.push(work.clone());
-        work = call!(func(work));
-    }
-    elems.push(work);
-    elems.into()
-}
-
-pub fn iter_while(
-    init: Object, pred: Object, func: Object
-) -> Result<Vec<Object>, ErrObject> {
-    let mut elems = Vec::new();
-    let mut work = init;
-    while call!(pred(work.clone())).ok_or_err()?.cast()? {
-        elems.push(work.clone());
-        work = call!(func(work));
-    }
-    Ok(elems)
-}
-
-
-pub fn make_bltns() -> Bltn {
-    let mut arr = HashMap::new();
-    def_bltn!(arr.range(x: Number, y: Number) = range(x, y, 1.into()));
-    def_bltn!(arr.range_step(x: Number, y: Number, step: Number) =
-        range(x, y, step));
-
-    def_bltn!(arr.iter(init, times: usize, f) = iter(init, times, f));
-    def_bltn!(arr.iter_while(init, pred, f) =
-        iter_while(init, pred, f).into());
-
-    def_bltn!(arr.zip(v1: Vec<Object>, v2: Vec<Object>) =
-        zip(v1, v2).collect());
-    def_bltn!(arr.zip_with(f, v1: Vec<Object>, v2: Vec<Object>) =
-        zip(v1, v2).map(|(x, y)| call!(f(x, y))).collect());
-
-    def_bltn!(arr.fst(vc: Vec<Object>) = {
-        let mut vc = vc;
-        if vc.len() >= 1 { vc.remove(0) } else {
-            eval_err!("Array does not have a first element")
+        let mut elems = Vec::new();
+        let is_desc = if is_desc { -1 } else { 1 }.into();
+        while (end - start) * is_desc >= zero {
+            elems.push(start);
+            start += step;
         }
-    });
-    def_bltn!(arr.snd(vc: Vec<Object>) = {
-        let mut vc = vc;
-        if vc.len() >= 2 { vc.remove(1) } else {
-            eval_err!("Array does not have a second element")
+        Ok(elems)
+    }
+
+    /// arr.iter (x0: any) (len: natural) (f: any -> any) -> array
+    /// Generate array by repeatedly applying 'f' to 'x0'
+    /// so the final array has length 'len'
+    /// Example:    'arr.iter x 3 f == [x, f x, f (f x)]'
+    pub fn iter(
+        init: Object, times: usize, func: Object
+    ) -> Result<Vec<Object>, ErrObject> {
+        if times == 0 { return Ok(vec![]) }
+
+        let mut elems = Vec::new();
+        let mut work = init;
+        for _ in 1..times {
+            elems.push(work.clone());
+            work = call!(func(work)).ok_or_err()?;
         }
-    });
-   def_bltn!(arr.last(vc: Vec<Object>) = {
-        let mut vc = vc;
-        if let Some(elem) = vc.pop() { elem } else {
-            eval_err!("Array does not have a last element")
+        elems.push(work);
+        Ok(elems)
+    }
+
+    /// arr.iter_while (x0: any) (pred: any -> bool) (f: any -> any) -> array
+    /// Generate array by repeatedly applying 'f' to 'x0'
+    /// until 'pred' fails for one of the results
+    /// Example:    'arr.iter_while 0 (\x: x < 3) (\x: x + 1)== [0, 1, 2]'
+    pub fn iter_while(
+        init: Object, pred: Object, func: Object
+    ) -> Result<Vec<Object>, ErrObject> {
+        let mut elems = Vec::new();
+        let mut work = init;
+        while call!(pred(work.clone())).ok_or_err()?.cast()? {
+            elems.push(work.clone());
+            work = call!(func(work));
         }
-    });
+        Ok(elems)
+    }
 
 
-    def_getter!(arr.len);
-    def_getter!(arr.sum);
-    def_getter!(arr.prod);
-    def_getter!(arr.max);
-    def_getter!(arr.min);
-    def_getter!(arr.rev);
 
-    def_bltn!(arr.map(f, a: Array) = a.map(f).into());
-    def_bltn!(arr.filter(f, a: Array) = a.filter(f).into());
-    def_bltn!(arr.fold(init, f, a: Array) = a.fold(init, f).into());
-    def_bltn!(arr.all(f, a: Array) = a.all(f).into());
-    def_bltn!(arr.any(f, a: Array) = a.any(f).into());
-    def_bltn!(arr.has(elm, a: Array) = a.has(elm).into());
-    Bltn::Map(arr)
+    /// arr.zip (xs: array) (ys: array) -> array of [any, any]
+    /// Create array by pairing up corresponding
+    /// elements of 'xs' and 'ys' for their shared length
+    /// Example:    'arr.zip [0, true, 2] ["a", 2] == [[0, "a"], [true, 2]]'
+    pub fn zip(v1: Vec<Object>, v2: Vec<Object>) -> Vec<(Object, Object)>
+        { std::iter::zip(v1, v2).collect() }
+
+    /// arr.zip_with (f: (x: any) (y: any) -> any) (xs: array) (ys: array) -> array
+    /// Create array by applying 'f' to corresponding
+    /// elements of 'xs' and 'ys' for their shared length
+    /// Example:    'arr.zip_with (\x y: x + y) [0, 1, 2] [10, 20] == [10, 21]'
+    pub fn zip_with(f: Object, v1: Vec<Object>, v2: Vec<Object>) -> Vec<Object>
+        { std::iter::zip(v1, v2).map(|(x, y)| call!(f(x, y))).collect() }
+
+
+
+    /// arr.fst (a: array) -> any
+    /// First element of 'a'
+    pub fn fst(v: Vec<Object>) -> Result<Object, &'static str> {
+        let mut v = v;
+        if v.len() >= 1 { Ok(v.remove(0)) }
+        else { Err("Array does not have a first element")}
+    }
+
+    /// arr.snd (a: array) -> any
+    /// Second element of 'a'
+    pub fn snd(v: Vec<Object>) -> Result<Object, &'static str> {
+        let mut v = v;
+        if v.len() >= 2 { Ok(v.remove(1)) }
+        else { Err("Array does not have a second element")}
+    }
+
+    /// arr.last (a: array) -> any
+    /// Last element of 'a'
+    pub fn last(v: Vec<Object>) -> Result<Object, &'static str> {
+        let mut v = v;
+        if let Some(elem) = v.pop() { Ok(elem) }
+        else { Err("Array does not have a last element")}
+    }
+
+
+
+    /// arr.len (x: any) -> any
+    /// Call method 'len' on 'x'
+    fn len(obj: Object) -> Object { call!(obj.len) }
+    /// arr.sum (x: any) -> any
+    /// Call method 'sum' on 'x'
+    fn sum(obj: Object) -> Object { call!(obj.sum) }
+    /// arr.prod (x: any) -> any
+    /// Call method 'prod' on 'x'
+    fn prod(obj: Object) -> Object { call!(obj.prod) }
+    /// arr.max (x: any) -> any
+    /// Call method 'max' on 'x'
+    fn max(obj: Object) -> Object { call!(obj.max) }
+    /// arr.min (x: any) -> any
+    /// Call method 'min' on 'x'
+    fn min(obj: Object) -> Object { call!(obj.min) }
+    /// arr.rev (x: any) -> any
+    /// Call method 'rev' on 'x'
+    fn rev(obj: Object) -> Object { call!(obj.rev) }
+
+    /// arr.map (f: any -> any) (a: array) -> array
+    /// Apply 'f' to every element of 'a'
+    fn map(f: Object, a: Array) -> Array { a.map(f) }
+    /// arr.filter (pred: any -> bool) (a: array) -> array
+    /// Apply 'pred' to every element of 'a'.
+    /// Creates new array containing elements that return true
+    fn filter(pred: Object, a: Array) -> Result<Array, Object>
+        { a.filter(pred) }
+    /// arr.fold (init: any) (f: (accum: any) (x: any) -> any) (a: array) -> any
+    /// Fold values into accumulator starting with 'init'.
+    /// 'f' takes the accumulator 'accum' and
+    /// the next element 'x' of 'a' as arguments
+    fn fold(init: Object, f: Object, a: Array) -> Result<Object, Object>
+        { a.fold(init, f) }
+    /// arr.all (pred: any -> bool) (a: array) -> bool
+    /// Check if all the elements of 'a' fulfill 'pred'
+    fn all(pred: Object, a: Array) -> bool { a.all(pred) }
+    /// arr.any (pred: any -> bool) (a: array) -> bool
+    /// Check if any element in 'a' fulfills 'pred'
+    fn any(pred: Object, a: Array) -> bool { a.any(pred) }
+    /// arr.has (target: any) (a: array) -> bool
+    /// Check if 'a' contains the element 'target'
+    fn has(elem: Object, a: Array) -> bool { a.has(elem) }
 }
 

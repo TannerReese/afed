@@ -6,6 +6,7 @@ use crate::object::{Operable, Object, Unary, Binary, NamedType};
 #[derive(Clone, Copy)]
 pub struct BltnFunc<const N: usize> {
     pub name: &'static str,
+    pub help: &'static str,
     ptr: fn([Object; N]) -> Object,
 }
 
@@ -15,8 +16,9 @@ impl<const N: usize> NamedType for BltnFunc<N> {
 
 impl<const N: usize> BltnFunc<N> {
     pub fn new(
-        name: &'static str, ptr: fn([Object; N]) -> Object
-    ) -> Object { BltnFunc {name, ptr}.into() }
+        name: &'static str, help: &'static str,
+        ptr: fn([Object; N]) -> Object
+    ) -> Object { BltnFunc {name, help, ptr}.into() }
 }
 
 impl<const N: usize> Operable for BltnFunc<N> {
@@ -32,10 +34,7 @@ impl<const N: usize> Operable for BltnFunc<N> {
     }}
 
     fn help(&self, attr: Option<&str>) -> Option<String> { match attr {
-        None => Some(concat!("builtin function:\n",
-            "Function implemented by backend and exposed to users",
-            "\n\nMethods:\narity -> usize"
-        ).to_owned()),
+        None => Some(self.help.to_owned()),
         Some("arity") => Some(concat!("arity -> usize\n",
             "Number of arguments to builtin function"
         ).to_owned()),

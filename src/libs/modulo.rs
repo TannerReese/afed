@@ -1,5 +1,4 @@
 use std::mem::swap;
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 
@@ -7,9 +6,8 @@ use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object,
+    Operable, Object, NamedType,
     Unary, Binary,
-    NamedType, EvalError,
 };
 use crate::object::number::Number;
 
@@ -278,13 +276,17 @@ impl From<Modulo> for Object {
 
 
 
-pub fn make_bltns() -> Bltn {
-    let mut modulo = HashMap::new();
-    def_bltn!(static modulo("mod").Mod(m: Number) = match m {
-        Number::Ratio(0, 1) => eval_err!("Modulo can't be zero"),
-        Number::Ratio(m, 1) => Modulo::from(1, m.abs() as u64).into(),
-        _ => eval_err!("Modulo must be a non-zero integer"),
-    });
-    Bltn::Map(modulo)
+create_bltns!{modulo("mod"):
+    /// mod.Mod (m: integer) -> modulo
+    /// Return residue class '1 (mod m)'
+    /// Can be used to generate all residue classes
+    /// so '6 * mod.Mod 15' represents '6 (mod 15)'
+    #[allow(non_snake_case)]
+    #[global]
+    fn Mod(m: Number) -> Result<Modulo, &'static str> { match m {
+        Number::Ratio(0, 1) => Err("Modulo can't be zero"),
+        Number::Ratio(m, 1) => Ok(Modulo::from(1, m.abs() as u64)),
+        _ => Err("Modulo must be a non-zero integer"),
+    }}
 }
 

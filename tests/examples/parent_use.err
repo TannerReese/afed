@@ -6,7 +6,7 @@ Error: Redefinition of label 'redef' in map
 Parse Error in line 8, column 8 of "parent_use.af"
 |   [1, use + 3, "h"] = ``
 |          ^
-Error: 'use' keyword can only be used for importing
+Error: 'use' keyword cannot be used as a variable
 
 2 Parse Errors encountered
 

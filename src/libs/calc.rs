@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::{Add, Sub, Mul, Div, AddAssign};
 use std::iter::{zip, Product};
 use std::cmp::Ordering;
@@ -181,13 +180,6 @@ where I: Iterator<Item=Vec<f64>> {
     }).sum::<Object>() * Object::from(volume / count as f64)
 }
 
-pub fn derivative(direc: Object, f: Object, x: Object) -> Object {
-    let h = f64::EPSILON.cbrt();
-    let px = x.clone() - direc.clone() * Object::from(h);
-    let nx = x + direc * Object::from(h);
-    (call!(f(nx)) - call!(f(px))) / Object::from(2.0 * h)
-}
-
 pub fn extremum_grid(
     count: usize, direc: Ordering, mut bnds: Bounds<f64>, f: Object
 ) -> Result<(Vec<f64>, Object), Object> {
@@ -234,62 +226,119 @@ fn pt_to_obj<T: Into<Object>>(mut pt: Point<T>) -> Object {
 
 const EXTR_ITERS: usize = 30;
 
-pub fn make_bltns() -> Bltn {
-    let mut calc = HashMap::new();
-    def_bltn!(calc.integ_grid(size: u32, bnds: Bounds<f64>, f) = {
+create_bltns!{calc:
+    /// calc.integ_grid (size: natural) (bounds: array of [number, number]) (f: n-ary function) -> any
+    /// 'bounds' is an array with 'n' pairs (lower, upper).
+    /// 'f' must take 'n' numbers as arguments and return a scalable and summable value.
+    /// Integrates 'f' over the region defined by 'bounds'
+    /// by evaluating 'f' at the points of an 'n'-dimensional cubic grid
+    /// with 'size' grid points along one side.
+    fn integ_grid(size: u32, bnds: Bounds<f64>, f: Object) -> Object {
         let vol = bnds.volume();
         let grid = bnds.grid(size);
         integral(grid, vol, f)
-    });
-    def_bltn!(calc.integ_rand(count: usize, bnds: Bounds<f64>, f) = {
+    }
+
+    /// calc.integ_rand (count: natural) (bounds: array of [number, number]) (f: n-ary function) -> any
+    /// 'bounds' is an array with 'n' pairs (lower, upper).
+    /// 'f' must take 'n' numbers as arguments and return a scalable and summable value.
+    /// Integrates 'f' over the region defined by 'bounds'
+    /// by evaluating 'f' at 'count' randomly chosen points in 'boudns'.
+    fn integ_rand(count: usize, bnds: Bounds<f64>, f: Object) -> Object {
         let vol = bnds.volume();
         let rnd = bnds.rand(Some(count));
         integral(rnd, vol, f)
-    });
-
-    def_bltn!(calc.deriv(f, x) = derivative(1.into(), f, x));
-    def_bltn!(calc.direc_deriv(direc, f, x) = derivative(direc, f, x));
+    }
 
 
-    def_bltn!(calc.max(bnds: Bounds<f64>, f) =
+
+    /// calc.deriv (f: any -> any) (x: any) -> any
+    /// Differentiate 'f' at 'x' by comparing the value of
+    /// 'f (x - h)' and 'f (x + h)' where 'h' is a very small real number.
+    /// So 'x' must be able to be added to a real number.
+    fn deriv(f: Object, x: Object) -> Object { direc_deriv(1.into(), f, x) }
+
+    /// calc.direc_deriv (direc: any) (f: any -> any) (x: any) -> any
+    /// Differentiate 'f' at 'x' in the direction of 'direc'
+    /// by comparing the value of 'f (x - h * direc)' and 'f (x + h * direc)'
+    /// where 'h' is a very small real number.
+    /// So 'direc' must be able to be multiplied by a
+    /// real number and added to 'x'.
+    fn direc_deriv(direc: Object, f: Object, x: Object) -> Object {
+        let h = f64::EPSILON.cbrt();
+        let px = x.clone() - direc.clone() * Object::from(h);
+        let nx = x + direc * Object::from(h);
+        (call!(f(nx)) - call!(f(px))) / Object::from(2.0 * h)
+    }
+
+
+
+    /// calc.max (bounds: array of [number, number]) (f: n-ary function) -> any
+    /// Same arguments as 'calc.max_pt'.
+    /// Returns only the value of the maximum.
+    fn max(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
         }
-    );
-    def_bltn!(calc.argmax(bnds: Bounds<f64>, f) =
+    }
+
+    /// calc.argmax (bounds: array of [number, number]) (f: n-ary function) -> point
+    /// Same arguments as 'calc.max_pt'.
+    /// Returns only the point that achieves the maximum.
+    fn argmax(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((pt, _)) => pt_to_obj(pt),
         }
-    );
-    def_bltn!(calc.max_pt(bnds: Bounds<f64>, f) =
+    }
+
+    /// calc.max_pt (bounds: array of [number, number]) (f: n-ary function) -> (point, any)
+    /// 'bounds' is an array with 'n' pairs (lower, upper).
+    /// 'f' must take 'n' numbers as arguments and return an orderable value.
+    /// Find the point with the maximum value of 'f'
+    /// whose coordinates lie within the bounds given by 'bounds'.
+    /// Both the point and value of the maximum are returned as a pair.
+    fn max_pt(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Greater, bnds, f) {
             Err(err) => err,
             Ok((pt, val)) => vec![pt_to_obj(pt), val].into(),
         }
-    );
+    }
 
 
-    def_bltn!(calc.min(bnds: Bounds<f64>, f) =
+
+    /// calc.min (bounds: array of [number, number]) (f: n-ary function) -> any
+    /// Same arguments as 'calc.min_pt'.
+    /// Returns only the value of the minimum.
+    fn min(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((_, val)) => val,
         }
-    );
-    def_bltn!(calc.argmin(bnds: Bounds<f64>, f) =
+    }
+
+    /// calc.argmin (bounds: array of [number, number]) (f: n-ary function) -> point
+    /// Same arguments as 'calc.min_pt'.
+    /// Returns only the point that achieves the minimum.
+    fn argmin(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((pt, _)) => pt_to_obj(pt),
         }
-    );
-    def_bltn!(calc.min_pt(bnds: Bounds<f64>, f) =
+    }
+
+    /// calc.min_pt (bounds: array of [number, number]) (f: n-ary function) -> (point, any)
+    /// 'bounds' is an array with 'n' pairs (lower, upper).
+    /// 'f' must take 'n' numbers as arguments and return an orderable value.
+    /// Find the point with the minimum value of 'f'
+    /// whose coordinates lie within the bounds given by 'bounds'.
+    /// Both the point and value of the minimum are returned as a pair.
+    fn min_pt(bnds: Bounds<f64>, f: Object) -> Object {
         match extremum_grid(EXTR_ITERS, Ordering::Less, bnds, f) {
             Err(err) => err,
             Ok((pt, val)) => vec![pt_to_obj(pt), val].into(),
         }
-    );
-
-    Bltn::Map(calc)
+    }
 }
 

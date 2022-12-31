@@ -1,7 +1,8 @@
 # Test help messages
 
-# Help message of error
+# Erroneous cases
 help (null + null) = `Eval Error: Binary operator + not implemented between null and null`,
+help = ``,
 
 # Help messages of methods
 help [1, 2].len = `array.len -> natural
@@ -121,6 +122,12 @@ help m.c = `null:
 Operators:
 
 Methods:`,
+
+# Help messages for libraries
+help num.sqrt = ` num.sqrt (x: any) -> any
+ Call method 'sqrt' on 'x'`,
+help map = ` arr.map (f: any -> any) (a: array) -> array
+ Apply 'f' to every element of 'a'`,
 
 # Test manipulation of help message
 (help null).as_string + "   Extra..." = `"null:\n Null value. Exists for compatability with JSON\n\nOperators:\n\nMethods:   Extra..."`,

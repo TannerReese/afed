@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Error, Write};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
@@ -9,9 +8,8 @@ use super::mat::Matrix;
 
 use crate::expr::Bltn;
 use crate::object::{
-    Operable, Object,
+    Operable, Object, NamedType,
     Unary, Binary,
-    NamedType, EvalError,
 };
 use crate::object::array::Array;
 
@@ -240,16 +238,27 @@ impl From<Vector> for Object {
 
 
 
-pub fn make_bltns() -> Bltn {
-    let mut vec = HashMap::new();
-    def_bltn!(static vec.V(comps: Array) =
-        if comps.0.len() > 0 { Vector(comps.0).into() } 
-        else { eval_err!("Vector cannot be zero dimensional") }
-    );
-    def_getter!(vec.dims);
-    def_getter!(vec.comps);
-    def_getter!(vec.mag);
-    def_getter!(vec.mag2);
-    Bltn::Map(vec)
+create_bltns!{vec:
+    /// vec.V (comps: array) -> vector
+    /// Construct a vector with the components 'comps'
+    #[allow(non_snake_case)]
+    #[global]
+    fn V(comps: Array) -> Result<Vector, &'static str> {
+        if comps.0.len() > 0 { Ok(Vector(comps.0)) }
+        else { Err("Vector cannot be zero dimensional") }
+    }
+
+    /// vec.dims (x: any) -> any
+    /// Call method 'dims' on 'x'
+    fn dims(obj: Object) -> Object { call!(obj.dims) }
+    /// vec.comps (x: any) -> any
+    /// Call method 'comps' on 'x'
+    fn comps(obj: Object) -> Object { call!(obj.dims) }
+    /// vec.mag (x: any) -> any
+    /// Call method 'mag' on 'x'
+    fn mag(obj: Object) -> Object { call!(obj.dims) }
+    /// vec.mag2 (x: any) -> any
+    /// Call method 'mag2' on 'x'
+    fn mag2(obj: Object) -> Object { call!(obj.dims) }
 }
 

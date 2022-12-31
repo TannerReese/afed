@@ -1,7 +1,8 @@
 # Test help messages
 
-# Help message of error
+# Erroneous cases
 help (null + null) = ``,
+help = ``,
 
 # Help messages of methods
 help [1, 2].len = ``,
@@ -15,6 +16,10 @@ help [] = ``,
 # Help messages of attributes of maps
 m: {a: 2, b: true, c: null},
 help m.c = ``,
+
+# Help messages for libraries
+help num.sqrt = ``,
+help map = ``,
 
 # Test manipulation of help message
 (help null).as_string + "   Extra..." = ``,

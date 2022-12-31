@@ -1,6 +1,5 @@
 use std::vec::IntoIter;
 use std::cell::Cell;
-use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Error, Write};
 use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
@@ -198,23 +197,15 @@ impl Matrix {
         })
     }
 
-    pub fn from_array(arr: Array) -> Result<Matrix, ErrObject> {
-        let mut comps = Vec::new();
-        for row in arr.0.into_iter() {
-            comps.push(row.cast()?)
-        }
-        Matrix::new(comps).map_err(|msg| EvalError::new(msg.to_owned()))
-    }
-
-    pub fn build<F>((rows, cols): (usize, usize), mut gen: F) -> Self
-    where F: FnMut(usize, usize) -> Object {
+    pub fn build<F, T>((rows, cols): (usize, usize), mut gen: F) -> Self
+    where T: Into<Object>, F: FnMut(usize, usize) -> T {
         let mut comps = Vec::new();
         for i in 0..rows { for j in 0..cols {
-            comps.push(gen(i, j))
+            comps.push(gen(i, j).into())
         }}
         Matrix {dims: (rows, cols), comps, deter: Cell::new(None)}
     }
-
+/*
     pub fn identity(dims: usize) -> Self {
         let ident = Self::build((dims, dims), |r, c|
             if r == c { 1 } else { 0 }.into()
@@ -222,7 +213,7 @@ impl Matrix {
         ident.deter.set(Some(1.into()));
         ident
     }
-
+*/
     pub fn transpose(&mut self) {
         let (rows, cols) = self.dims;
         let comps = &mut self.comps;
@@ -274,11 +265,11 @@ impl Matrix {
         }
 
         let rows = self.rows();
-        let ident = Self::identity(rows);
-        let mut augmat = AugMatrix::new(vec![self, ident]);
+        let id = ident(rows).unwrap();
+        let mut augmat = AugMatrix::new(vec![self, id.clone()]);
         if let Err(err) = augmat.gauss_elim(0) { return (err, None); }
 
-        if augmat.matrices[0] == Self::identity(rows) {
+        if augmat.matrices[0] == id {
             let inv = augmat.matrices.remove(1);
             let det = call!((augmat.deter).inv());
             inv.deter.set(Some(augmat.deter));
@@ -301,7 +292,7 @@ impl Matrix {
         let mut augmat = AugMatrix::new(vec![self]);
         if let Err(err) = augmat.gauss_elim(0) { return err; }
 
-        if augmat.matrices[0] == Self::identity(rows) {
+        if augmat.matrices[0] == ident(rows).unwrap() {
             call!((augmat.deter).inv())
         } else { 0.into() }
     }
@@ -448,7 +439,7 @@ impl Mul<Matrix> for Matrix {
         Matrix::build((self.rows(), rhs.cols()), |i, j|
             (0..self.cols()).map(|k|
                 self[(i, k)].clone() * rhs[(k, j)].clone()
-            ).sum()
+            ).sum::<Object>()
         )
     }
 }
@@ -490,29 +481,65 @@ impl From<Matrix> for Object {
 
 
 
+create_bltns!{mat:
+    /// mat.M (rows: array of arrays) -> matrix
+    /// Construct a matrix from a array of rows
+    #[allow(non_snake_case)]
+    #[global]
+    fn M(arr: Array) -> Result<Matrix, ErrObject> {
+        let mut comps = Vec::new();
+        for row in arr.0.into_iter() { comps.push(row.cast()?) }
+        Matrix::new(comps).map_err(|s| EvalError::new(s.to_owned()))
+    }
 
-pub fn make_bltns() -> Bltn {
-    let mut mat = HashMap::new();
-    def_bltn!(static mat.M(rows: Array) = Matrix::from_array(rows).into());
-    def_bltn!(mat.zero(rows: usize, cols: usize) = if rows > 0 && cols > 0 {
-        Matrix::build((rows, cols), |_, _| 0.into()).into()
-    } else { eval_err!("Matrix dimensions can't be zero") });
-    def_bltn!(mat.ident(dims: usize) =
-        if dims == 0 { eval_err!("Dimension must be a positive integer") }
-        else { Matrix::identity(dims).into() }
-    );
+    /// mat.zero (rows: natural) (cols: natural) -> matrix
+    /// A 'rows' by 'cols' dimensional zero matrix
+    pub fn zero(rows: usize, cols: usize) -> Result<Matrix, &'static str> {
+        if rows == 0 || cols == 0 { return Err(
+            "Matrix dimensions can't be zero"
+        )}
+        let z = Matrix::build((rows, cols), |_, _| 0);
+        z.deter.set(Some(0.into()));
+        Ok(z)
+    }
 
-    def_getter!(mat.rows);
-    def_getter!(mat.cols);
-    def_getter!(mat.row_vecs);
-    def_getter!(mat.col_vecs);
+    /// mat.ident (dims: natural) -> matrix
+    /// Identity matrix with dimension 'dims'
+    pub fn ident(dims: usize) -> Result<Matrix, &'static str> {
+        if dims == 0 { return Err("Dimension must be a positive integer") }
+        let id = Matrix::build((dims, dims), |r, c|
+            if r == c { 1 } else { 0 }
+        );
+        id.deter.set(Some(1.into()));
+        Ok(id)
+    }
 
-    def_bltn!(mat.trsp(m: Matrix) = {
+
+    /// mat.rows (x: any) -> any
+    /// Call method 'rows' on 'x'
+    fn rows(obj: Object) -> Object { call!(obj.rows) }
+    /// mat.cols (x: any) -> any
+    /// Call method 'cols' on 'x'
+    fn cols(obj: Object) -> Object { call!(obj.cols) }
+    /// mat.row_vecs (x: any) -> any
+    /// Call method 'row_vecs' on 'x'
+    fn row_vecs(obj: Object) -> Object { call!(obj.row_vecs) }
+    /// mat.col_vecs (x: any) -> any
+    /// Call method 'col_vecs' on 'x'
+    fn col_vecs(obj: Object) -> Object { call!(obj.col_vecs) }
+
+    /// mat.trsp (m: matrix) -> matrix
+    /// Transpose of 'm', where the rows and columns are swapped
+    pub fn trsp(m: Matrix) -> Matrix {
         let mut m = m;
-        m.transpose(); m.into()
-    });
-    def_bltn!(mat.inv(m: Matrix) = m.inverse().0);
-    def_bltn!(mat.deter(m: Matrix) = m.into_determinant());
-    Bltn::Map(mat)
+        m.transpose(); m
+    }
+
+    /// mat.inv (m: matrix) -> matrix
+    /// Multiplicative inverse of the matrix 'm'
+    fn inv(m: Matrix) -> Object { m.inverse().0 }
+    /// mat.deter (m: matrix) -> any
+    /// Determinant of the matrix 'm'
+    fn deter(m: Matrix) -> Object { m.into_determinant() }
 }
 

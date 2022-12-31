@@ -9,14 +9,15 @@ macro_rules! count_tt {
 }
 
 macro_rules! call {
+    ($obj:ident ($($arg:expr),*)) => { call!(($obj)($($arg),*)) };
     (($obj:expr)($($arg:expr),*)) =>
         { $obj.call(None, vec![$($arg.into()),*]) };
-    ($obj:ident ($($arg:expr),*)) =>
-        { $obj.call(None, vec![$($arg.into()),*]) };
 
-    (($obj:expr).$method:ident ($($arg:expr),*)) =>
-        { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
+    ($obj:ident.$attr:ident) => { call!(($obj).$attr()) };
+    (($obj:expr).$attr:ident) => { call!(($obj).$attr()) };
     ($obj:ident.$method:ident ($($arg:expr),*)) =>
+        { call!(($obj).$method($($arg),*)) };
+    (($obj:expr).$method:ident ($($arg:expr),*)) =>
         { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
 }
 
@@ -129,19 +130,19 @@ macro_rules! impl_operable {
 
 
     (@help #[doc=$doc:literal] $(#$meta:tt)*,
-        $is_oper:tt, ($help:expr), $vars:tt
+        $is_oper:tt, $help:expr, $vars:tt
     ) => { impl_operable!{@help $(#$meta)*,
-        $is_oper, (concat!($help, "\n", $doc)), $vars
+        $is_oper, concat!($help, "\n", $doc), $vars
     }};
-    (@help #[call] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+    (@help #[call] $(#$meta:tt)*, (), $help:expr, $vars:tt) =>
         { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
-    (@help #[unary $_:tt] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+    (@help #[unary $_:tt] $(#$meta:tt)*, (), $help:expr, $vars:tt) =>
         { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
-    (@help #[binary $_:tt] $(#$meta:tt)*, (), $help:tt, $vars:tt) =>
+    (@help #[binary $_:tt] $(#$meta:tt)*, (), $help:expr, $vars:tt) =>
         { impl_operable!{@help $(#$meta)*, (oper), $help, $vars} };
-    (@help #$_:tt $(#$meta:tt)*, $is_oper:tt, $help:tt, $vars:tt) =>
+    (@help #$_:tt $(#$meta:tt)*, $is_oper:tt, $help:expr, $vars:tt) =>
         { impl_operable!{@help $(#$meta)*, $is_oper, $help, $vars} };
-    (@help , (), ($help:expr), (
+    (@help , (), $help:expr, (
         $opers:ident, $methods:ident, $attr:ident, $func:tt
     )) => {
         if $attr == None { if let Some(sig) = $help.trim().lines().next() {
@@ -154,7 +155,7 @@ macro_rules! impl_operable {
             return Some($help.trim().to_owned());
         }
     };
-    (@help , (oper), ($help:expr), (
+    (@help , (oper), $help:expr, (
         $opers:ident, $methods:ident, $attr:ident, $func:tt
     )) => { if $attr == None { if $help.trim().len() > 0 {
         $opers += "\n";  $opers += $help;
@@ -202,7 +203,7 @@ macro_rules! impl_operable {
                 let mut _methods = String::new();
                 let mut _opers = String::new();
 
-                $(impl_operable!{@help $(#$meta)*, (), (""),
+                $(impl_operable!{@help $(#$meta)*, (), "",
                     (_opers, _methods, attr, $func)
                 })*
 
@@ -256,5 +257,119 @@ macro_rules! impl_operable {
     )*) => { impl_operable!{$Self, "", $(
         $(#$meta)* $vis fn $func $args -> $ret $block
     )*} };
+}
+
+
+
+macro_rules! create_bltns {
+    (@func #[global] $(#$m:tt)*, $help:expr, $_:expr, $vars:tt) =>
+        { create_bltns!{@func $(#$m)*, $help, true, $vars} };
+    (@func #[doc=$h:expr] $(#$m:tt)*, "", $g:expr, $vars:tt) =>
+        { create_bltns!{@func $(#$m)*, $h, $g, $vars} };
+    (@func #[doc=$h:expr] $(#$m:tt)*, $help:expr, $g:expr, $vars:tt) =>
+        { create_bltns!{@func $(#$m)*, concat!($help, "\n", $h), $g, $vars} };
+    (@func #[$_:meta] $($rest:tt)*) => { create_bltns!{@func $($rest)*} };
+
+    (@func , $help:expr, $is_global:expr, (
+        $pkg:ident, $name:expr, $func:ident () -> $ret:ty $block:block
+    )) => { if $pkg.insert(stringify!($func).to_owned(),
+        ($is_global, {
+            let val: $ret = $block;
+            Bltn::Const(val.into())
+        })
+    ).is_some() { panic!(
+        concat!($name, '.', stringify!($func), " redeclared")
+    )}};
+
+    (@func , $help:expr, $is_global:expr, ($pkg:ident, $name:expr,
+        $func:ident ($($arg:ident : $tp:ty),+) -> $ret:ty $block:block
+    )) => { if $pkg.insert(stringify!($func).to_owned(),
+        ($is_global, Bltn::Const(BltnFunc::new(
+            concat!($name, '.', stringify!($func)), $help,
+            |args: [Object; count_tt!($($arg)+)]| {
+                let [$($arg),+] = args;
+                $func($(match $arg.cast() {
+                    Err(err) => return err,
+                    Ok(val) => val,
+                }),+).into()
+            }
+        )))
+    ).is_some() { panic!(
+        concat!($name, '.', stringify!($func), " redeclared")
+    )}};
+
+
+    (@strip_meta #[global] $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>
+        { create_bltns!{@strip_meta $(#$meta)*, $(#$new_meta)*, $vars} };
+    (@strip_meta #$m:tt $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>
+        { create_bltns!{@strip_meta $(#$meta)*, $(#$new_meta)* #$m, $vars} };
+
+    (@strip_meta , $(#$meta:tt)*, ($vis:vis fn
+        $func:ident () -> $ret:ty $block:block
+    )) => {};
+    (@strip_meta , $(#$meta:tt)*, ($vis:vis fn
+        $func:ident ($($arg:ident : $tp:ty),+) -> $ret:ty $block:block
+    )) => { $(#$meta)* $vis fn $func ($($arg : $tp),+) -> $ret $block };
+
+
+
+    ($pkg:ident($name:expr), $make_bltns:ident,
+        mod {$(
+            $(#[global] $($is_global:literal)?)? $mod:ident : $modval:expr
+        ),* $(,)?} :
+        $($(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block)*
+    ) => {
+        $(create_bltns!{@strip_meta $(#$meta)*, ,
+            ($vis fn $func $args -> $ret $block)
+        })*
+
+        pub fn $make_bltns() -> Bltn {
+            let mut $pkg = ::std::collections::HashMap::new();
+            $(
+                let mut elems = match $modval {
+                    Bltn::Const(_) => panic!("Package must be map"),
+                    Bltn::Map(elems) => elems,
+                };
+
+                if false $(|| true $($is_global)?)? {
+                    for (_, (is_global, _)) in elems.iter_mut() {
+                        *is_global = true;
+                    }
+                }
+
+                if $pkg.insert(
+                    stringify!($mod).to_owned(), (false, Bltn::Map(elems))
+                ).is_some() { panic!(
+                    concat!("Package ", stringify!($mod), " redeclared")
+                )}
+            )*
+
+            $(create_bltns!(@func $(#$meta)*,
+                "", false, ($pkg, $name, $func $args -> $ret $block)
+            );)*
+            Bltn::Map($pkg)
+        }
+    };
+
+    ($pkg:ident : $($rest:tt)*) =>
+        { create_bltns!{$pkg(stringify!($pkg)), make_bltns: $($rest)*} };
+    ($pkg:ident($name:expr) : $($rest:tt)*) =>
+        { create_bltns!{$pkg($name), make_bltns: $($rest)*} };
+    ($pkg:ident($name:expr), $make_bltns:ident : mod $mods:tt $($rest:tt)*) =>
+        { create_bltns!{$pkg($name), $make_bltns, mod $mods: $($rest)*} };
+    ($pkg:ident($name:expr), $make_bltns:ident : $($rest:tt)*) =>
+        { create_bltns!{$pkg($name), $make_bltns, mod {}: $($rest)*}};
+
+    (mod $mods:tt $(
+        $(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block
+    )*) => { create_bltns!{pkg ("pkg"), make_bltns, mod $mods:
+        $($(#$meta)* $vis fn $func $args -> $ret $block)*
+    }};
+
+    ($(
+        $(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block
+    )*) => { create_bltns!{pkg ("pkg"), make_bltns, mod {}:
+        $($(#$meta)* $vis fn $func $args -> $ret $block)*
+    }};
 }
 

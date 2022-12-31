@@ -209,8 +209,9 @@ impl<'a> Pos<'a> {
             self.tag("true").map(|_| Object::new(Bool(true))),
             self.tag("false").map(|_| Object::new(Bool(false))),
             self.tag("if").map(|_| Object::new(Ternary())),
-            seq!(self: self.tag("use"), Err(Some(parse_err!(self,
-                "'use' keyword can only be used for importing"
+            alt!(self.tag("use"), self.tag("help"))
+            .and_then(|word| Err(Some(parse_err!(self,
+                "'{}' keyword cannot be used as a variable", word
             ))))
         )
     }
