@@ -1,30 +1,35 @@
 use std::fmt::{Debug, Display, Formatter, Error};
 use std::iter::zip;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::object::{
     Object, Unary, Binary, Operable, NamedType,
 };
 use super::{ExprId, ArgId, ExprArena, Pattern};
 
+// User defined function who's evaluated using a private AST
 #[derive(Debug, Clone)]
 pub struct Func {
+    // Name of function given by user
     name: Option<String>,
-    id: usize,
+    id: usize,  // Unique ID
+
+    // List of patterns matched against arguments
     pats: Vec<Pattern<ArgId>>,
-    body: ExprId,
-    arena: ExprArena,
+    body: ExprId,  // ID referring to the root node of `arena`
+    arena: ExprArena,  // Syntax Tree evaluated when calling `Func`
 }
 
 impl NamedType for Func { fn type_name() -> &'static str{ "function" } }
 
+// Only used to generate unique identifiers
+use std::sync::atomic::{AtomicUsize, Ordering};
 static FUNC_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Func {
     pub fn new(
         name: Option<String>, pats: Vec<Pattern<ArgId>>,
         body: ExprId, arena: ExprArena,
     ) -> Object {
+        // Create unique ID for function that is preserved by cloning
         let id = FUNC_COUNTER.fetch_add(1, Ordering::Relaxed);
         Object::new(Func {name, id, pats, body, arena})
     }
@@ -58,11 +63,13 @@ impl Operable for Func {
     ) -> Object { match attr {
         None => {
             self.arena.clear_cache();
+            // Match up given arguments with pattern `self.pats`
             for (pat, obj) in zip(self.pats.iter(), args.into_iter()) {
-                if let Err(err) = pat.recognize(&self.arena, obj) {
+                if let Err(err) = pat.match_args(&self.arena, obj) {
                     return err;
                 }
             }
+            // Evaluate arena same as is done for whole program
             self.arena.eval(self.body)
         },
 

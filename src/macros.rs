@@ -8,6 +8,7 @@ macro_rules! count_tt {
     ($fst:tt $($item:tt)*) => {1 + count_tt!($($item)*)};
 }
 
+// Calls `Object` with given method
 macro_rules! call {
     ($obj:ident ($($arg:expr),*)) => { call!(($obj)($($arg),*)) };
     (($obj:expr)($($arg:expr),*)) =>
@@ -21,6 +22,7 @@ macro_rules! call {
         { $obj.call(Some(stringify!($method)), vec![$($arg.into()),*]) };
 }
 
+// Quickly give name to a type so `Objectish` can be implemented
 macro_rules! name_type {
     ($name:ident: $tp:ty) => { name_type!{stringify!($name), $tp} };
     ($name:literal: $tp:ty) => { name_type!{$name, $tp} };
@@ -30,7 +32,51 @@ macro_rules! name_type {
 }
 
 
+/* Ergonomically implement the unary and binary operations as well as
+ * method calls on a type so `Objectish` can be implemented.
+ *
+ * An impl block is created for the type containing all of the method
+ * declarations (including those labelled with `#[call]`).  All meta
+ * attributes (besides those used by impl_operable!)  and visibility modifiers
+ * are preserved.  As such, methods in `impl_operable!` can collide with
+ * other methods declared on the type.  There may be at most one method
+ * declaration with `#[call]`.  It may have any valid identifier as a name.
+ *
+ * Operator declarations are identified by a `#[unary(<Unary>)]` or
+ * `#[binary(<Binary>)]` attribute. Here <Unary> and <Binary> are valid
+ * cases of the enums `Unary` and `Binary`, respectively.  Further,
+ * binary operator declarations may optionally include `rev` or `comm`
+ * (e.g. `#[binary(Add,comm)]`). `rev` indicates that this declaration
+ * accepts only arguments in the reverse order.  `comm` indicates that this
+ * declaration accepts either normal or reverse order arguments.  Multiple
+ * declarations can be given for a single operator.  The first one matching
+ * the types are order will be used.  The attribute `#[exclude(<type-1>,...)]`
+ * can be used to prevent the second argument from matching against any of
+ * the types <type-1>, ...  The name used in the signature of an operator
+ * declaration is irrelevant and need only be a valid token-tree (e.g. `_`).
+ *
+ * Example:
+ * Here we are assuming `MyType` can be cast to and from `u8`.
+ * ```
+ *   impl_operable!{MyType:
+ *       // Operator declarations
+ *       #[binary(Neg)]
+ *       #[exclude(Number)]
+ *       fn _(x: u8) -> u8 { -x }
+ *       #[binary(Add)]
+ *       fn _(x: u8, y: u8) -> u8 { x + y }
+ *
+ *       // Method declarations
+ *       #[call]
+ *       fn call__(self, shf: u8) -> u8 { u8::from(self) << shf }
+ *       pub fn times_three(&self) -> u8 { u8::from(self) * 3 }
+ *   }
+ * ```
+ */
 macro_rules! impl_operable {
+    /* Create cold to handle a unary operator in `unary` method
+     * of `Operable` trait for operable declarations
+     */
     (@una #[unary($name:ident)] $(#$meta:tt)*, (), $vars:tt) =>
         { impl_operable!{@una $(#$meta)*, ($name), $vars} };
     (@una #[$_:meta] $(#$meta:tt)*, $una:tt, $vars:tt) =>
@@ -45,6 +91,9 @@ macro_rules! impl_operable {
 
 
 
+    /* Create code to handle a binary operator in `binary` method
+     * of `Operable` trait for operator declarations
+     */
     (@bin #[binary(comm, $n:ident)] $(#$meta:tt)*, (), $e:tt, $vars:tt) =>
         { impl_operable!{@bin $(#$meta)*, ($n, true, true), $e, $vars} };
     (@bin #[binary(rev, $n:ident)] $(#$meta:tt)*, (), $e:tt, $vars:tt) =>
@@ -95,6 +144,8 @@ macro_rules! impl_operable {
 
 
 
+    // Helper sub-macro for calling `@arity` and `@call`
+    // Filters out all operator declarations
     (@method #[call] $(#$meta:tt)*, (), $vars:tt) =>
         { impl_operable!{@method $(#$meta)*, (call), $vars} };
     (@method #[unary $_:tt] $(#$meta:tt)*, $c:tt, $vs:tt) => {};
@@ -108,14 +159,23 @@ macro_rules! impl_operable {
         { impl_operable!{@$method None, $vars} };
 
 
+    // Create code to return arity for a method based on the method header
     (@arity $attr_pat:pat, ($attr:ident,
         ($_:pat $(, $arg:ident : $tp:ty)*)
     )) => { if let $attr_pat = $attr {
         return Some(count_tt!($($arg)*));
     }};
 
-    (@get_self_ref $self:ident, (self $($_:tt)*)) => { $self.clone() };
-    (@get_self_ref $self:ident, (&self $($_:tt)*)) => { $self };
+    /* Method calls on `Object`s are always call-by-reference
+     * so `@get_self_ref` clones `self` if the method being
+     * called was written to take ownership of `self`.
+     */
+    (@self_from_ref $self:ident, (self $($_:tt)*)) => { $self.clone() };
+    (@self_from_ref $self:ident, (&self $($_:tt)*)) => { $self };
+
+    /* Create code to cast arguments and
+     * call a method for all method declarations
+     */
     (@call $attr_pat:pat, ($self:ident, $attr:ident,
         $argvec:ident, $func_args:tt,
         $func:ident ($_:pat $(, $arg:ident : $tp:ty)*) -> $ret:ty $block:block
@@ -124,11 +184,14 @@ macro_rules! impl_operable {
             Ok(value) => value,
             Err(err) => return err,
         };)*
-        return impl_operable!(@get_self_ref $self, $func_args)
+        return impl_operable!(@self_from_ref $self, $func_args)
             .$func($($arg),*).into()
     }};
 
 
+    /* `@help` creates code to generate the help messages
+     * for operator and method headers
+     */
     (@help #[doc=$doc:literal] $(#$meta:tt)*,
         $is_oper:tt, $help:expr, $vars:tt
     ) => { impl_operable!{@help $(#$meta)*,
@@ -163,6 +226,10 @@ macro_rules! impl_operable {
 
 
 
+    /* `@method_impl` strips meta attributes used by `impl_operable!`
+     * and filter out operator declarations
+     * before they are placed into the impl block
+     */
     (@method_impl #[call] $(#$meta:tt)*, $mlist:tt, $vars:tt) =>
         { impl_operable!{@method_impl $(#$meta)*, $mlist, $vars} };
     (@method_impl #[unary $_:tt] $(#$meta:tt)*, $mlist:tt, $vars:tt) => {};
@@ -261,7 +328,28 @@ macro_rules! impl_operable {
 
 
 
+/* Used by library code to create a `Bltn::Map` instance
+ * which will be named `$pkg`. It will contain constants and
+ * functions corresponding to the function declarations provided.
+ *
+ * `create_bltns!` will also create a impl block containing
+ * declarations for all functions with more than zero arguments.
+ * NOTE: Functions cannot be genericized
+ *
+ * Example:
+ * ```
+ *   create_bltns!{package_name:
+ *       fn my_constant() -> f32 { 0.57 }
+ *       fn foo(x: usize) -> usize { x + 1 }
+ *       pub fn bar(v: Vec<Object>) -> usize { v.len() }
+ *   }
+ * ```
+ */
 macro_rules! create_bltns {
+    /* `@func` converts the method headers into
+     * `Bltn::Const` if they have no arguments
+     *  and `BltnFunc` instances otherwise
+     */
     (@func #[global] $(#$m:tt)*, $help:expr, $_:expr, $vars:tt) =>
         { create_bltns!{@func $(#$m)*, $help, true, $vars} };
     (@func #[doc=$h:expr] $(#$m:tt)*, "", $g:expr, $vars:tt) =>
@@ -299,6 +387,9 @@ macro_rules! create_bltns {
     )}};
 
 
+    /* `@strip_meta` removes this macros attributes from
+     * the method headers before they're placed in their impl block
+     */
     (@strip_meta #[global] $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>
         { create_bltns!{@strip_meta $(#$meta)*, $(#$new_meta)*, $vars} };
     (@strip_meta #$m:tt $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>

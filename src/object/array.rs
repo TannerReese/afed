@@ -244,6 +244,7 @@ impl<T: Into<Object> + Castable, const N: usize> Castable for [T; N] {
     }
 }
 
+// Creates conversion trait implementations between tuples and `Object`
 macro_rules! convert_tuple {
     (@multicast $on_err:expr, $($var:ident : $tp:ty),+) => {$(
         let $var = match <$tp>::cast($var) {

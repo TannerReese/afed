@@ -8,13 +8,12 @@ use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
 use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
 use std::iter::{Sum, Product};
 
-use std::sync::atomic::AtomicUsize;
-
 use std::hash::Hash;
 use std::borrow::Borrow;
 
 pub use opers::{Unary, Binary, Assoc};
 use self::bool::Bool;
+use self::partial_eval::PartialEval;
 
 macro_rules! try_ok {
     ($obj:expr) => {{
@@ -33,7 +32,7 @@ pub mod number;
 pub mod string;
 pub mod array;
 pub mod map;
-pub mod curry;
+pub mod partial_eval;
 
 
 pub trait Operable {
@@ -51,6 +50,10 @@ pub trait NamedType : Any {
     fn type_name() -> &'static str;
 }
 
+/* An `Object` is a pointer to any of a number of dynamic types.
+ * Types implementing `Objectish` are those to which `Object` can point.
+ * An `Objectish` type can be cast to an `Object` by "forgetting" its type.
+ */
 pub trait Objectish :
     Eq + Clone + Any + NamedType
     + Debug + Display + Operable
@@ -63,6 +66,18 @@ impl<T> Objectish for T where T:
 
 fn as_any<T>(x: &T) -> &dyn Any where T: Objectish { x }
 
+/* The two layer structure of `ObjectishSafe` and `Objectish` is necessary
+ * because `Objectish` requires a type to have object-unsafe methods.
+ *
+ * Specifically, any methods which are pass-by-value (i.e. with `self`)
+ * or have an argument of type `Self` require the type to be `Sized`.
+ * However, the value behind a dynamic pointer can't be `Sized`.
+ *
+ * To get around this, `ObjectishSafe` is a dummy trait which has only
+ * pass-by-reference methods.  These are implemented by storing the
+ * `Objectish` type as an `Option` on the dynamic type.  The dynamic value
+ * can then be "stolen" out of the `Option` to perform the unsafe operations.
+ */
 trait ObjectishSafe {
     fn as_any(&self) -> &dyn Any;
     fn as_any_opt(&mut self) -> &mut dyn Any;
@@ -174,7 +189,12 @@ impl Object {
 }
 
 
-// Don't try to replace with TryFrom<Object>
+/* WARNING: Don't try to replace this with `TryFrom<Object>`
+ * Because of the orphan rule, it isn't possible to implement such a `TryFrom`
+ * on genericized types like `Vec<T>` or `(A, B)`.  Since generic conversions
+ * between these types and `Object` are so crucial for ergonomic library
+ * code, it is important to keep this trait defined inside the crate.
+ */
 pub trait Castable: Sized {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)>;
 }
@@ -258,7 +278,7 @@ impl Object {
             return (*self.0).call(attr, args);
         } else if args.len() < arity {
             let attr = attr.map(|s| s.to_owned());
-            return curry::Curry::new(self.clone(), attr, args);
+            return PartialEval::new(self.clone(), attr, args);
         }
 
         let mut args = args.into_iter();
@@ -275,7 +295,7 @@ impl Object {
 
             res = if iter.as_slice().len() >= arity {
                 (*res.0).call(None, iter.take(arity).collect())
-            } else { curry::Curry::new(res.clone(), None, iter.collect()) };
+            } else { PartialEval::new(res.clone(), None, iter.collect()) };
         }
         res
     }
@@ -431,6 +451,9 @@ pub struct EvalError {
     pub msg: String,
 }
 name_type!{error: EvalError}
+
+// Only for generating unique identifiers on EvalError
+use std::sync::atomic::AtomicUsize;
 
 static EVAL_ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl EvalError {

@@ -6,15 +6,15 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Curry {
+pub struct PartialEval {
     func: Object,
     arity: usize,
     attr: Option<String>,
     args: Vec<Object>,
 }
-name_type!{"partial evaluation": Curry}
+name_type!{"partial evaluation": PartialEval}
 
-impl Curry {
+impl PartialEval {
     pub fn new(func: Object, attr: Option<String>, mut args: Vec<Object>) -> Object {
         let attr_ref = attr.as_ref().map(|s| s.as_str());
         let arity = if let Some(x) = func.arity(attr_ref) { x }
@@ -25,17 +25,17 @@ impl Curry {
             args.len(), arity,
         )}
 
-        match func.try_cast::<Curry>() {
+        match func.try_cast::<PartialEval>() {
             Ok(mut curry) => {
                 if let Some(name) = attr { panic!(
-                    "Curry object has no method {}", name
+                    "PartialEval object has no method {}", name
                 )}
 
                 curry.arity -= args.len();
                 curry.args.append(&mut args);
                 curry
             },
-            Err(func) => Curry {
+            Err(func) => PartialEval {
                 arity: arity - args.len(),
                 attr, func, args,
             },
@@ -43,7 +43,7 @@ impl Curry {
     }
 }
 
-impl Operable for Curry {
+impl Operable for PartialEval {
     fn unary(self, _: Unary) -> Option<Object> { None }
     fn binary(self,
         _: bool, _: Binary, other: Object
@@ -83,7 +83,7 @@ impl Operable for Curry {
     }}
 }
 
-impl Display for Curry {
+impl Display for PartialEval {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "({})", self.func)?;
         if let Some(method) = &self.attr
@@ -94,7 +94,7 @@ impl Display for Curry {
     }
 }
 
-impl From<Curry> for Object {
-    fn from(c: Curry) -> Self { Object::new(c) }
+impl From<PartialEval> for Object {
+    fn from(c: PartialEval) -> Self { Object::new(c) }
 }
 

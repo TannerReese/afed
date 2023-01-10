@@ -12,32 +12,71 @@ use parser::{parse, ParseError};
 mod parser;
 
 
-struct Subst {
-    start: usize,
-    end: usize,
-    filename: Option<OsString>,
-
-    lineno: usize,
-    column: usize,
-    target: ExprId,
-    value: Option<Object>,
-}
-
+/* To place the results back into the document, we need to keep track
+ * of where the values need to be placed. `Docmt` maintains a list of
+ * substitutions for this purpose.  Each substitution represents a location
+ * where a result can be placed.  When printing the result, the `Docmt`
+ * prints the text outside the substitutions verbatim.
+ */
 pub struct Docmt {
-    src: String,
+    /* Length of `src` which is needed since the `Docmt` doesn't have access
+     * to `src` while parsing, but needs it to check new `Subst`
+     */
     len: usize,
+    src: String,  // Text to be parsed
+
+    /* List of files in the "parse stack". This is used to prevent circular
+     * dependencies from file inclusion. The last element of `paths` will
+     * be the current filename unless `paths` is empty. If empty then `src`
+     * was acquired from STDIN and so has unknown source.
+     */
     pub paths: Vec<PathBuf>,
 
+    is_parsed: bool,  // Flag set to true after parsing
+
+    // AST generated during parsing and used during evaluation
     arena: ExprArena,
-    is_parsed: bool,
-    pub only_clear: bool,
+    // List of parse errors encountered while parsing
     errors: Vec<ParseError>,
+    // List of substitutions ordered by location in `src`
+    // NOTE: Two `Subst` cannot overlap
     substs: Vec<Subst>,
+
+    /* When true the document is parsed and evaluated,
+     * but results are not placed in the `Subst`s
+     */
+    pub only_clear: bool,
+
+    /* When true the `Docmt` will ignore calls to `push` new `Subst`.
+     * It's used when parsing multiple files. The same `Docmt` is used to
+     * parse all files.  So this flag is turned on when not parsing the
+     * primary program so that the equal statements in the other files
+     * don't get recorded.  The flag is then reverted after parsing the
+     * included file.
+     */
     pub ignore_substs: bool,
 }
 
+struct Subst {
+    // Location of `Subst` in `src` of `Docmt`
+    start: usize,
+    end: usize,
+    // File from which this substitution was obtained
+    filename: Option<OsString>,
+    // Line and column number of character before substitution
+    lineno: usize,
+    column: usize,
+
+    // Expression whose value is printed in the substitution
+    target: ExprId,
+    // Cached value of substitution
+    value: Option<Object>,
+}
+
+
 impl Docmt {
     pub fn new(src: String, path: Option<PathBuf>) -> Docmt {
+        // Treat `path` as relative to the current directory
         let paths = path.and_then(|p|
             p.canonicalize().ok()
         ).into_iter().collect();
@@ -52,6 +91,7 @@ impl Docmt {
         }
     }
 
+    // Parse document using `parse` method which uses `ParsingContext`
     pub fn parse<W: Write>(
         &mut self, err_out: &mut W, bltns: Bltn
     ) -> Result<(), usize> {
@@ -62,6 +102,7 @@ impl Docmt {
             self.is_parsed = true;
         }
 
+        // Print any parse errors that occur
         for err in self.errors.iter() {
             write!(err_out, "{}\n", err)
             .expect("IO Error while writing parse error");
@@ -71,6 +112,7 @@ impl Docmt {
         if count == 0 { Ok(()) } else { Err(count) }
     }
 
+    // Evaluate the `ExprArena` and print the results into the substitutions
     pub fn eval<W: Write>(
         &mut self, err_out: &mut W
     ) -> Result<(), usize> {
@@ -82,6 +124,7 @@ impl Docmt {
         } in self.substs.iter_mut() {
             if value.is_some() { continue; }
             let res = self.arena.eval(*target);
+            // Print EvalError to `err_out`
             if res.is_err() {
                 write!(err_out, "line {}, column {}", lineno, column)
                 .and_then(|_| if let Some(name) = filename {
@@ -97,6 +140,7 @@ impl Docmt {
     }
 
 
+    // Add `ParseError` to list of parse errors
     fn add_error(&mut self, mut err: ParseError) {
         if let Some(name) = self.paths.last()
         .and_then(|file| file.file_name()) {
@@ -105,10 +149,12 @@ impl Docmt {
         self.errors.push(err);
     }
 
+    // Check and add new `Subst` to list of substitions in correct spot
     fn push(&mut self, mut new: Subst) -> bool {
         if self.ignore_substs { return false }
         if new.start > new.end || new.end > self.len { return false }
 
+        // Find correct location for `new`
         let i = self.substs.iter()
             .enumerate().rev()
             .filter(|(_, sbs)| sbs.start < new.start)
@@ -122,6 +168,7 @@ impl Docmt {
             if new.end > after.start { return false }
         }
 
+        // Make sure the `target` expression keeps its cached value
         self.arena.set_saved(new.target);
         if let Some(name) = self.paths.last()
         .and_then(|file| file.file_name()) {
@@ -146,6 +193,9 @@ impl Display for Docmt {
 
             if let Some(obj) = value {
                 let sub = obj.to_string();
+                /* Escape all graves so that repeated
+                 * calls of afed don't break things
+                 */
                 let sub = sub.chars().flat_map(|c|
                     if c == '`' || c == '?' { vec!['?', c] }
                     else { vec![c] }

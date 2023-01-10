@@ -12,7 +12,7 @@ pub mod docmt;
 
 #[derive(Debug, Clone)]
 enum Stream {
-    Void,
+    Void,  // Same as /dev/null
     Stdin,
     Stdout,
     Stderr,
@@ -27,12 +27,14 @@ impl Stream {
         } else { Stream::Path(PathBuf::from(path)) }
     }
 
+    // Try to convert Stream into a PathBuf
     fn get_path(&self) -> Option<PathBuf> { match self {
         Stream::Void |
         Stream::Stdin | Stream::Stdout | Stream::Stderr => None,
         Stream::Path(buf) => Some(buf.clone()),
     }}
 
+    // Create Reader using appropriate interface for each type of pipe
     fn to_reader(&self) -> Box<dyn Read> {
         match self {
             Stream::Void => Box::new(empty()),
@@ -49,6 +51,7 @@ impl Stream {
         }
     }
 
+    // Create Writer using appropriate interface for each type of pipe
     fn to_writer(&self) -> Box<dyn Write> {
         match self {
             Stream::Void => Box::new(sink()),
@@ -125,6 +128,7 @@ const HELP_MSG: &str = concat!(
     "  afed file.af -o output.af\n",
 );
 
+// Die and print usage message
 macro_rules! usage {
     ($($arg:tt),*) => {{
         eprintln!($($arg),*);
@@ -134,6 +138,7 @@ macro_rules! usage {
 }
 
 
+// Parse command line arguments
 impl Params {
     fn parse() -> Params {
         let mut input_path = None;
@@ -191,17 +196,22 @@ impl Params {
             }
         }
 
+        // Use STDIN as default
         let input = input.unwrap_or(Stream::Stdin);
+        // Use `input` as default
         let output = if check { Stream::Void }
             else if let Some(out) = output { out }
             else if let Stream::Stdin = input { Stream::Stdout }
             else { input.clone() };
+        // Use STDERR as default
         let errors = if no_errors { Stream::Void }
             else if let Some(err) = errors { err }
             else { Stream::Stderr };
 
+        // Use path of `input` as default
         let input_path = input_path.or(input.get_path());
 
+        // Make sure the program doesn't accidently overwrite the file
         if no_clobber && input == output {
             usage!("Input and output files match, but --no-clobber is on");
         }
@@ -222,8 +232,10 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
     doc.only_clear = prms.clear;
     let mut any_errors = false;
 
+    // Generate all of the libraries
     let bltns = libs::make_bltns();
 
+    // Parse program and print parse errors to `errout`
     let mut errout = prms.errors.to_writer();
     if let Err(count) = doc.parse(&mut errout, bltns) {
         any_errors = true;
@@ -232,6 +244,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
         )?;
     }
 
+    // Evaluate AST and print eval errors to `errout`
     if let Err(count) = doc.eval(&mut errout) {
         any_errors = true;
         write!(&mut errout, "{} Eval Error{} encountered\n",
@@ -239,6 +252,7 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
         )?;
     }
 
+    // Still print something even if successful
     if !any_errors { write!(&mut errout, "No Errors encountered\n")?; }
 
     write!(prms.output.to_writer(), "{}", doc)?;

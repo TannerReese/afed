@@ -287,6 +287,7 @@ impl Number {
 
 
 
+// Create conversion trait implementations between integral types and `Object`
 macro_rules! convert_integral { ($tp:ty) => {
     impl From<$tp> for Number {
         fn from(n: $tp) -> Self { Number::Ratio(n as i64, 1) }
