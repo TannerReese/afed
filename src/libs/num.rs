@@ -2,10 +2,10 @@ use super::bltn_func::BltnFunc;
 use crate::expr::Bltn;
 use crate::object::Object;
 
-create_bltns!{num:
+create_bltns! {num:
     fn pi() -> f64 { std::f64::consts::PI }
     fn e() -> f64 { std::f64::consts::E }
-    fn gold() -> f64 { (1.0 + (5.0 as f64).sqrt()) / 2.0 }
+    fn gold() -> f64 { (1.0 + (5.0_f64).sqrt()) / 2.0 }
 
     /// num.signum (x: any) -> any
     /// Call method 'signum' on 'x'
@@ -113,4 +113,3 @@ create_bltns!{num:
     /// Call method 'choose' on 'n' with argument 'k'
     fn choose(n: Object, k: Object) -> Object { call!(n.choose(k)) }
 }
-

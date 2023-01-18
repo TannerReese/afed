@@ -44,23 +44,37 @@ impl AugMatrix {
             if matrices.iter().any(|m| m.rows() != rows) {
                 panic!("All row dimensions must match in Augmented Matrix")
             }
-        } else { panic!("Augmented Matrix must contain matrices") }
-        AugMatrix {rows, matrices, deter: 1.into()}
+        } else {
+            panic!("Augmented Matrix must contain matrices")
+        }
+        AugMatrix {
+            rows,
+            matrices,
+            deter: 1.into(),
+        }
     }
 
     fn swap_rows(&mut self, r1: usize, r2: usize) {
         if r1 >= self.rows || r2 >= self.rows {
             panic!("Bad row indices {} and {}", r1, r2)
-        } else if r1 == r2 { return; }
+        } else if r1 == r2 {
+            return;
+        }
 
-        for m in self.matrices.iter_mut() { m.swap_rows(r1, r2); }
+        for m in self.matrices.iter_mut() {
+            m.swap_rows(r1, r2);
+        }
         self.deter.do_inside(|x| -x);
     }
 
     fn scale_row(&mut self, r: usize, scalar: &Object) {
-        if r >= self.rows { panic!("Bad row index {}", r) }
+        if r >= self.rows {
+            panic!("Bad row index {}", r)
+        }
 
-        for m in self.matrices.iter_mut() { m.scale_row(r, &scalar); }
+        for m in self.matrices.iter_mut() {
+            m.scale_row(r, scalar);
+        }
         self.deter *= scalar.clone();
     }
 
@@ -69,7 +83,9 @@ impl AugMatrix {
             panic!("Bad row indices {} and {}", src, tgt)
         }
 
-        for m in self.matrices.iter_mut() { m.add_rows(src, tgt, scalar); }
+        for m in self.matrices.iter_mut() {
+            m.add_rows(src, tgt, scalar);
+        }
     }
 
     pub fn gauss_elim(&mut self, target: usize) -> Result<(), Object> {
@@ -91,17 +107,18 @@ impl AugMatrix {
                         inv = Some(call!(elem.inv()));
                         self.swap_rows(pivot_row, r);
                         break;
-                    },
-                    Ok(false) => {},
+                    }
+                    Ok(false) => {}
                     Err(err) => return Err(err),
                 }
             }
-            let inv = if let Some(i) = inv { i }
-                else { continue };
+            let inv = if let Some(i) = inv { i } else { continue };
 
             self.scale_row(pivot_row, &inv);
             for r in 0..rows {
-                if r == pivot_row { continue }
+                if r == pivot_row {
+                    continue;
+                }
                 let elem = -self.matrices[target][(r, c)].clone();
                 self.add_rows(pivot_row, r, &elem);
             }
@@ -110,4 +127,3 @@ impl AugMatrix {
         Ok(())
     }
 }
-

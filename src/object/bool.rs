@@ -1,20 +1,18 @@
-use std::fmt::{Display, Formatter, Error};
+use std::fmt::{Display, Error, Formatter};
 
-use super::{
-    Operable, Object, Castable,
-    Unary, Binary,
-    NamedType, ErrObject,
-};
+use super::{Binary, Castable, ErrObject, NamedType, Object, Operable, Unary};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
-name_type!{bool: Bool}
+name_type! {bool: Bool}
 
 impl Bool {
-    pub fn new(b: bool) -> Object { Bool(b).into() }
+    pub fn create(b: bool) -> Object {
+        Bool(b).into()
+    }
 }
 
-impl_operable!{Bool:
+impl_operable! {Bool:
     //! Boolean value. Either true or false.
     //! Arithmetic operations behave like a field of order two
     //! where true = 1 (mod 2) and false = 0 (mod 2)
@@ -44,7 +42,6 @@ impl_operable!{Bool:
     #[binary(Mul)] fn _(b1: bool, b2: bool) -> bool { b1 && b2 }
 }
 
-
 impl Display for Bool {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{}", self.0)
@@ -52,33 +49,40 @@ impl Display for Bool {
 }
 
 impl From<Bool> for bool {
-    fn from(b: Bool) -> bool { b.0 }
+    fn from(b: Bool) -> bool {
+        b.0
+    }
 }
 
 impl From<Bool> for Object {
-    fn from(b: Bool) -> Object { Object::new(b) }
+    fn from(b: Bool) -> Object {
+        Object::new(b)
+    }
 }
 
 impl From<bool> for Bool {
-    fn from(b: bool) -> Bool { Bool(b) }
+    fn from(b: bool) -> Bool {
+        Bool(b)
+    }
 }
 
 impl From<bool> for Object {
-    fn from(b: bool) -> Object { Object::new(Bool(b)) }
+    fn from(b: bool) -> Object {
+        Object::new(Bool(b))
+    }
 }
 
 impl Castable for bool {
-    fn cast(obj: Object) -> Result<bool, (Object, ErrObject)>
-        { Ok(Bool::cast(obj)?.0) }
+    fn cast(obj: Object) -> Result<bool, (Object, ErrObject)> {
+        Ok(Bool::cast(obj)?.0)
+    }
 }
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ternary();
-name_type!{ternary: Ternary}
+name_type! {ternary: Ternary}
 
-impl_operable!{Ternary:
+impl_operable! {Ternary:
     //! If statement for deciding between objects
 
     #[call]
@@ -90,10 +94,13 @@ impl_operable!{Ternary:
 }
 
 impl Display for Ternary {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> { write!(f, "if") }
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "if")
+    }
 }
 
 impl From<Ternary> for Object {
-    fn from(t: Ternary) -> Self { Object::new(t) }
+    fn from(t: Ternary) -> Self {
+        Object::new(t)
+    }
 }
-

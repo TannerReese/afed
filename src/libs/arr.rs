@@ -1,11 +1,11 @@
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{Object, ErrObject};
-use crate::object::number::Number;
 use crate::object::array::Array;
+use crate::object::number::Number;
+use crate::object::{ErrObject, Object};
 
-create_bltns!{arr:
+create_bltns! {arr:
     /// arr.range (start: number) (end: number) -> array of numbers
     /// Generate sequence of numbers starting at 'start'
     /// increasing by one up to and potentially including 'end'
@@ -95,7 +95,7 @@ create_bltns!{arr:
     /// First element of 'a'
     pub fn fst(v: Vec<Object>) -> Result<Object, &'static str> {
         let mut v = v;
-        if v.len() >= 1 { Ok(v.remove(0)) }
+        if !v.is_empty() { Ok(v.remove(0)) }
         else { Err("Array does not have a first element")}
     }
 
@@ -160,4 +160,3 @@ create_bltns!{arr:
     /// Check if 'a' contains the element 'target'
     fn has(elem: Object, a: Array) -> bool { a.has(elem) }
 }
-

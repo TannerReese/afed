@@ -1,4 +1,3 @@
-
 /* Each expression, $parse, should attempt to parse a symbol.
  * alt! will perform these in sequence until one of them
  * succeeds or unrecoverably errors.
@@ -19,11 +18,16 @@ macro_rules! alt {
  * if it fails `$recover` is run.
  */
 macro_rules! recover {
-    ($doc:expr, $parse:expr, $recover:expr) => { match $parse {
-        Ok(good) => Ok(good),
-        Err(None) => $recover,
-        Err(Some(err)) => { $doc.add_error(err); $recover },
-    }};
+    ($doc:expr, $parse:expr, $recover:expr) => {
+        match $parse {
+            Ok(good) => Ok(good),
+            Err(None) => $recover,
+            Err(Some(err)) => {
+                $doc.add_error(err);
+                $recover
+            }
+        }
+    };
 }
 
 // Reverts affects of `$parse` when it doesn't succeed
@@ -31,7 +35,9 @@ macro_rules! revert {
     ($context:ident : $parse:expr) => {{
         let start = *$context;
         let res = $parse;
-        if res.is_err() { *$context = start; }
+        if res.is_err() {
+            *$context = start;
+        }
         res
     }};
 }
@@ -43,21 +49,25 @@ macro_rules! peek {
         let res = $parse;
         *$context = start;
         res
-    }}
+    }};
 }
 
 // Optionally parses `$parse` succeeding when nothing is found
 macro_rules! opt {
-    ($parse:expr) => { match $parse {
-        Ok(good) => Ok(Some(good)),
-        Err(None) => Ok(None),
-        Err(Some(errs)) => Err(Some(errs)),
-    }};
+    ($parse:expr) => {
+        match $parse {
+            Ok(good) => Ok(Some(good)),
+            Err(None) => Ok(None),
+            Err(Some(errs)) => Err(Some(errs)),
+        }
+    };
 }
 
 // Ignore return value of `$parse` returning () instead
 macro_rules! ign {
-    ($parse:expr) => { $parse.map(|_| ()) };
+    ($parse:expr) => {
+        $parse.map(|_| ())
+    };
 }
 
 // Parse `$parse` optionally delimited by `$before` and `$after`
@@ -105,7 +115,9 @@ macro_rules! tuple {
  * and create a vector of the results
  */
 macro_rules! many0 {
-    ($parse:expr) => { many0!($parse, Ok(())) };
+    ($parse:expr) => {
+        many0!($parse, Ok(()))
+    };
     ($parse:expr, $sep:expr) => {{
         let mut results = Vec::new();
         loop {
@@ -116,7 +128,7 @@ macro_rules! many0 {
             }
 
             match $sep {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(None) => break Ok(results),
                 Err(Some(err)) => break Err(Some(err)),
             }
@@ -133,4 +145,3 @@ macro_rules! many1 {
         )
     }
 }
-

@@ -99,6 +99,7 @@ Operators:
 
 Methods:
 array.len -> natural
+array.is_empty -> bool
 array.fst -> any
 array.snd -> any
 array.last -> any
@@ -130,5 +131,5 @@ help map = ` arr.map (f: any -> any) (a: array) -> array
  Apply 'f' to every element of 'a'`,
 
 # Test manipulation of help message
-(help null).as_string + "   Extra..." = `"null:\n Null value. Exists for compatability with JSON\n\nOperators:\n\nMethods:   Extra..."`,
+(help null).into_string + "   Extra..." = `"null:\n Null value. Exists for compatability with JSON\n\nOperators:\n\nMethods:   Extra..."`,
 

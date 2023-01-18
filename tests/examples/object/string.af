@@ -1,5 +1,10 @@
 # Test string operations
 
+# Unimplemented operators
+-"Hello" = ``,
+"a" * "b" = ``,
+
+# String arithmetic
 "Hello" + "World" = ``,
 "baz" + (foo + "bar") = ``,
 3 * (foo + "baz") = ``,
@@ -8,13 +13,10 @@ foo: "foo",
 
 # String methods
 "This is several chars".len = ``,
+"".is_empty = ``, "  ".is_empty = ``,
 foo2: foo.lower + " vs. " + foo.upper = ``,
 foo2 4 = ``,
 
 # Polymorphic application
 ["Hello", [1, "a", true]].map \x: x.len = ``,
-
-# Unimplemented operators
--"Hello" = ``,
-"a" * "b" = ``,
 

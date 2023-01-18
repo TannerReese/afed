@@ -27,6 +27,7 @@ arr.njfd = ``,
 
 # Array methods
 arr2.len = ``,
+arr2.is_empty = ``,
 arr2.fst = ``, arr2.snd = ``,
 arr2.last = ``,
 arr2: [8, -1, 2, 0, -7, 3],

@@ -1,19 +1,36 @@
 use std::str::FromStr;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Unary { Neg, Not }
+pub enum Unary {
+    Neg,
+    Not,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Binary {
     Apply,
-    And, Or,
-    Eq, Neq, Lt, Leq, Gt, Geq,
-    Add, Sub, Mul, Div, Mod, FlrDiv, Pow,
+    And,
+    Or,
+    Eq,
+    Neq,
+    Lt,
+    Leq,
+    Gt,
+    Geq,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    FlrDiv,
+    Pow,
 }
 
 type Prec = usize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Assoc { Left, Right }
+pub enum Assoc {
+    Left,
+    Right,
+}
 
 impl Unary {
     pub fn prec(&self) -> Prec {
@@ -30,9 +47,7 @@ impl Unary {
         }
     }
 
-    pub const OPERS: [Self; 2] = [
-        Unary::Not, Unary::Neg,
-    ];
+    pub const OPERS: [Self; 2] = [Unary::Not, Unary::Neg];
 }
 
 impl Binary {
@@ -84,11 +99,20 @@ impl Binary {
 
     pub const OPERS: [Self; 16] = [
         Binary::Apply,
-        Binary::Or, Binary::And,
-        Binary::Eq, Binary::Neq,
-        Binary::Lt, Binary::Leq, Binary::Gt, Binary::Geq,
-        Binary::Add, Binary::Sub,
-        Binary::Mul, Binary::Div, Binary::Mod, Binary::FlrDiv,
+        Binary::Or,
+        Binary::And,
+        Binary::Eq,
+        Binary::Neq,
+        Binary::Lt,
+        Binary::Leq,
+        Binary::Gt,
+        Binary::Geq,
+        Binary::Add,
+        Binary::Sub,
+        Binary::Mul,
+        Binary::Div,
+        Binary::Mod,
+        Binary::FlrDiv,
         Binary::Pow,
     ];
 }
@@ -96,18 +120,23 @@ impl Binary {
 impl FromStr for Unary {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Unary::OPERS.iter().copied()
-        .filter(|op| s.starts_with(op.symbol()))
-        .max_by_key(|op| op.symbol().len()).ok_or(())
+        Unary::OPERS
+            .iter()
+            .copied()
+            .filter(|op| s.starts_with(op.symbol()))
+            .max_by_key(|op| op.symbol().len())
+            .ok_or(())
     }
 }
 
 impl FromStr for Binary {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Binary::OPERS.iter().copied()
-        .filter(|op| s.starts_with(op.symbol()))
-        .max_by_key(|op| op.symbol().len()).ok_or(())
+        Binary::OPERS
+            .iter()
+            .copied()
+            .filter(|op| s.starts_with(op.symbol()))
+            .max_by_key(|op| op.symbol().len())
+            .ok_or(())
     }
 }
-

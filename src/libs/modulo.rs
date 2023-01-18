@@ -1,39 +1,45 @@
+use std::cmp::Ordering;
+use std::fmt::{Display, Error, Formatter};
 use std::mem::swap;
-use std::fmt::{Display, Formatter, Error};
-use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 use super::bltn_func::BltnFunc;
 
 use crate::expr::Bltn;
-use crate::object::{
-    Operable, Object, NamedType,
-    Unary, Binary,
-};
 use crate::object::number::Number;
+use crate::object::{Binary, NamedType, Object, Operable, Unary};
 
 fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
     let (mut r, mut s) = ((a, 1, 0), (b, 0, 1));
-    if r.0 < s.0 { swap(&mut r, &mut s); }
+    if r.0 < s.0 {
+        swap(&mut r, &mut s);
+    }
 
     while s.0 > 0 {
         let div = r.0 / s.0;
-        r = (r.0 - div * s.0,
-            r.1 - (div as i64) * s.1, r.2 - (div as i64) * s.2
+        r = (
+            r.0 - div * s.0,
+            r.1 - (div as i64) * s.1,
+            r.2 - (div as i64) * s.2,
         );
         swap(&mut r, &mut s);
     }
-    return (r.0, (r.1, r.2))
+    (r.0, (r.1, r.2))
 }
 
 fn largest_coprime(mut x: u64, mut reducer: u64) -> u64 {
-    if reducer == 0 { return 1 }
+    if reducer == 0 {
+        return 1;
+    }
 
     reducer = bezout(x, reducer).0;
     while reducer != 1 {
-        while x % reducer == 0 { x /= reducer; }
+        while x % reducer == 0 {
+            x /= reducer;
+        }
         reducer = bezout(x, reducer).0;
     }
-    return x
+    x
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,9 +47,9 @@ pub struct Modulo {
     residue: i64,
     modulo: u64,
 }
-name_type!{modulo: Modulo}
+name_type! {modulo: Modulo}
 
-impl_operable!{Modulo:
+impl_operable! {Modulo:
     //! Residue class of a modular ring or an integer.
     //! Stored as a 64-bit signed residue and a 64-bit unsigned modulo.
     //! All operations convert integers to the appropriate modulo.
@@ -101,15 +107,15 @@ impl_operable!{Modulo:
     /// modulo.has_inv -> bool
     /// True when residue class has a multiplicative inverse
     pub fn has_inv(self) -> bool
-        { bezout(self.residue.abs() as u64, self.modulo).0 == 1 }
+        { bezout(self.residue.unsigned_abs(), self.modulo).0 == 1 }
     /// modulo.inv -> modulo
     /// Multiplicative inverse of residue class
     pub fn inv(self) -> Self {
         if self.residue == 1 || self.residue == -1 { self }
         else if self.modulo > 0 {
-            let (sign, res) = (self.residue.signum(), self.residue.abs());
-            let new_mod = largest_coprime(self.modulo, res as u64);
-            let (inv, _) = bezout(res as u64, new_mod).1;
+            let (sign, res) = (self.residue.signum(), self.residue.unsigned_abs());
+            let new_mod = largest_coprime(self.modulo, res);
+            let (inv, _) = bezout(res, new_mod).1;
             Modulo::from(sign * inv, new_mod)
         } else { Modulo::from(0, 1) }
     }
@@ -118,7 +124,7 @@ impl_operable!{Modulo:
     /// Smallest positive integer 'k' such that 'modulo ^ k == 1'
     /// or zero if 'modulo' is not invertible
     pub fn order(self) -> u64 {
-        if bezout(self.residue.abs() as u64, self.modulo).0 > 1 {
+        if bezout(self.residue.unsigned_abs(), self.modulo).0 > 1 {
             return 0;
         }
 
@@ -135,39 +141,38 @@ impl_operable!{Modulo:
     }
 }
 
-
-
 impl Modulo {
     fn from(mut residue: i64, modulo: u64) -> Self {
         if modulo > 0 {
             residue %= modulo as i64;
-            if residue < 0 { residue += modulo as i64; }
+            if residue < 0 {
+                residue += modulo as i64;
+            }
         }
         Modulo { residue, modulo }
     }
 
-    fn from_number(&self, num: Number) -> Result<Self, String> { match num {
-        Number::Ratio(n, d) => Ok(
-            Modulo::from(n, self.modulo) /
-            Modulo::from(d as i64, self.modulo)
-        ),
-        Number::Real(_) => Err(
-            "Cannot convert real number to Modulo".to_owned()
-        ),
-    }}
-
+    fn from_number(num: Number, modulo: u64) -> Result<Self, String> {
+        match num {
+            Number::Ratio(n, d) => Ok(Modulo::from(n, modulo) / Modulo::from(d as i64, modulo)),
+            Number::Real(_) => Err("Cannot convert real number to Modulo".to_owned()),
+        }
+    }
 
     pub fn pow(mut self, rhs: i64) -> Self {
         let mut exp;
-        if rhs == 0 { return self }
-        else if rhs < 0 {
-            self = self.inv();
-            exp = (-rhs) as u64;
-        } else { exp = rhs as u64; }
+        match rhs.cmp(&0) {
+            Ordering::Equal => return self,
+            Ordering::Less => self = self.inv(),
+            _ => {}
+        }
+        exp = rhs.unsigned_abs();
 
         let (mut accum, mut power) = (Modulo::from(1, 0), self);
         while exp > 0 {
-            if exp & 1 == 1 { accum = accum * power; }
+            if exp & 1 == 1 {
+                accum = accum * power;
+            }
             power = power * power;
             exp >>= 1;
         }
@@ -177,92 +182,118 @@ impl Modulo {
 
 impl Neg for Modulo {
     type Output = Self;
-    fn neg(self) -> Self { Modulo::from(-self.residue, self.modulo) }
+    fn neg(self) -> Self {
+        Modulo::from(-self.residue, self.modulo)
+    }
 }
 
 impl Add for Modulo {
     type Output = Self;
-    fn add(self, rhs: Self) -> Self { Modulo::from(
-        self.residue + rhs.residue, bezout(self.modulo, rhs.modulo).0,
-    )}
+    fn add(self, rhs: Self) -> Self {
+        Modulo::from(
+            self.residue + rhs.residue,
+            bezout(self.modulo, rhs.modulo).0,
+        )
+    }
 }
 
 impl Add<Number> for Modulo {
     type Output = Result<Modulo, String>;
-    fn add(self, rhs: Number) -> Self::Output
-        { self.from_number(rhs).map(|n| self + n) }
+    fn add(self, rhs: Number) -> Self::Output {
+        Modulo::from_number(rhs, self.modulo).map(|n| self + n)
+    }
 }
 
 impl Sub for Modulo {
     type Output = Self;
-    fn sub(self, rhs: Self) -> Self { Modulo::from(
-        self.residue - rhs.residue, bezout(self.modulo, rhs.modulo).0,
-    )}
+    fn sub(self, rhs: Self) -> Self {
+        Modulo::from(
+            self.residue - rhs.residue,
+            bezout(self.modulo, rhs.modulo).0,
+        )
+    }
 }
 
 impl Sub<Number> for Modulo {
     type Output = Result<Modulo, String>;
-    fn sub(self, rhs: Number) -> Self::Output
-        { self.from_number(rhs).map(|n| self - n) }
+    fn sub(self, rhs: Number) -> Self::Output {
+        Modulo::from_number(rhs, self.modulo).map(|n| self - n)
+    }
 }
 
 impl Sub<Modulo> for Number {
     type Output = Result<Modulo, String>;
-    fn sub(self, rhs: Modulo) -> Self::Output
-        { rhs.from_number(self).map(|n| n - rhs) }
+    fn sub(self, rhs: Modulo) -> Self::Output {
+        Modulo::from_number(self, rhs.modulo).map(|n| n - rhs)
+    }
 }
 
 impl Mul for Modulo {
     type Output = Self;
-    fn mul(self, rhs: Self) -> Self { Modulo::from(
-        self.residue * rhs.residue, bezout(self.modulo, rhs.modulo).0,
-    )}
+    fn mul(self, rhs: Self) -> Self {
+        Modulo::from(
+            self.residue * rhs.residue,
+            bezout(self.modulo, rhs.modulo).0,
+        )
+    }
 }
 
 impl Mul<Number> for Modulo {
     type Output = Result<Modulo, String>;
-    fn mul(self, rhs: Number) -> Self::Output
-        { self.from_number(rhs).map(|n| self * n) }
+    fn mul(self, rhs: Number) -> Self::Output {
+        Modulo::from_number(rhs, self.modulo).map(|n| self * n)
+    }
 }
 
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl Div for Modulo {
     type Output = Self;
-    fn div(self, rhs: Self) -> Self { self * rhs.inv() }
+    fn div(self, rhs: Self) -> Self {
+        self * rhs.inv()
+    }
 }
 
 impl Div<Number> for Modulo {
     type Output = Result<Modulo, String>;
-    fn div(self, rhs: Number) -> Self::Output
-        { self.from_number(rhs).map(|n| self / n) }
+    fn div(self, rhs: Number) -> Self::Output {
+        Modulo::from_number(rhs, self.modulo).map(|n| self / n)
+    }
 }
 
 impl Div<Modulo> for Number {
     type Output = Result<Modulo, String>;
-    fn div(self, rhs: Modulo) -> Self::Output
-        { rhs.from_number(self).map(|n| n / rhs) }
+    fn div(self, rhs: Modulo) -> Self::Output {
+        Modulo::from_number(self, rhs.modulo).map(|n| n / rhs)
+    }
 }
 
 impl Rem for Modulo {
     type Output = Self;
-    fn rem(self, rhs: Self) -> Self { Modulo::from(
-        self.residue, bezout(self.modulo,
-            bezout(rhs.residue.abs() as u64, rhs.modulo).0
-        ).0,
-    )}
+    fn rem(self, rhs: Self) -> Self {
+        Modulo::from(
+            self.residue,
+            bezout(
+                self.modulo,
+                bezout(rhs.residue.unsigned_abs(), rhs.modulo).0,
+            )
+            .0,
+        )
+    }
 }
 
 impl Rem<Number> for Modulo {
     type Output = Result<Modulo, String>;
-    fn rem(self, rhs: Number) -> Self::Output
-        { self.from_number(rhs).map(|n| self % n) }
+    fn rem(self, rhs: Number) -> Self::Output {
+        Modulo::from_number(rhs, self.modulo).map(|n| self % n)
+    }
 }
 
 impl Rem<Modulo> for Number {
     type Output = Result<Modulo, String>;
-    fn rem(self, rhs: Modulo) -> Self::Output
-        { rhs.from_number(self).map(|n| n % rhs) }
+    fn rem(self, rhs: Modulo) -> Self::Output {
+        Modulo::from_number(self, rhs.modulo).map(|n| n % rhs)
+    }
 }
-
 
 impl Display for Modulo {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -271,12 +302,12 @@ impl Display for Modulo {
 }
 
 impl From<Modulo> for Object {
-    fn from(m: Modulo) -> Self { Object::new(m) }
+    fn from(m: Modulo) -> Self {
+        Object::new(m)
+    }
 }
 
-
-
-create_bltns!{modulo("mod"):
+create_bltns! {modulo("mod"):
     /// mod.Mod (m: integer) -> modulo
     /// Return residue class '1 (mod m)'
     /// Can be used to generate all residue classes
@@ -285,8 +316,7 @@ create_bltns!{modulo("mod"):
     #[global]
     fn Mod(m: Number) -> Result<Modulo, &'static str> { match m {
         Number::Ratio(0, 1) => Err("Modulo can't be zero"),
-        Number::Ratio(m, 1) => Ok(Modulo::from(1, m.abs() as u64)),
+        Number::Ratio(m, 1) => Ok(Modulo::from(1, m.unsigned_abs())),
         _ => Err("Modulo must be a non-zero integer"),
     }}
 }
-

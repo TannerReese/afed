@@ -1,13 +1,13 @@
+use std::fmt::{Display, Error, Formatter};
 use std::vec::Vec;
-use std::fmt::{Display, Formatter, Error};
 
-use super::opers::{Unary, Binary};
-use super::{Operable, Object, NamedType};
+use super::opers::{Binary, Unary};
+use super::{NamedType, Object, Operable};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null();
-name_type!{null: Null}
-impl_operable!{Null:
+name_type! {null: Null}
+impl_operable! {Null:
     //! Null value. Exists for compatability with JSON
 }
 
@@ -18,6 +18,7 @@ impl Display for Null {
 }
 
 impl From<Null> for Object {
-    fn from(n: Null) -> Self { Object::new(n) }
+    fn from(n: Null) -> Self {
+        Object::new(n)
+    }
 }
-

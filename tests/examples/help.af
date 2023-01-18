@@ -22,5 +22,5 @@ help num.sqrt = ``,
 help map = ``,
 
 # Test manipulation of help message
-(help null).as_string + "   Extra..." = ``,
+(help null).into_string + "   Extra..." = ``,
 

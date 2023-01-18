@@ -1,6 +1,5 @@
-
 macro_rules! eval_err {
-    ($($arg:tt)*) => { EvalError::new(format!($($arg)*)) };
+    ($($arg:tt)*) => { EvalError::create(format!($($arg)*)) };
 }
 
 macro_rules! count_tt {
@@ -24,13 +23,20 @@ macro_rules! call {
 
 // Quickly give name to a type so `Objectish` can be implemented
 macro_rules! name_type {
-    ($name:ident: $tp:ty) => { name_type!{stringify!($name), $tp} };
-    ($name:literal: $tp:ty) => { name_type!{$name, $tp} };
-    ($name:expr, $tp:ty) =>{
-        impl NamedType for $tp { fn type_name() -> &'static str { $name }}
+    ($name:ident: $tp:ty) => {
+        name_type! {stringify!($name), $tp}
+    };
+    ($name:literal: $tp:ty) => {
+        name_type! {$name, $tp}
+    };
+    ($name:expr, $tp:ty) => {
+        impl NamedType for $tp {
+            fn type_name() -> &'static str {
+                $name
+            }
+        }
     };
 }
-
 
 /* Ergonomically implement the unary and binary operations as well as
  * method calls on a type so `Objectish` can be implemented.
@@ -84,10 +90,13 @@ macro_rules! impl_operable {
     (@una , (), $vars:tt) => {};
     (@una , ($name:ident), ($self:ident, $op:ident,
         ($id:ident : $tp:ty) -> $ret:ty $block:block
-    )) => { if let Unary::$name = $op {
-        let ret: $ret = (|$id: $tp| $block)($self.into());
-        return Some(ret.into());
-    }};
+    )) => {
+        #[allow(clippy::redundant_closure_call)]
+        if let Unary::$name = $op {
+            let ret: $ret = (|$id: $tp| $block)($self.into());
+            return Some(ret.into());
+        }
+    };
 
 
 
@@ -124,9 +133,11 @@ macro_rules! impl_operable {
                 Ok(other) => return Err((Object::new($self), other.into())),
                 Err(other) => { $other = other },
             })*
+            #[allow(clippy::redundant_closure_call)]
             match $self.try_into() {
                 Ok(self_) => match $other.try_cast() {
                     Ok(other) => {
+                        // Closure must be used to make 'return's work inside $block
                         let ret: $ret = (|$v1: $t1, $v2: $t2| $block)(
                             self_, other
                         );
@@ -326,8 +337,6 @@ macro_rules! impl_operable {
     )*} };
 }
 
-
-
 /* Used by library code to create a `Bltn::Map` instance
  * which will be named `$pkg`. It will contain constants and
  * functions corresponding to the function declarations provided.
@@ -372,7 +381,7 @@ macro_rules! create_bltns {
     (@func , $help:expr, $is_global:expr, ($pkg:ident, $name:expr,
         $func:ident ($($arg:ident : $tp:ty),+) -> $ret:ty $block:block
     )) => { if $pkg.insert(stringify!($func).to_owned(),
-        ($is_global, Bltn::Const(BltnFunc::new(
+        ($is_global, Bltn::Const(BltnFunc::create(
             concat!($name, '.', stringify!($func)), $help,
             |args: [Object; count_tt!($($arg)+)]| {
                 let [$($arg),+] = args;
@@ -463,4 +472,3 @@ macro_rules! create_bltns {
         $($(#$meta)* $vis fn $func $args -> $ret $block)*
     }};
 }
-

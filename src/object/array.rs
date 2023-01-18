@@ -1,20 +1,16 @@
-use std::collections::VecDeque;
-use std::fmt::{Display, Formatter, Error, Write};
 use std::cmp::Ordering;
+use std::collections::VecDeque;
+use std::fmt::{Display, Error, Formatter, Write};
 use std::iter::repeat;
 
-use super::opers::{Unary, Binary};
-use super::{
-    Operable, Object, Castable,
-    NamedType, ErrObject, EvalError,
-};
+use super::opers::{Binary, Unary};
+use super::{Castable, ErrObject, EvalError, NamedType, Object, Operable};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);
-name_type!{array: Array}
+name_type! {array: Array}
 
-
-impl_operable!{Array:
+impl_operable! {Array:
     //! Dynamically sized heterogeneous list of objects
 
     /// array + array -> array
@@ -43,6 +39,9 @@ impl_operable!{Array:
     /// array.len -> natural
     /// Number of elements in 'array'
     pub fn len(&self) -> usize { self.0.len() }
+    /// array.is_empty -> bool
+    /// Whether array has no elements
+    pub fn is_empty(&self) -> bool { self.0.is_empty() }
 
     /// array.fst -> any
     /// First element of 'array'
@@ -121,29 +120,35 @@ impl_operable!{Array:
     pub fn rev(self) -> Self { self.0.into_iter().rev().collect() }
 }
 
-
-
 impl Array {
     fn all_or_any(&self, is_all: bool, pred: Object) -> bool {
         for elem in self.0.iter() {
             match call!(pred(elem.clone())).cast() {
                 Err(_) => return false,
-                Ok(is_true) => if is_all != is_true { return !is_all },
+                Ok(is_true) => {
+                    if is_all != is_true {
+                        return !is_all;
+                    }
+                }
             }
         }
-        return is_all;
+        is_all
     }
 
     fn extreme(&self, direc: Ordering) -> Result<Object, &'static str> {
-        if self.0.len() == 0 { return Err(
-            "Empty array has no maximum or minimum"
-        )}
+        if self.0.is_empty() {
+            return Err("Empty array has no maximum or minimum");
+        }
 
         let mut ext_obj = &self.0[0];
         for ob in self.0[1..].iter() {
             if let Some(ord) = ob.partial_cmp(ext_obj) {
-                if ord == direc { ext_obj = ob; }
-            } else { return Err("Cannot compare all elements in array") }
+                if ord == direc {
+                    ext_obj = ob;
+                }
+            } else {
+                return Err("Cannot compare all elements in array");
+            }
         }
         Ok(ext_obj.clone())
     }
@@ -154,7 +159,9 @@ impl Display for Array {
         f.write_char('[')?;
         let mut is_first = true;
         for obj in self.0.iter() {
-            if !is_first { f.write_str(", ")?; }
+            if !is_first {
+                f.write_str(", ")?;
+            }
             is_first = false;
             write!(f, "{}", obj)?;
         }
@@ -162,33 +169,34 @@ impl Display for Array {
     }
 }
 
-
-
 impl<T: Into<Object>> FromIterator<T> for Array {
-    fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self {
-        Array(iter.into_iter().map(|x|
-            x.into()
-        ).collect())
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Array(iter.into_iter().map(|x| x.into()).collect())
     }
 }
 
 impl<T: Into<Object>> FromIterator<T> for Object {
-    fn from_iter<I: IntoIterator<Item=T>>(iter: I) -> Self
-        { Array::from_iter(iter).into() }
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Array::from_iter(iter).into()
+    }
 }
 
-
 impl From<Array> for Vec<Object> {
-    fn from(arr: Array) -> Self { arr.0 }
+    fn from(arr: Array) -> Self {
+        arr.0
+    }
 }
 
 impl From<Array> for Object {
-    fn from(arr: Array) -> Self { arr.0.into() }
+    fn from(arr: Array) -> Self {
+        arr.0.into()
+    }
 }
 
 impl<T: Into<Object>> From<Vec<T>> for Array {
-    fn from(elems: Vec<T>) -> Self
-        { elems.into_iter().map(|x| x.into()).collect() }
+    fn from(elems: Vec<T>) -> Self {
+        elems.into_iter().map(|x| x.into()).collect()
+    }
 }
 
 impl<T: Into<Object>> From<Vec<T>> for Object {
@@ -198,12 +206,13 @@ impl<T: Into<Object>> From<Vec<T>> for Object {
             let elm = elm.into();
             if elm.is_err() {
                 return elm;
-            } else { objs.push(elm) }
+            } else {
+                objs.push(elm)
+            }
         }
         Object::new(Array(objs))
     }
 }
-
 
 impl<T: Into<Object>, const N: usize> From<[T; N]> for Object {
     fn from(arr: [T; N]) -> Object {
@@ -211,24 +220,24 @@ impl<T: Into<Object>, const N: usize> From<[T; N]> for Object {
     }
 }
 
-
-
 impl<T: Into<Object> + Castable> Castable for Vec<T> {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         let mut elems: VecDeque<Object> = Array::cast(obj)?.0.into();
 
         let mut casted = Vec::new();
-        while let Some(x) = elems.pop_front() { match T::cast(x) {
-            Ok(x) => casted.push(x),
-            Err((x, err)) => {
-                elems.push_front(x);
-                return Err((
-                    casted.into_iter().map(|x| x.into())
-                    .chain(elems).collect(), err
-                ))
-            },
-        }}
-        Ok(casted.into())
+        while let Some(x) = elems.pop_front() {
+            match T::cast(x) {
+                Ok(x) => casted.push(x),
+                Err((x, err)) => {
+                    elems.push_front(x);
+                    return Err((
+                        casted.into_iter().map(|x| x.into()).chain(elems).collect(),
+                        err,
+                    ));
+                }
+            }
+        }
+        Ok(casted)
     }
 }
 
@@ -236,10 +245,10 @@ impl<T: Into<Object> + Castable, const N: usize> Castable for [T; N] {
     fn cast(obj: Object) -> Result<Self, (Object, ErrObject)> {
         Vec::<T>::cast(obj)?.try_into().map_err(|v: Vec<T>| {
             let len = v.len();
-            (v.into(), eval_err!(
-                "Array has {} elements, but {} were expected",
-                len, N,
-            ))
+            (
+                v.into(),
+                eval_err!("Array has {} elements, but {} were expected", len, N,),
+            )
         })
     }
 }
@@ -272,7 +281,6 @@ macro_rules! convert_tuple {
     };
 }
 
-convert_tuple!{x: A}
-convert_tuple!{x: A, y: B}
-convert_tuple!{x: A, y: B, z: C}
-
+convert_tuple! {x: A}
+convert_tuple! {x: A, y: B}
+convert_tuple! {x: A, y: B, z: C}

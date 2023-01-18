@@ -1,30 +1,25 @@
-use std::vec::IntoIter;
 use std::cell::Cell;
-use std::fmt::{Debug, Display, Formatter, Error, Write};
-use std::ops::{Neg, Add, Sub, Mul, Div, Rem};
-use std::ops::{AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
-use std::ops::{Index, IndexMut};
+use std::fmt::{Debug, Display, Error, Formatter, Write};
 use std::iter::zip;
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
+use std::ops::{Index, IndexMut};
+use std::vec::IntoIter;
 
-use super::vec::Vector;
 use super::augmat::AugMatrix;
 use super::bltn_func::BltnFunc;
+use super::vec::Vector;
 
 use crate::expr::Bltn;
-use crate::object::{
-    Operable, Object,
-    Unary, Binary,
-    NamedType, EvalError, ErrObject,
-};
 use crate::object::array::Array;
+use crate::object::{Binary, ErrObject, EvalError, NamedType, Object, Operable, Unary};
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
         let (adims, bdims) = ($a.dims, $b.dims);
-        if adims != bdims { panic!(
-            "Matrix dimensions {:?} and {:?} do not match",
-            adims, bdims,
-        )}
+        if adims != bdims {
+            panic!("Matrix dimensions {:?} and {:?} do not match", adims, bdims,)
+        }
     };
 }
 
@@ -33,14 +28,14 @@ pub struct Matrix {
     pub comps: Vec<Object>,
     deter: Cell<Option<Object>>,
 }
-name_type!{matrix: Matrix}
+name_type! {matrix: Matrix}
 
 pub struct IntoVectors {
     dims: usize,
     comps: IntoIter<Object>,
 }
 
-impl_operable!{Matrix:
+impl_operable! {Matrix:
     //! Matrix with arbitrary size and heterogeneous components
 
     /// -matrix -> matrix
@@ -177,7 +172,6 @@ impl_operable!{Matrix:
     }
 }
 
-
 impl Matrix {
     pub fn new(rows: Vec<Vec<Object>>) -> Result<Matrix, &'static str> {
         let row_dim = rows.len();
@@ -192,28 +186,38 @@ impl Matrix {
 
         let comps = rows.into_iter().flatten().collect();
         Ok(Matrix {
-            dims: (row_dim, col_dim), comps,
+            dims: (row_dim, col_dim),
+            comps,
             deter: Cell::new(None),
         })
     }
 
     pub fn build<F, T>((rows, cols): (usize, usize), mut gen: F) -> Self
-    where T: Into<Object>, F: FnMut(usize, usize) -> T {
+    where
+        T: Into<Object>,
+        F: FnMut(usize, usize) -> T,
+    {
         let mut comps = Vec::new();
-        for i in 0..rows { for j in 0..cols {
-            comps.push(gen(i, j).into())
-        }}
-        Matrix {dims: (rows, cols), comps, deter: Cell::new(None)}
+        for i in 0..rows {
+            for j in 0..cols {
+                comps.push(gen(i, j).into())
+            }
+        }
+        Matrix {
+            dims: (rows, cols),
+            comps,
+            deter: Cell::new(None),
+        }
     }
-/*
-    pub fn identity(dims: usize) -> Self {
-        let ident = Self::build((dims, dims), |r, c|
-            if r == c { 1 } else { 0 }.into()
-        );
-        ident.deter.set(Some(1.into()));
-        ident
-    }
-*/
+    /*
+        pub fn identity(dims: usize) -> Self {
+            let ident = Self::build((dims, dims), |r, c|
+                if r == c { 1 } else { 0 }.into()
+            );
+            ident.deter.set(Some(1.into()));
+            ident
+        }
+    */
     pub fn transpose(&mut self) {
         let (rows, cols) = self.dims;
         let comps = &mut self.comps;
@@ -224,25 +228,34 @@ impl Matrix {
 
         let mut visited = Vec::with_capacity(rows * cols);
         visited.resize(rows * cols, false);
-        for i in 0..rows { for j in 0..cols {
-            let start = j + i * cols;
-            if visited[start] { continue }
-            visited[start] = true;
+        for i in 0..rows {
+            for j in 0..cols {
+                let start = j + i * cols;
+                if visited[start] {
+                    continue;
+                }
+                visited[start] = true;
 
-            let mut loc = start;
-            loop {
-                let prev_loc = prev(loc);
-                if prev_loc == start { break }
-                comps.swap(loc, prev_loc);
-                loc = prev_loc;
-                visited[loc] = true;
+                let mut loc = start;
+                loop {
+                    let prev_loc = prev(loc);
+                    if prev_loc == start {
+                        break;
+                    }
+                    comps.swap(loc, prev_loc);
+                    loc = prev_loc;
+                    visited[loc] = true;
+                }
             }
-        }}
+        }
         self.dims = (self.dims.1, self.dims.0);
     }
 
     pub fn into_rows(self) -> IntoVectors {
-        IntoVectors {dims: self.cols(), comps: self.comps.into_iter()}
+        IntoVectors {
+            dims: self.cols(),
+            comps: self.comps.into_iter(),
+        }
     }
 
     pub fn into_columns(mut self) -> IntoVectors {
@@ -250,57 +263,85 @@ impl Matrix {
         self.into_rows()
     }
 
-
-    pub fn flrdiv_assign(&mut self, rhs: Object)
-        { self.comps.iter_mut().for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone()))); }
-    pub fn flrdiv(mut self, rhs: Object) -> Self { self.flrdiv_assign(rhs); self }
-
+    pub fn flrdiv_assign(&mut self, rhs: Object) {
+        self.comps
+            .iter_mut()
+            .for_each(|r| r.do_inside(|x| x.flrdiv(rhs.clone())));
+    }
+    pub fn flrdiv(mut self, rhs: Object) -> Self {
+        self.flrdiv_assign(rhs);
+        self
+    }
 
     pub fn inverse(self) -> (Object, Option<Object>) {
         if self.dims.0 != self.dims.1 {
-            return (eval_err!(concat!(
-                "Rows dimension {} and column dimension {} don't match.",
-                " Cannot take inverse"
-            ), self.dims.0, self.dims.1), None);
+            return (
+                eval_err!(
+                    concat!(
+                        "Rows dimension {} and column dimension {} don't match.",
+                        " Cannot take inverse"
+                    ),
+                    self.dims.0,
+                    self.dims.1
+                ),
+                None,
+            );
         }
 
         let rows = self.rows();
         let id = ident(rows).unwrap();
         let mut augmat = AugMatrix::new(vec![self, id.clone()]);
-        if let Err(err) = augmat.gauss_elim(0) { return (err, None); }
+        if let Err(err) = augmat.gauss_elim(0) {
+            return (err, None);
+        }
 
         if augmat.matrices[0] == id {
             let inv = augmat.matrices.remove(1);
             let det = call!((augmat.deter).inv());
             inv.deter.set(Some(augmat.deter));
             (inv.into(), Some(det))
-        } else { (eval_err!("Matrix is singular"), None) }
+        } else {
+            (eval_err!("Matrix is singular"), None)
+        }
     }
 
-
     pub fn into_determinant(self) -> Object {
-        if let Some(deter) = self.deter.take() { return deter }
+        if let Some(deter) = self.deter.take() {
+            return deter;
+        }
 
         if self.dims.0 != self.dims.1 {
-            return eval_err!(concat!(
-                "Rows dimension {} and column dimension {} don't match.",
-                " Cannot take inverse"
-            ), self.dims.0, self.dims.1);
+            return eval_err!(
+                concat!(
+                    "Rows dimension {} and column dimension {} don't match.",
+                    " Cannot take inverse"
+                ),
+                self.dims.0,
+                self.dims.1
+            );
         }
 
         let rows = self.rows();
         let mut augmat = AugMatrix::new(vec![self]);
-        if let Err(err) = augmat.gauss_elim(0) { return err; }
+        if let Err(err) = augmat.gauss_elim(0) {
+            return err;
+        }
 
         if augmat.matrices[0] == ident(rows).unwrap() {
             call!((augmat.deter).inv())
-        } else { 0.into() }
+        } else {
+            0.into()
+        }
     }
 }
 
 impl Debug for Matrix {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "Matrix {{ dims: {:?}, comps: {:?} }}", self.dims, self.comps)
+        write!(
+            f,
+            "Matrix {{ dims: {:?}, comps: {:?} }}",
+            self.dims, self.comps
+        )
     }
 }
 
@@ -309,7 +350,11 @@ impl Clone for Matrix {
         let old_det = self.deter.take();
         let deter = Cell::new(old_det.clone());
         self.deter.set(old_det);
-        Matrix { dims: self.dims, comps: self.comps.clone(), deter }
+        Matrix {
+            dims: self.dims,
+            comps: self.comps.clone(),
+            deter,
+        }
     }
 }
 
@@ -323,25 +368,29 @@ impl Eq for Matrix {}
 
 impl Index<(usize, usize)> for Matrix {
     type Output = Object;
-    fn index(&self, (r, c): (usize, usize)) -> &Object
-        { let cols = self.cols(); &self.comps[c + r * cols] }
+    fn index(&self, (r, c): (usize, usize)) -> &Object {
+        let cols = self.cols();
+        &self.comps[c + r * cols]
+    }
 }
 
 impl IndexMut<(usize, usize)> for Matrix {
-    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut Object
-        { let cols = self.cols(); &mut self.comps[c + r * cols] }
+    fn index_mut(&mut self, (r, c): (usize, usize)) -> &mut Object {
+        let cols = self.cols();
+        &mut self.comps[c + r * cols]
+    }
 }
 
 impl Iterator for IntoVectors {
     type Item = Vector;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.comps.as_slice().len() > 0 {
+        if !self.comps.as_slice().is_empty() {
             Some(self.comps.by_ref().take(self.dims).collect())
-        } else { None }
+        } else {
+            None
+        }
     }
 }
-
-
 
 impl Neg for Matrix {
     type Output = Self;
@@ -360,7 +409,10 @@ impl AddAssign for Matrix {
 
 impl Add for Matrix {
     type Output = Self;
-    fn add(mut self, rhs: Self) -> Self { self += rhs; self }
+    fn add(mut self, rhs: Self) -> Self {
+        self += rhs;
+        self
+    }
 }
 
 impl SubAssign for Matrix {
@@ -372,116 +424,134 @@ impl SubAssign for Matrix {
 
 impl Sub for Matrix {
     type Output = Self;
-    fn sub(mut self, rhs: Self) -> Self { self -= rhs; self }
+    fn sub(mut self, rhs: Self) -> Self {
+        self -= rhs;
+        self
+    }
 }
 
-
-
 impl MulAssign<Object> for Matrix {
-    fn mul_assign(&mut self, rhs: Object)
-        { self.comps.iter_mut().for_each(|a| *a *= rhs.clone()); }
+    fn mul_assign(&mut self, rhs: Object) {
+        self.comps.iter_mut().for_each(|a| *a *= rhs.clone());
+    }
 }
 
 impl Mul<Object> for Matrix {
     type Output = Matrix;
-    fn mul(mut self, rhs: Object) -> Matrix { self *= rhs; self }
+    fn mul(mut self, rhs: Object) -> Matrix {
+        self *= rhs;
+        self
+    }
 }
 
 impl Mul<Matrix> for Object {
     type Output = Matrix;
     fn mul(self, mut rhs: Matrix) -> Matrix {
-        rhs.comps.iter_mut().for_each(|a| a.do_inside(|x| self.clone() * x));
+        rhs.comps
+            .iter_mut()
+            .for_each(|a| a.do_inside(|x| self.clone() * x));
         rhs
     }
 }
 
 impl DivAssign<Object> for Matrix {
-    fn div_assign(&mut self, rhs: Object)
-        { self.comps.iter_mut().for_each(|a| *a /= rhs.clone()); }
+    fn div_assign(&mut self, rhs: Object) {
+        self.comps.iter_mut().for_each(|a| *a /= rhs.clone());
+    }
 }
 
 impl Div<Object> for Matrix {
     type Output = Matrix;
-    fn div(mut self, rhs: Object) -> Matrix { self /= rhs; self }
+    fn div(mut self, rhs: Object) -> Matrix {
+        self /= rhs;
+        self
+    }
 }
 
 impl RemAssign<Object> for Matrix {
-    fn rem_assign(&mut self, rhs: Object)
-        { self.comps.iter_mut().for_each(|a| *a %= rhs.clone()) }
+    fn rem_assign(&mut self, rhs: Object) {
+        self.comps.iter_mut().for_each(|a| *a %= rhs.clone())
+    }
 }
 
 impl Rem<Object> for Matrix {
     type Output = Matrix;
-    fn rem(mut self, rhs: Object) -> Matrix { self %= rhs; self }
+    fn rem(mut self, rhs: Object) -> Matrix {
+        self %= rhs;
+        self
+    }
 }
-
-
 
 impl Mul<Vector> for Matrix {
     type Output = Vector;
-    fn mul(self, rhs: Vector) -> Vector
-        { self.into_rows().map(|row| row * rhs.clone()).collect() }
+    fn mul(self, rhs: Vector) -> Vector {
+        self.into_rows().map(|row| row * rhs.clone()).collect()
+    }
 }
 
 impl Mul<Matrix> for Vector {
     type Output = Vector;
-    fn mul(self, rhs: Matrix) -> Vector
-        { rhs.into_columns().map(|col| self.clone() * col).collect() }
+    fn mul(self, rhs: Matrix) -> Vector {
+        rhs.into_columns().map(|col| self.clone() * col).collect()
+    }
 }
 
 impl Mul<Matrix> for Matrix {
     type Output = Matrix;
     fn mul(self, rhs: Matrix) -> Self::Output {
-        if self.cols() != rhs.rows() { panic!(
-            "For matrix multiplication, {} and {} do not match",
-            self.cols(), rhs.rows(),
-        )}
-        Matrix::build((self.rows(), rhs.cols()), |i, j|
-            (0..self.cols()).map(|k|
-                self[(i, k)].clone() * rhs[(k, j)].clone()
-            ).sum::<Object>()
-        )
+        if self.cols() != rhs.rows() {
+            panic!(
+                "For matrix multiplication, {} and {} do not match",
+                self.cols(),
+                rhs.rows(),
+            )
+        }
+        Matrix::build((self.rows(), rhs.cols()), |i, j| {
+            (0..self.cols())
+                .map(|k| self[(i, k)].clone() * rhs[(k, j)].clone())
+                .sum::<Object>()
+        })
     }
 }
-
 
 impl Display for Matrix {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let (rows, cols) = self.dims;
-        
+
         f.write_str("M[")?;
         let mut is_first = true;
         for i in 0..rows {
-            if !is_first { f.write_str(", ")?; }
+            if !is_first {
+                f.write_str(", ")?;
+            }
             is_first = false;
-            
+
             let mut is_first_inner = true;
             f.write_char('[')?;
             for j in 0..cols {
-                if !is_first_inner { f.write_str(", ")?; }
+                if !is_first_inner {
+                    f.write_str(", ")?;
+                }
                 is_first_inner = false;
                 write!(f, "{}", self[(i, j)])?;
             }
             f.write_char(']')?;
         }
         f.write_char(']')
-
     }
 }
 
 impl From<Matrix> for Object {
     fn from(m: Matrix) -> Self {
         if m.comps.iter().any(|x| x.is_err()) {
-            m.comps.into_iter()
-            .filter(|x| x.is_err())
-            .next().unwrap()
-        } else { Object::new(m) }
+            m.comps.into_iter().find(|x| x.is_err()).unwrap()
+        } else {
+            Object::new(m)
+        }
     }
 }
 
-
-
-create_bltns!{mat:
+create_bltns! {mat:
     /// mat.M (rows: array of arrays) -> matrix
     /// Construct a matrix from a array of rows
     #[allow(non_snake_case)]
@@ -489,7 +559,7 @@ create_bltns!{mat:
     fn M(arr: Array) -> Result<Matrix, ErrObject> {
         let mut comps = Vec::new();
         for row in arr.0.into_iter() { comps.push(row.cast()?) }
-        Matrix::new(comps).map_err(|s| EvalError::new(s.to_owned()))
+        Matrix::new(comps).map_err(|s| EvalError::create(s.to_owned()))
     }
 
     /// mat.zero (rows: natural) (cols: natural) -> matrix
@@ -542,4 +612,3 @@ create_bltns!{mat:
     /// Determinant of the matrix 'm'
     fn deter(m: Matrix) -> Object { m.into_determinant() }
 }
-
