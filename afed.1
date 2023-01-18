@@ -1,0 +1,253 @@
+.TH AFED 1 "January 12, 2023"
+.SH NAME
+afed - an interpreted functional language for interactive computations
+
+.SH SYNOPSIS
+.SY afed
+[ \fB-CdnE\fP ]
+[ \fB-e\fP \fIerrors\fP ]
+[ \fB-i\fP \fIinput\fP ]
+[ [ \fB\-o\fP ] output ]
+.SY afed
+[ \fB\-h\fP | \fB\-?\fP | \fB\-\-help\fP ]
+.YS
+
+
+.SH DESCRIPTION
+Afed is an interpreted functional language which embraces a declarative style
+for ASCII-based interactive computing.
+As opposed to printing results to the command line or a file,
+Afed places the results of computations into \fIequals expressions\fP in the document itself.
+These \fIequals expressions\fP are indicated by '= ``'.
+For example, this line
+.IP
+.EX
+1 - (3 + 4 = ``) = ``
+.EE
+.P
+after evaluation would become
+.IP
+.EX
+1 - (3 + 4 = `7`) = `-6`
+.EE
+.P
+
+The Afed programming language is primarily focused on supporting mathematical computations.
+To this end, it has a number of libraries written in Rust that make it easy to solve mathematical problems.
+
+
+
+.SH OPTIONS
+\fBafed\fP GNU-like syntax for command line arguments.
+
+.TP
+.BI \-i\  INPUT
+.TQ
+.BI \-\-input\  INPUT
+Afed program file that will be parsed and evaluated.
+The results of each computation attahced to an \fIequals expression\fP
+will be printed in the area between the graves.
+If parse errors occur nothing will be printed in that expression.
+INPUT can be '-' to pull the file from STDIN.
+If not given the input defaults to STDIN.
+
+.TP
+.BI \-o\  OUTPUT
+.TQ
+.BI \-\-output\  OUTPUT
+Filename to which the results will be written.
+If there is no output given then the result is written back to the input.
+OUTPUT can be '-' so the result will be printed on STDOUT.
+
+.TP
+.B \-C
+.TQ
+.B \-\-check
+Parses and evaluates the document printing any errors encountered.
+However, no results are sent to the output.
+
+.TP
+.B \-d
+.TQ
+.B \-\-clear
+The text between the graves in each equals expression is deleted.
+It makes no other modifications.
+
+.TP
+.B \-n
+.TQ
+.B \-\-no\-clobber
+Ensures that the input file is not modified.
+If \fB-n\fP is set and the input and output are the same
+the program exit with an error.
+
+.TP
+.BI \-e\  ERRORS
+.TQ
+.BI \-\-errors\  ERRORS
+Filename to which the parsing and evaluation errors will be written.
+ERRORS can be '-' to write the errors to STDOUT.
+If not given the program defaults to STDERR.
+
+.TP
+.B \-E
+.TQ
+.B \-\-no\-errors
+Suppresses any parsing or evaluation errors from being written anywhere.
+If present then any \fB-e\fP flag will be ignored.
+
+.TP
+.B \-h, \-?, \-\-help
+Print a help message for the executable and exits.
+
+
+
+.SH EXAMPLES
+A typical call to Afed will parse, evaluate,
+and then modify the input file.
+.IP
+.EX
+afed input.af
+.EE
+.P
+
+To designate a different place to send the output,
+we can just add an argument.
+.IP
+.EX
+afed input.af output.af
+.EE
+.P
+
+To make sure, the output is different than the input,
+we can use the \fB\-n\fP flag.
+The following command will produce an error since a distinct output is not given.
+.IP
+.EX
+afed \-\-no\-clobber input.af
+.EE
+.P
+
+We could also just check for errors and remove any previous results with
+.IP
+.EX
+afed input.af \-C \-d
+.EE
+.P
+
+If we want to save the errors, we have
+.IP
+.EX
+afed input.af --errors afed_errors.err
+.EE
+.P
+
+
+.SH LANGUAGE
+Afed supports a set of primitive types similar to JavaScript, Python, and many other interpreted languages.
+This includes numerics, strings, booleans, a null type, arrays (lists), and maps (dictionaries).
+Single line comments are started by '\fB#\fP' while multiline comments are delimited by '\fB#{\fP' and '\fB}#\fP'.
+There are methods defined on many of these types which can be called like
+.IP
+.EX
+3.log 81 = `4`,  # Log base 3 of 81
+[1, 2, 3].len = `3`,
+"hello".upper = `"HELLO"`,
+.EE
+.P
+Values can be assigned to variables and used later.
+The order of declaration is irrelevant for evaluation.
+These variables can be scoped using maps.
+.IP
+.EX
+x: {
+    y: 3 * u
+},
+u: 4,
+x.y = `12`,
+.EE
+.P
+Afed also has user-definable functions and lambda expressions.
+At this time, recursive user-defined functions are not supported.
+These are defined and called using a Haskell-like syntax.
+.IP
+.EX
+f x y: x + y,
+f 2 3 = `5`,
+(\\x y: x + y) 2 3 = `5`,
+.EE
+.P
+These definitions also support destructuring of arrays and maps.
+For maps, the destructuring may be fuzzy about the presence of other keys.
+.IP
+.EX
+f [x, y] {a: c, ..}: x * y + c,
+f [3, 2] {a: 5, b: ""} = `11`,
+.EE
+.P
+
+There are a number of builtin libraries to help with calculations.
+.IP \fBnum\fP
+Standard rounding, trigonometric, exponential, logarithmic, and combinatorics functions.
+These are also accessible as methods on numbers
+For convenience, all members of this library are available in the global namespace.
+.IP \fBarr\fP
+Array manipulation functions including \fBmap\fP, \fBfilter\fP, \fBfold\fP, and others.
+These functions can also be called as methods on arrays.
+For convenience, all members of this library are available in the global namespace.
+.IP \fBprs\fP
+Functions dealing with prime numbers and factorization of positive integers.
+This includes \fBis_prime\fP and \fBprime_factors\fP.
+.IP \fBmod\fP
+Contains constructor for modular type, \fBmod.Mod\fP.
+This constructor is available as \fBMod\fP in the global namespace.
+.IP \fBvec\fP
+Contains constructor for vector type, \fBvec.V\fP,
+as well as vector manipulation functions.
+The constructor \fBV\fP is available in the global namespace.
+.IP \fBmat\fP
+Contains constructor for matrix type, \fBmat.M\fP,
+as well as matrix manipulation functions.
+The constructor \fBM\fP is available in the global namespace.
+.IP \fBcalc\fP
+Library for calculating the derivative, integral, maximum, and minimum of real valued functions.
+.IP \fBplt\fP
+Provides constructor, \fBplt.Plot\fP, for creating plots.
+Plots can be used to created 2D graphs of real valued functions that are displayed in the document.
+.P
+
+More information about any objects, methods, or libraries can be found by calling \fBhelp\fP.
+For example, to get information about the \fBlen\fP method or the number,
+we can call
+.IP
+.EX
+help 4 = ``,
+help [1, true, 3].len = ``,
+help arr = ``,
+.EE
+.P
+
+.SH IMPORTING
+An Afed file may import other Afed files with \fBuse\fP statements.
+To import all of the top-level variable declarations from 'child.af' into 'parent.af'
+(assuming 'child.af' and 'parent.af' are in the same directory),
+we would place the following line into 'parent.af' outside of any map
+.IP
+.EX
+use "child.af",
+.EE
+.P
+We may also provide an absolute path to 'child.af'
+or a path relative to where the \fBafed\fP command called.
+We can also do qualified imports by encompassing the \fBuse\fP in a map
+.IP
+.EX
+my_child: { use "child.af" },
+.EE
+.P
+Note that \fBuse\fP can only occur inside of a map body cannot be used as a variable.
+
+.SH AUTHOR
+.IP
+Tanner Reese <tannerjamesreese@gmail.com>
+
