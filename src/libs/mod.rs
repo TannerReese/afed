@@ -1,6 +1,4 @@
-use super::expr::Bltn;
-
-pub mod bltn_func;
+use afed_objects::create_bltns;
 
 pub mod arr;
 pub mod num;

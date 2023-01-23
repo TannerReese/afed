@@ -1,8 +1,7 @@
 use std::fmt::{Display, Error, Formatter};
 use std::vec::Vec;
 
-use super::opers::{Binary, Unary};
-use super::{Castable, ErrObject, EvalError, NamedType, Object, Operable};
+use super::{Castable, ErrObject, Object};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Str(pub String);

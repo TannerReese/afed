@@ -3,8 +3,8 @@ use std::fmt::{Display, Error, Formatter};
 use std::io::Write;
 use std::path::PathBuf;
 
-use super::expr::{Bltn, ExprArena, ExprId};
-use super::object::Object;
+use super::expr::{ExprArena, ExprId};
+use afed_objects::{bltn::Bltn, Object};
 
 use parser::{parse, ParseError};
 

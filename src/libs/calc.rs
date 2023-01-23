@@ -8,10 +8,7 @@ use rand::{
     thread_rng,
 };
 
-use super::bltn_func::BltnFunc;
-
-use crate::expr::Bltn;
-use crate::object::{Castable, ErrObject, EvalError, Object};
+use afed_objects::{call, create_bltns, eval_err, Castable, ErrObject, Object};
 
 macro_rules! dim_check {
     ($d1:expr, $d2:expr) => {

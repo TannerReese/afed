@@ -6,9 +6,14 @@ version = 3
 name = "afed"
 version = "0.1.0"
 dependencies = [
+ "afed_objects",
  "id-arena",
  "rand",
 ]
+
+[[package]]
+name = "afed_objects"
+version = "0.1.0"
 
 [[package]]
 name = "cfg-if"

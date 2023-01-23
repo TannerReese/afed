@@ -1,6 +1,6 @@
 use std::fmt::{Display, Error, Formatter};
 
-use super::{Binary, NamedType, Object, Operable, Unary};
+use super::{Binary, Object, Operable, Unary};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartialEval {

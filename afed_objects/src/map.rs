@@ -5,8 +5,7 @@ use std::vec::Vec;
 use std::borrow::Borrow;
 use std::hash::Hash;
 
-use super::opers::{Binary, Unary};
-use super::{Castable, ErrObject, EvalError, NamedType, Object, Operable};
+use super::{Binary, Castable, ErrObject, Object, Operable, Unary};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map(pub HashMap<String, Object>);

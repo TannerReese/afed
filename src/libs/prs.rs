@@ -1,6 +1,4 @@
-use super::bltn_func::BltnFunc;
-use crate::expr::Bltn;
-use crate::object::Object;
+use afed_objects::{create_bltns, Object};
 
 pub struct PrimeSieve {
     primality: Vec<bool>,

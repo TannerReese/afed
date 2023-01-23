@@ -12,8 +12,8 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 
 use self::bool::Bool;
+pub use self::opers::{Assoc, Binary, Unary};
 use self::partial_eval::PartialEval;
-pub use opers::{Assoc, Binary, Unary};
 
 macro_rules! try_ok {
     ($obj:expr) => {{
@@ -28,8 +28,13 @@ macro_rules! try_ok {
 
 mod opers;
 
+#[macro_use]
+pub mod macros;
+
 pub mod array;
+pub mod bltn;
 pub mod bool;
+pub mod error;
 pub mod map;
 pub mod null;
 pub mod number;
@@ -163,8 +168,9 @@ impl Object {
     }
 
     pub fn is_err(&self) -> bool {
-        self.is_a::<EvalError>()
+        self.is_a::<error::EvalError>()
     }
+
     pub fn ok_or_err(self) -> Result<Object, ErrObject> {
         if self.is_err() {
             Err(self)
@@ -172,9 +178,11 @@ impl Object {
             Ok(self)
         }
     }
+
     pub fn type_id(&self) -> TypeId {
         (*self.0).as_any().type_id()
     }
+
     pub fn is_a<T>(&self) -> bool
     where
         T: Any,
@@ -556,70 +564,5 @@ impl DivAssign for Object {
 impl RemAssign for Object {
     fn rem_assign(&mut self, rhs: Self) {
         self.do_inside(|x| x % rhs)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EvalError {
-    pub id: usize,
-    pub msg: String,
-}
-name_type! {error: EvalError}
-
-// Only for generating unique identifiers on EvalError
-use std::sync::atomic::AtomicUsize;
-
-static EVAL_ERROR_COUNTER: AtomicUsize = AtomicUsize::new(0);
-impl EvalError {
-    pub fn create(msg: String) -> ErrObject {
-        use std::sync::atomic::Ordering;
-        let id = EVAL_ERROR_COUNTER.fetch_add(1, Ordering::Relaxed);
-        Object::new(EvalError { id, msg })
-    }
-}
-
-impl Operable for EvalError {
-    fn unary(self, _: Unary) -> Option<Object> {
-        Some(Object::new(self))
-    }
-    fn binary(self, _: bool, _: Binary, _: Object) -> Result<Object, (Object, Object)> {
-        Ok(Object::new(self))
-    }
-
-    fn arity(&self, _: Option<&str>) -> Option<usize> {
-        Some(0)
-    }
-    fn help(&self, _: Option<&str>) -> Option<String> {
-        Some(self.to_string())
-    }
-    fn call(&self, _: Option<&str>, _: Vec<Object>) -> Object {
-        Object::new(self.clone())
-    }
-}
-
-impl Display for EvalError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "Eval Error: {}", self.msg)
-    }
-}
-
-impl<T: Into<Object>> From<Result<T, Object>> for Object {
-    fn from(res: Result<T, Object>) -> Self {
-        match res {
-            Ok(x) => x.into(),
-            Err(err) => err,
-        }
-    }
-}
-
-impl<T: Into<Object>> From<Result<T, String>> for Object {
-    fn from(res: Result<T, String>) -> Self {
-        res.map_err(&EvalError::create).into()
-    }
-}
-
-impl<T: Into<Object>> From<Result<T, &str>> for Object {
-    fn from(res: Result<T, &str>) -> Self {
-        res.map_err(|s| s.to_owned()).into()
     }
 }

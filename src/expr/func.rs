@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use std::iter::zip;
 
 use super::{ArgId, ExprArena, ExprId, Pattern};
-use crate::object::{Binary, NamedType, Object, Operable, Unary};
+use afed_objects::{Binary, NamedType, Object, Operable, Unary};
 
 // User defined function who's evaluated using a private AST
 #[derive(Debug, Clone)]

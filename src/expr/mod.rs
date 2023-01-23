@@ -4,9 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Error, Formatter};
 use std::slice::Iter;
 
-use super::object::array::Array;
-use super::object::map::Map;
-use super::object::{Binary, EvalError, Object, Unary};
+use afed_objects::{array::Array, bltn::Bltn, eval_err, map::Map, Binary, Object, Unary};
 
 use func::Func;
 pub use pattern::Pattern;
@@ -198,15 +196,6 @@ impl ExprArena {
 
         self.resolve(root, |_, key| globals.get(key).cloned());
     }
-}
-
-/* A tree of packages that can be converted to objects and added to the arena.
- * The bool in the entries of `Bltn::Map` represents whether that entry
- * should be treated as a global when the `Bltn` is added to an `ExprArena`.
- */
-pub enum Bltn {
-    Const(Object),
-    Map(HashMap<String, (bool, Bltn)>),
 }
 
 impl ExprArena {

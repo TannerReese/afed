@@ -1,6 +1,4 @@
-use super::bltn_func::BltnFunc;
-use crate::expr::Bltn;
-use crate::object::Object;
+use afed_objects::{call, create_bltns, Object};
 
 create_bltns! {num:
     fn pi() -> f64 { std::f64::consts::PI }

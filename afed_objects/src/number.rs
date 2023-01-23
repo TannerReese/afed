@@ -5,7 +5,7 @@ use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 use std::vec::Vec;
 
-use super::{Binary, Castable, ErrObject, EvalError, NamedType, Object, Operable, Unary};
+use super::{Castable, ErrObject, Object};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Number {

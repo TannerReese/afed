@@ -3,9 +3,7 @@ use std::iter::zip;
 
 use super::{ArgId, ExprArena};
 
-use crate::object::array::Array;
-use crate::object::map::Map;
-use crate::object::{EvalError, Object};
+use afed_objects::{array::Array, eval_err, map::Map, Object};
 
 // Tree of arguments used for destructuring calls
 #[derive(Debug, Clone)]

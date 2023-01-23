@@ -4,13 +4,12 @@ use std::fmt::{Display, Error, Formatter};
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
-use crate::expr::{Bltn, ExprId, Pattern};
+use crate::expr::{ExprId, Pattern};
 
-use crate::object::bool::{Bool, Ternary};
-use crate::object::null::Null;
-use crate::object::number::Number;
-use crate::object::string::PrintStr;
-use crate::object::{Assoc, Binary, NamedType, Object, Operable, Unary};
+use afed_objects::{
+    bltn::Bltn, bool::Ternary, impl_operable, name_type, null::Null, number::Number,
+    string::PrintStr, Assoc, Binary, Object, Unary,
+};
 
 use super::{Docmt, Subst};
 
@@ -263,8 +262,8 @@ impl<'a> ParsingContext<'a> {
     fn constant(&mut self) -> ParseResult<Object> {
         alt!(
             self.tag("null").map(|_| Object::new(Null())),
-            self.tag("true").map(|_| Object::new(Bool(true))),
-            self.tag("false").map(|_| Object::new(Bool(false))),
+            self.tag("true").map(|_| true.into()),
+            self.tag("false").map(|_| false.into()),
             self.tag("if").map(|_| Object::new(Ternary())),
             // Don't allow keywords to be used as variables
             alt!(self.tag("use"), self.tag("help")).and_then(|word| Err(Some(parse_err!(

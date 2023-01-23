@@ -3,12 +3,9 @@ use std::io::{empty, sink, stderr, stdin, stdout, Error, Read, Write};
 use std::path::PathBuf;
 use std::process::exit;
 
-#[macro_use]
-pub mod macros;
 pub mod docmt;
 pub mod expr;
 pub mod libs;
-pub mod object;
 
 #[derive(Debug, Clone)]
 enum Stream {

@@ -7,12 +7,9 @@ use std::ops::{Index, IndexMut};
 use std::vec::IntoIter;
 
 use super::augmat::AugMatrix;
-use super::bltn_func::BltnFunc;
 use super::vec::Vector;
 
-use crate::expr::Bltn;
-use crate::object::array::Array;
-use crate::object::{Binary, ErrObject, EvalError, NamedType, Object, Operable, Unary};
+use afed_objects::{call, create_bltns, eval_err, impl_operable, name_type, Object};
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -556,10 +553,15 @@ create_bltns! {mat:
     /// Construct a matrix from a array of rows
     #[allow(non_snake_case)]
     #[global]
-    fn M(arr: Array) -> Result<Matrix, ErrObject> {
+    fn M(rows: Vec<Object>) -> Object {
         let mut comps = Vec::new();
-        for row in arr.0.into_iter() { comps.push(row.cast()?) }
-        Matrix::new(comps).map_err(|s| EvalError::create(s.to_owned()))
+        for row in rows.into_iter() {
+            match row.cast() {
+                Err(err) => return err,
+                Ok(arr) => comps.push(arr),
+            }
+        }
+        Matrix::new(comps).into()
     }
 
     /// mat.zero (rows: natural) (cols: natural) -> matrix

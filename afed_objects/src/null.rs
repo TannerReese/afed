@@ -1,8 +1,7 @@
 use std::fmt::{Display, Error, Formatter};
 use std::vec::Vec;
 
-use super::opers::{Binary, Unary};
-use super::{NamedType, Object, Operable};
+use super::Object;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Null();

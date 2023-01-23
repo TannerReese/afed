@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use std::fmt::{Display, Error, Formatter, Write};
 use std::ops::{Add, AddAssign, Index, IndexMut};
 
-use super::bltn_func::BltnFunc;
-
-use crate::expr::Bltn;
-use crate::object::{Binary, ErrObject, EvalError, NamedType, Object, Operable, Unary};
+use afed_objects::{
+    call, create_bltns, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
+};
 
 #[derive(Debug, Clone)]
 pub struct Plot {

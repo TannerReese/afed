@@ -3,8 +3,7 @@ use std::collections::VecDeque;
 use std::fmt::{Display, Error, Formatter, Write};
 use std::iter::repeat;
 
-use super::opers::{Binary, Unary};
-use super::{Castable, ErrObject, EvalError, NamedType, Object, Operable};
+use super::{Castable, ErrObject, Object};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Array(pub Vec<Object>);

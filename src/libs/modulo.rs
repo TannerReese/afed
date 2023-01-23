@@ -3,11 +3,7 @@ use std::fmt::{Display, Error, Formatter};
 use std::mem::swap;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
-use super::bltn_func::BltnFunc;
-
-use crate::expr::Bltn;
-use crate::object::number::Number;
-use crate::object::{Binary, NamedType, Object, Operable, Unary};
+use afed_objects::{create_bltns, impl_operable, name_type, number::Number, Object};
 
 fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
     let (mut r, mut s) = ((a, 1, 0), (b, 0, 1));

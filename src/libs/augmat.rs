@@ -1,5 +1,5 @@
 use super::mat::Matrix;
-use crate::object::Object;
+use afed_objects::{call, Object};
 
 #[derive(Debug, Clone)]
 pub struct AugMatrix {

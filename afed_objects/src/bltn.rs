@@ -1,8 +1,18 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Error, Formatter};
-use std::vec::Vec;
 
-use crate::object::{Binary, NamedType, Object, Operable, Unary};
+use super::{Binary, NamedType, Object, Operable, Unary};
 
+/* A tree of packages that can be converted to objects and added to the arena.
+ * The bool in the entries of `Bltn::Map` represents whether that entry
+ * should be treated as a global when the `Bltn` is added to an `ExprArena`.
+ */
+pub enum Bltn {
+    Const(Object),
+    Map(HashMap<String, (bool, Bltn)>),
+}
+
+// Wrapper for Rust functions so they can be used in Afed
 #[derive(Clone, Copy)]
 pub struct BltnFunc<const N: usize> {
     pub name: &'static str,

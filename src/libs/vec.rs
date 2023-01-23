@@ -3,12 +3,9 @@ use std::iter::zip;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 
-use super::bltn_func::BltnFunc;
 use super::mat::Matrix;
 
-use crate::expr::Bltn;
-use crate::object::array::Array;
-use crate::object::{Binary, NamedType, Object, Operable, Unary};
+use afed_objects::{array::Array, call, create_bltns, impl_operable, name_type, Object};
 
 macro_rules! check_dims_panic {
     ($a:expr, $b:expr) => {

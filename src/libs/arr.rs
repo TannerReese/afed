@@ -1,9 +1,4 @@
-use super::bltn_func::BltnFunc;
-
-use crate::expr::Bltn;
-use crate::object::array::Array;
-use crate::object::number::Number;
-use crate::object::{ErrObject, Object};
+use afed_objects::{array::Array, call, create_bltns, number::Number, ErrObject, Object};
 
 create_bltns! {arr:
     /// arr.range (start: number) (end: number) -> array of numbers

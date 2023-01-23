@@ -1,6 +1,6 @@
 use std::fmt::{Display, Error, Formatter};
 
-use super::{Binary, Castable, ErrObject, NamedType, Object, Operable, Unary};
+use super::{Castable, ErrObject, Object};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bool(pub bool);
