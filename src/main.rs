@@ -1,11 +1,19 @@
+use libloading::Library;
 use std::fs::{canonicalize, File};
 use std::io::{empty, sink, stderr, stdin, stdout, Error, Read, Write};
 use std::path::PathBuf;
 use std::process::exit;
 
+extern crate afed_objects;
+
+pub mod bltns;
 pub mod docmt;
 pub mod expr;
-pub mod libs;
+mod linking;
+
+use self::bltns::build_bltns;
+use self::linking::load_from_pkgs;
+use afed_objects::pkg::Pkg;
 
 #[derive(Debug, Clone)]
 enum Stream {
@@ -254,20 +262,24 @@ impl Params {
     }
 }
 
-fn parse_and_eval(prms: Params) -> Result<(), Error> {
+fn parse_and_eval(prms: Params, libs: &mut Vec<Library>) -> Result<(), Error> {
     let mut prog = String::new();
     prms.input.to_reader().read_to_string(&mut prog)?;
 
     let mut doc = docmt::Docmt::new(prog, prms.input_path);
     doc.only_clear = prms.clear;
     let mut any_errors = false;
+    let mut errout = prms.errors.to_writer();
 
-    // Generate all of the libraries
-    let bltns = libs::make_bltns();
+    // Generate all of the builtins
+    let mut pkgs = build_bltns();
+
+    // Load the packages from pkg folder
+    load_from_pkgs(&mut errout, &mut pkgs, libs).expect("IO Error while writing loading error");
+    let pkgs = Pkg::from_map(pkgs);
 
     // Parse program and print parse errors to `errout`
-    let mut errout = prms.errors.to_writer();
-    if let Err(count) = doc.parse(&mut errout, bltns) {
+    if let Err(count) = doc.parse(&mut errout, pkgs) {
         any_errors = true;
         write!(
             &mut errout,
@@ -298,7 +310,12 @@ fn parse_and_eval(prms: Params) -> Result<(), Error> {
 }
 
 fn main() {
-    if let Err(err) = parse_and_eval(Params::parse()) {
+    /* WARNING: Do not move the instantiation of libs inside `parse_and_eval`
+     * Instantiating it here ensures that all of the loaded libraries
+     * will have lifetimes that outlive the `Docmt` and `ExprArena`.
+     */
+    let mut libs = Vec::new();
+    if let Err(err) = parse_and_eval(Params::parse(), &mut libs) {
         eprintln!("IO Error: {}", err);
         exit(1);
     }

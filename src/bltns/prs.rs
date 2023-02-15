@@ -1,4 +1,4 @@
-use afed_objects::{create_bltns, Object};
+use afed_objects::{declare_pkg, Object};
 
 pub struct PrimeSieve {
     primality: Vec<bool>,
@@ -96,7 +96,7 @@ impl Iterator for PrimeFactors {
     }
 }
 
-create_bltns! {prs:
+declare_pkg! {prs: #![bltn_pkg]
     /// prs.is_prime (x: natural) -> bool
     /// Returns whether 'x' is prime
     pub fn is_prime(x: u64) -> bool {

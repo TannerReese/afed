@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
+use std::convert::TryInto;
 use std::fmt::{Display, Error, Formatter};
 use std::mem::swap;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
-use afed_objects::{create_bltns, impl_operable, name_type, number::Number, Object};
+use afed_objects::{declare_pkg, impl_operable, name_type, number::Number, Object};
 
 fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
     let (mut r, mut s) = ((a, 1, 0), (b, 0, 1));
@@ -303,7 +304,7 @@ impl From<Modulo> for Object {
     }
 }
 
-create_bltns! {modulo("mod"):
+declare_pkg! {"mod": #![bltn_pkg]
     /// mod.Mod (m: integer) -> modulo
     /// Return residue class '1 (mod m)'
     /// Can be used to generate all residue classes

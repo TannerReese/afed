@@ -1,11 +1,12 @@
+use std::convert::TryInto;
 use std::fmt::{Display, Error, Formatter, Write};
-use std::iter::zip;
+use std::iter::{zip, FromIterator};
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 
 use super::mat::Matrix;
 
-use afed_objects::{array::Array, call, create_bltns, impl_operable, name_type, Object};
+use afed_objects::{array::Array, call, declare_pkg, impl_operable, name_type, Object};
 
 macro_rules! check_dims_panic {
     ($a:expr, $b:expr) => {
@@ -258,7 +259,7 @@ impl From<Vector> for Object {
     }
 }
 
-create_bltns! {vec:
+declare_pkg! {vec: #![bltn_pkg]
     /// vec.V (comps: array) -> vector
     /// Construct a vector with the components 'comps'
     #[allow(non_snake_case)]

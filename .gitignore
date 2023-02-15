@@ -1,6 +1,9 @@
 # Build files
 target
 
+# Cargo.lock, but only for libraries
+*/Cargo.lock
+
 # Vim Swap files
 *.sw*
 

@@ -1,6 +1,6 @@
-use std::any::{Any, TypeId};
 use std::clone::Clone;
 use std::fmt::{Debug, Display, Error, Formatter, Write};
+use std::mem::take;
 use std::vec::Vec;
 
 use std::cmp::Ordering;
@@ -32,13 +32,13 @@ mod opers;
 pub mod macros;
 
 pub mod array;
-pub mod bltn;
 pub mod bool;
 pub mod error;
 pub mod map;
 pub mod null;
 pub mod number;
 pub mod partial_eval;
+pub mod pkg;
 pub mod string;
 
 pub trait Operable {
@@ -50,24 +50,54 @@ pub trait Operable {
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
-pub trait NamedType: Any {
+/* WARNING: Don't try to replace this with `Any` and `TypeId`
+ * The way TypeId's are assigned they can differ between different
+ * compilations of the same file causing issues with dynamic linking.
+ * To avoid this, the `name_type!` macro assigns IDs in a way that
+ * is consistent for a given file.
+ */
+pub trait NamedType {
     fn type_name() -> &'static str;
+    fn type_id() -> NamedTypeId;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct NamedTypeId(u32);
+
+const fn hash_str(mut state: u64, s: &'static str) -> u64 {
+    let mod_prime: u64 = 0xfffffffb;
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        state = ((state + bytes[i] as u64) << 4) % mod_prime;
+        i += 1;
+    }
+    state
+}
+
+impl NamedTypeId {
+    pub const fn _from_context(
+        _type: &'static str,
+        typename: &'static str,
+        line: u32,
+        column: u32,
+    ) -> Self {
+        let mod_prime: u64 = 0xfffffffb;
+        let mut id = (line as u64) << 4;
+        id = ((id + column as u64) << 4) % mod_prime;
+        id = hash_str(id, _type);
+        id = hash_str(id, typename);
+        Self(id as u32)
+    }
 }
 
 /* An `Object` is a pointer to any of a number of dynamic types.
  * Types implementing `Objectish` are those to which `Object` can point.
  * An `Objectish` type can be cast to an `Object` by "forgetting" its type.
  */
-pub trait Objectish: Eq + Clone + Any + NamedType + Debug + Display + Operable {}
+pub trait Objectish: Eq + Clone + NamedType + Debug + Display + Operable {}
 
-impl<T> Objectish for T where T: Eq + Clone + Any + NamedType + Debug + Display + Operable {}
-
-fn as_any<T>(x: &T) -> &dyn Any
-where
-    T: Objectish,
-{
-    x
-}
+impl<T> Objectish for T where T: Eq + Clone + NamedType + Debug + Display + Operable {}
 
 /* The two layer structure of `ObjectishSafe` and `Objectish` is necessary
  * because `Objectish` requires a type to have object-unsafe methods.
@@ -82,12 +112,14 @@ where
  * can then be "stolen" out of the `Option` to perform the unsafe operations.
  */
 trait ObjectishSafe {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_opt(&mut self) -> &mut dyn Any;
+    fn as_dummy(&self) -> &dyn DummySafe;
+    fn as_dummy_mut(&mut self) -> &mut dyn DummySafe;
     fn type_name_dyn(&self) -> &'static str;
+    fn type_id_dyn(&self) -> NamedTypeId;
 
     fn clone(&self) -> Object;
     fn eq(&self, other: &Object) -> bool;
+
     fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error>;
 
@@ -99,68 +131,93 @@ trait ObjectishSafe {
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object;
 }
 
-fn to_obj<T>(obj: &mut Option<T>) -> T {
-    std::mem::take(obj).unwrap()
-}
-fn to_ref<T>(obj: &Option<T>) -> &T {
-    obj.as_ref().unwrap()
-}
-
-impl<T> ObjectishSafe for Option<T>
-where
-    T: Objectish + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        as_any(to_ref(self))
-    }
-    fn as_any_opt(&mut self) -> &mut dyn Any {
+impl<T: Objectish + 'static> ObjectishSafe for Option<T> {
+    fn as_dummy(&self) -> &dyn DummySafe {
         self
     }
+
+    fn as_dummy_mut(&mut self) -> &mut dyn DummySafe {
+        self
+    }
+
     fn type_name_dyn(&self) -> &'static str {
         T::type_name()
     }
 
-    fn clone(&self) -> Object {
-        Object::new(to_ref(self).clone())
+    fn type_id_dyn(&self) -> NamedTypeId {
+        T::type_id()
     }
+
+    fn clone(&self) -> Object {
+        Object::new(self.as_ref().unwrap().clone())
+    }
+
     fn eq(&self, other: &Object) -> bool {
-        if let Some(other) = other.cast_ref::<T>() {
-            to_ref(self) == other
+        if let Some(other) = other.downcast_ref::<T>() {
+            self.as_ref().unwrap() == other
         } else {
             false
         }
     }
 
     fn display_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        Display::fmt(to_ref(self), f)
+        Display::fmt(self.as_ref().unwrap(), f)
     }
+
     fn debug_fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        Debug::fmt(to_ref(self), f)
+        Debug::fmt(self.as_ref().unwrap(), f)
     }
 
     fn unary(&mut self, op: Unary) -> Option<Object> {
-        to_obj(self).unary(op)
+        take(self).unwrap().unary(op)
     }
+
     fn binary(&mut self, rev: bool, op: Binary, other: Object) -> Result<Object, (Object, Object)> {
-        to_obj(self).binary(rev, op, other)
+        take(self).unwrap().binary(rev, op, other)
     }
 
     fn arity(&self, attr: Option<&str>) -> Option<usize> {
-        to_ref(self).arity(attr)
+        self.as_ref().unwrap().arity(attr)
     }
+
     fn help(&self, attr: Option<&str>) -> Option<String> {
-        to_ref(self).help(attr)
+        self.as_ref().unwrap().help(attr)
     }
+
     fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object {
-        to_ref(self).call(attr, args)
+        self.as_ref().unwrap().call(attr, args)
     }
 }
 
 pub struct Object(Box<dyn ObjectishSafe>);
 pub type ErrObject = Object;
 
+// Helper trait for casting to an arbitrary NamedType
+trait DummySafe {}
+impl<T: NamedType> DummySafe for Option<T> {}
+
 impl Object {
-    pub fn new<T>(obj: T) -> Object
+    fn downcast_ref<T: NamedType>(&self) -> Option<&T> {
+        if T::type_id() == (*self.0).type_id_dyn() {
+            let dummy_ptr = (*self.0).as_dummy() as *const dyn DummySafe;
+            unsafe { (&*(dummy_ptr as *const Option<T>)).as_ref() }
+        } else {
+            None
+        }
+    }
+
+    fn downcast_into<T: NamedType>(mut self) -> Result<T, Self> {
+        if T::type_id() == (*self.0).type_id_dyn() {
+            let dummy_ptr = (*self.0).as_dummy_mut() as *mut dyn DummySafe;
+            unsafe { Ok(take(&mut *(dummy_ptr as *mut Option<T>)).unwrap()) }
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl Object {
+    pub fn new<T: Objectish + 'static>(obj: T) -> Object
     where
         T: Objectish,
     {
@@ -179,19 +236,12 @@ impl Object {
         }
     }
 
-    pub fn type_id(&self) -> TypeId {
-        (*self.0).as_any().type_id()
+    pub fn type_id(&self) -> NamedTypeId {
+        (*self.0).type_id_dyn()
     }
 
-    pub fn is_a<T>(&self) -> bool
-    where
-        T: Any,
-    {
-        TypeId::of::<T>() == self.type_id()
-    }
-
-    pub fn cast_ref<T: 'static>(&self) -> Option<&T> {
-        (*self.0).as_any().downcast_ref()
+    pub fn is_a<T: NamedType>(&self) -> bool {
+        T::type_id() == self.type_id()
     }
 
     pub fn do_inside(&mut self, func: impl FnOnce(Self) -> Self) {
@@ -202,9 +252,11 @@ impl Object {
     pub fn cast<T: Castable>(self) -> Result<T, ErrObject> {
         T::cast(self).map_err(|(_, err)| err)
     }
+
     pub fn try_cast<T: Castable>(self) -> Result<T, Object> {
         T::cast(self).map_err(|(obj, _)| obj)
     }
+
     pub fn cast_with_err<T: Castable>(self) -> Result<T, (Object, ErrObject)> {
         T::cast(self)
     }
@@ -214,7 +266,7 @@ impl Object {
         B: Hash + Eq,
         String: Borrow<B>,
     {
-        self.cast_ref::<map::Map>().and_then(|m| m.get(key))
+        self.downcast_ref::<map::Map>().and_then(|m| m.get(key))
     }
 
     pub fn find<'a, I, B>(&self, path: I) -> Option<&Object>
@@ -255,17 +307,14 @@ impl<T> Castable for T
 where
     T: Objectish,
 {
-    fn cast(mut obj: Object) -> Result<T, (Object, ErrObject)> {
-        let given_type = (*obj.0).type_name_dyn();
-        let any_ref = (*obj.0).as_any_opt();
-        if let Some(opt) = any_ref.downcast_mut::<Option<T>>() {
-            Ok(std::mem::take(opt).unwrap())
-        } else {
-            Err((
+    fn cast(obj: Object) -> Result<T, (Object, ErrObject)> {
+        let given_typename = (*obj.0).type_name_dyn();
+        obj.downcast_into::<T>().map_err(|obj| {
+            (
                 obj,
-                eval_err!("Expected {}, but found {}", T::type_name(), given_type),
-            ))
-        }
+                eval_err!("Expected {}, but found {}", T::type_name(), given_typename),
+            )
+        })
     }
 }
 

@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use std::iter::zip;
 
 use super::{ArgId, ExprArena, ExprId, Pattern};
-use afed_objects::{Binary, NamedType, Object, Operable, Unary};
+use afed_objects::{Binary, NamedType, NamedTypeId, Object, Operable, Unary};
 
 // User defined function who's evaluated using a private AST
 #[derive(Debug, Clone)]
@@ -20,6 +20,9 @@ pub struct Func {
 impl NamedType for Func {
     fn type_name() -> &'static str {
         "function"
+    }
+    fn type_id() -> NamedTypeId {
+        NamedTypeId::_from_context("Func", Self::type_name(), line!(), column!())
     }
 }
 

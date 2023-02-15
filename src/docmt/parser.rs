@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::expr::{ExprId, Pattern};
 
 use afed_objects::{
-    bltn::Bltn, bool::Ternary, impl_operable, name_type, null::Null, number::Number,
+    bool::Ternary, impl_operable, name_type, null::Null, number::Number, pkg::Pkg,
     string::PrintStr, Assoc, Binary, Object, Unary,
 };
 
@@ -696,12 +696,12 @@ impl<'a> ParsingContext<'a> {
 }
 
 // Create and use `ParsingContext` to parse `src`
-pub fn parse(doc: &mut Docmt, src: &str, bltns: Bltn) {
+pub fn parse(doc: &mut Docmt, src: &str, pkgs: Pkg) {
     let mut ctx = ParsingContext::new(src);
     match ctx.root(doc) {
         Ok(membs) => {
             let root = doc.arena.create_map(membs);
-            doc.arena.resolve_builtins(root, bltns);
+            doc.arena.resolve_pkgs(root, pkgs);
         }
         Err(Some(err)) => doc.add_error(err),
         Err(None) => {}

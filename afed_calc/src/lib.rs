@@ -8,7 +8,7 @@ use rand::{
     thread_rng,
 };
 
-use afed_objects::{call, create_bltns, eval_err, Castable, ErrObject, Object};
+use afed_objects::{call, declare_pkg, eval_err, Castable, ErrObject, Object};
 
 macro_rules! dim_check {
     ($d1:expr, $d2:expr) => {
@@ -281,7 +281,7 @@ fn pt_to_obj<T: Into<Object>>(mut pt: Point<T>) -> Object {
 
 const EXTR_ITERS: usize = 30;
 
-create_bltns! {calc:
+declare_pkg! {calc:
     /// calc.integ_grid (size: natural) (bounds: array of [number, number]) (f: n-ary function) -> any
     /// 'bounds' is an array with 'n' pairs (lower, upper).
     /// 'f' must take 'n' numbers as arguments and return a scalable and summable value.

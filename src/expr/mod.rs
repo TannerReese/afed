@@ -4,13 +4,15 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Error, Formatter};
 use std::slice::Iter;
 
-use afed_objects::{array::Array, bltn::Bltn, eval_err, map::Map, Binary, Object, Unary};
+use afed_objects::{array::Array, eval_err, map::Map, pkg::Pkg, Binary, Object, Unary};
 
-use func::Func;
-pub use pattern::Pattern;
+extern crate id_arena;
 
 pub mod func;
 pub mod pattern;
+
+use func::Func;
+pub use pattern::Pattern;
 
 #[derive(Debug, Clone)]
 pub struct ExprArena(Arena<Node>);
@@ -180,11 +182,11 @@ impl ExprArena {
      * Also, the elements of `bltns` are converted to objects and added to
      * the arena.
      */
-    pub fn resolve_builtins(&mut self, root: ExprId, bltns: Bltn) {
+    pub fn resolve_pkgs(&mut self, root: ExprId, pkgs: Pkg) {
         let mut globals = HashMap::new();
-        match bltns {
-            Bltn::Const(_) => panic!("Cannot resolve against constant"),
-            Bltn::Map(bltns) => {
+        match pkgs {
+            Pkg::Const(_) => panic!("Cannot resolve against constant"),
+            Pkg::Map(bltns) => {
                 for (key, (_, pkg)) in bltns.into_iter() {
                     let id = self.expr_from_bltn(pkg, &mut globals);
                     if globals.insert(key, id).is_some() {
@@ -200,10 +202,10 @@ impl ExprArena {
 
 impl ExprArena {
     // Convert `bltn` to objects and add them to the arena
-    fn expr_from_bltn(&mut self, bltn: Bltn, globals: &mut HashMap<String, ExprId>) -> ExprId {
+    fn expr_from_bltn(&mut self, bltn: Pkg, globals: &mut HashMap<String, ExprId>) -> ExprId {
         match bltn {
-            Bltn::Const(obj) => self.from_obj(obj),
-            Bltn::Map(elems) => {
+            Pkg::Const(obj) => self.from_obj(obj),
+            Pkg::Map(elems) => {
                 let elems = elems
                     .into_iter()
                     .map(|(key, (is_global, elem))| {
@@ -239,8 +241,8 @@ impl Default for ExprArena {
  * in memory.
  */
 impl ExprArena {
-    pub fn new() -> ExprArena {
-        ExprArena(Arena::new())
+    pub fn new() -> Self {
+        Self(Arena::new())
     }
 
     // Helper method for other create methods
@@ -749,12 +751,12 @@ impl ExprArena {
                     None
                 } else {
                     // Create arena and clone the structure of `body` into it
-                    let mut arena = ExprArena::new();
-                    let func = self.clone_into(&mut arena, exp);
-                    if let Inner::Func { name, pats, body } = &mut arena.0[func].inner {
+                    let mut new_arena = ExprArena::new();
+                    let func = self.clone_into(&mut new_arena, exp);
+                    if let Inner::Func { name, pats, body } = &mut new_arena.0[func].inner {
                         let name = std::mem::take(name);
                         let pats = std::mem::take(pats);
-                        Some(Func::create(name, pats, *body, arena))
+                        Some(Func::create(name, pats, *body, new_arena))
                     } else {
                         unreachable!()
                     }

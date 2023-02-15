@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fmt::{Display, Error, Formatter, Write};
 use std::ops::{Add, AddAssign, Index, IndexMut};
 
 use afed_objects::{
-    call, create_bltns, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
+    call, declare_pkg, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -520,7 +521,7 @@ impl Add<Plot> for Object {
     }
 }
 
-create_bltns! {plt:
+declare_pkg! {plt: #![bltn_pkg]
     /// plt.Plot (options: map) -> plot
     /// Construct a plot using 'options'
     /// Options:

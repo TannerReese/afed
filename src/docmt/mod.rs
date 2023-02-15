@@ -4,13 +4,13 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use super::expr::{ExprArena, ExprId};
-use afed_objects::{bltn::Bltn, Object};
-
-use parser::{parse, ParseError};
+use afed_objects::{pkg::Pkg, Object};
 
 #[macro_use]
 mod combins;
 mod parser;
+
+use self::parser::{parse, ParseError};
 
 /* To place the results back into the document, we need to keep track
  * of where the values need to be placed. `Docmt` maintains a list of
@@ -74,7 +74,7 @@ struct Subst {
 }
 
 impl Docmt {
-    pub fn new(src: String, path: Option<PathBuf>) -> Docmt {
+    pub fn new(src: String, path: Option<PathBuf>) -> Self {
         // Treat `path` as relative to the current directory
         let paths = path
             .and_then(|p| p.canonicalize().ok())
@@ -95,17 +95,17 @@ impl Docmt {
     }
 
     // Parse document using `parse` method which uses `ParsingContext`
-    pub fn parse<W: Write>(&mut self, err_out: &mut W, bltns: Bltn) -> Result<(), usize> {
+    pub fn parse<W: Write>(&mut self, errout: &mut W, pkgs: Pkg) -> Result<(), usize> {
         if !self.is_parsed {
             let src = std::mem::take(&mut self.src);
-            parse(self, &src, bltns);
+            parse(self, &src, pkgs);
             self.src = src;
             self.is_parsed = true;
         }
 
         // Print any parse errors that occur
         for err in self.errors.iter() {
-            writeln!(err_out, "{}", err).expect("IO Error while writing parse error");
+            writeln!(errout, "{}", err).expect("IO Error while writing parse error");
         }
 
         let count = self.errors.len();
@@ -117,7 +117,7 @@ impl Docmt {
     }
 
     // Evaluate the `ExprArena` and print the results into the substitutions
-    pub fn eval<W: Write>(&mut self, err_out: &mut W) -> Result<(), usize> {
+    pub fn eval<W: Write>(&mut self, errout: &mut W) -> Result<(), usize> {
         if self.only_clear {
             return Ok(());
         }
@@ -136,17 +136,17 @@ impl Docmt {
                 continue;
             }
             let res = self.arena.eval(*target);
-            // Print EvalError to `err_out`
+            // Print EvalError to `errout`
             if res.is_err() {
-                write!(err_out, "line {}, column {}", lineno, column)
+                write!(errout, "line {}, column {}", lineno, column)
                     .and_then(|_| {
                         if let Some(name) = filename {
-                            write!(err_out, " of {:?}", name)
+                            write!(errout, " of {:?}", name)
                         } else {
                             Ok(())
                         }
                     })
-                    .and_then(|_| writeln!(err_out, " {}", res))
+                    .and_then(|_| writeln!(errout, " {}", res))
                     .expect("IO Error while writing eval error");
                 err_count += 1;
             }

@@ -1,6 +1,6 @@
-use afed_objects::{array::Array, call, create_bltns, number::Number, ErrObject, Object};
+use afed_objects::{array::Array, call, declare_pkg, number::Number, ErrObject, Object};
 
-create_bltns! {arr:
+declare_pkg! {arr: #![bltn_pkg]
     /// arr.range (start: number) (end: number) -> array of numbers
     /// Generate sequence of numbers starting at 'start'
     /// increasing by one up to and potentially including 'end'

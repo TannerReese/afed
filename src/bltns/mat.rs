@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::convert::TryInto;
 use std::fmt::{Debug, Display, Error, Formatter, Write};
 use std::iter::zip;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
@@ -9,7 +10,7 @@ use std::vec::IntoIter;
 use super::augmat::AugMatrix;
 use super::vec::Vector;
 
-use afed_objects::{call, create_bltns, eval_err, impl_operable, name_type, Object};
+use afed_objects::{call, declare_pkg, eval_err, impl_operable, name_type, Object};
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -548,7 +549,7 @@ impl From<Matrix> for Object {
     }
 }
 
-create_bltns! {mat:
+declare_pkg! {mat: #![bltn_pkg]
     /// mat.M (rows: array of arrays) -> matrix
     /// Construct a matrix from a array of rows
     #[allow(non_snake_case)]

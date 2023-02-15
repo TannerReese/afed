@@ -37,6 +37,10 @@ macro_rules! name_type {
             fn type_name() -> &'static str {
                 $name
             }
+
+            fn type_id() -> $crate::NamedTypeId {
+                $crate::NamedTypeId::_from_context(stringify!($tp), $name, line!(), column!())
+            }
         }
     };
 }
@@ -342,52 +346,64 @@ macro_rules! impl_operable {
     )*} };
 }
 
-/* Used by library code to create a `Bltn::Map` instance
+/* Used by library code to create a `Pkg::Map` instance
  * which will be named `$pkg`. It will contain constants and
  * functions corresponding to the function declarations provided.
  *
- * `create_bltns!` will also create a impl block containing
+ * `declare_pkg!` will also create a impl block containing
  * declarations for all functions with more than zero arguments.
  * NOTE: Functions cannot be genericized
  *
- * Example:
+ * If `#![bltn_pkg]` is added after the name of the package
+ * then the package will declared to be statically linked
+ * and not dynamically linked.
+ *
+ * Examples:
  * ```
- *   create_bltns!{package_name:
+ *   declare_pkg!{package_name:
  *       fn my_constant() -> f32 { 0.57 }
  *       fn foo(x: usize) -> usize { x + 1 }
  *       pub fn bar(v: Vec<Object>) -> usize { v.len() }
  *   }
  * ```
+ *
+ * ```
+ *   declare_pkg!{builtin_package: #![bltn_pkg]
+ *       fn baz(n: usize, s: String) -> bool { s.len() == n }
+ *   }
+ * ```
  */
 #[macro_export]
-macro_rules! create_bltns {
+macro_rules! declare_pkg {
     /* `@func` converts the method headers into
-     * `Bltn::Const` if they have no arguments
-     *  and `BltnFunc` instances otherwise
+     * `Pkg::Const` if they have no arguments
+     *  and `PkgFunc` instances otherwise
      */
     (@func #[global] $(#$m:tt)*, $help:expr, $_:expr, $vars:tt) =>
-        { $crate::create_bltns!{@func $(#$m)*, $help, true, $vars} };
+        { $crate::declare_pkg!{@func $(#$m)*, $help, true, $vars} };
     (@func #[doc=$h:expr] $(#$m:tt)*, "", $g:expr, $vars:tt) =>
-        { $crate::create_bltns!{@func $(#$m)*, $h, $g, $vars} };
+        { $crate::declare_pkg!{@func $(#$m)*, $h, $g, $vars} };
     (@func #[doc=$h:expr] $(#$m:tt)*, $help:expr, $g:expr, $vars:tt) =>
-        { $crate::create_bltns!{@func $(#$m)*, concat!($help, "\n", $h), $g, $vars} };
-    (@func #[$_:meta] $($rest:tt)*) => { $crate::create_bltns!{@func $($rest)*} };
+        { $crate::declare_pkg!{@func $(#$m)*, concat!($help, "\n", $h), $g, $vars} };
+    (@func #[$_:meta] $($rest:tt)*) => { $crate::declare_pkg!{@func $($rest)*} };
 
+    // When header has no arguments make it into a Pkg::Const
     (@func , $help:expr, $is_global:expr, (
         $pkg:ident, $name:expr, $func:ident () -> $ret:ty $block:block
     )) => { if $pkg.insert(stringify!($func).to_owned(),
         ($is_global, {
             let val: $ret = $block;
-            $crate::bltn::Bltn::Const(val.into())
+            $crate::pkg::Pkg::Const(val.into())
         })
     ).is_some() { panic!(
         concat!($name, '.', stringify!($func), " redeclared")
     )}};
 
+    // When header has arguments make it into a PkgFunc
     (@func , $help:expr, $is_global:expr, ($pkg:ident, $name:expr,
         $func:ident ($($arg:ident : $tp:ty),+) -> $ret:ty $block:block
     )) => { if $pkg.insert(stringify!($func).to_owned(),
-        ($is_global, $crate::bltn::Bltn::Const($crate::bltn::BltnFunc::create(
+        ($is_global, $crate::pkg::Pkg::Const($crate::pkg::PkgFunc::create(
             concat!($name, '.', stringify!($func)), $help,
             |args: [Object; $crate::count_tt!($($arg)+)]| {
                 let [$($arg),+] = args;
@@ -406,9 +422,9 @@ macro_rules! create_bltns {
      * the method headers before they're placed in their impl block
      */
     (@strip_meta #[global] $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>
-        { $crate::create_bltns!{@strip_meta $(#$meta)*, $(#$new_meta)*, $vars} };
+        { $crate::declare_pkg!{@strip_meta $(#$meta)*, $(#$new_meta)*, $vars} };
     (@strip_meta #$m:tt $(#$meta:tt)*, $(#$new_meta:tt)*, $vars:tt) =>
-        { $crate::create_bltns!{@strip_meta $(#$meta)*, $(#$new_meta)* #$m, $vars} };
+        { $crate::declare_pkg!{@strip_meta $(#$meta)*, $(#$new_meta)* #$m, $vars} };
 
     (@strip_meta , $(#$meta:tt)*, ($vis:vis fn
         $func:ident () -> $ret:ty $block:block
@@ -419,62 +435,49 @@ macro_rules! create_bltns {
 
 
 
-    ($pkg:ident($name:expr), $make_bltns:ident,
-        mod {$(
-            $(#[global] $($is_global:literal)?)? $mod:ident : $modval:expr
-        ),* $(,)?} :
+    ($name:ident : $($rest:tt)*) =>
+        { $crate::declare_pkg!{stringify!($name), $($rest)*} };
+    ($name:literal : $($rest:tt)*) =>
+        { $crate::declare_pkg!{$name, $($rest)*} };
+
+    /* Case used for builtin packages
+     * Function name isn't mangled so that
+     * `build_pkg` doesn't go to the global namespace
+     */
+    ($name:expr, #![bltn_pkg]
         $($(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block)*
     ) => {
-        $($crate::create_bltns!{@strip_meta $(#$meta)*, ,
+        // Create impl block for functions
+        $($crate::declare_pkg!{@strip_meta $(#$meta)*, ,
             ($vis fn $func $args -> $ret $block)
         })*
 
-        pub fn $make_bltns() -> $crate::bltn::Bltn {
-            let mut $pkg = ::std::collections::HashMap::new();
-            $(
-                let mut elems = match $modval {
-                    $crate::bltn::Bltn::Const(_) => panic!("Package must be map"),
-                    $crate::bltn::Bltn::Map(elems) => elems,
-                };
-
-                if false $(|| true $($is_global)?)? {
-                    for (_, (is_global, _)) in elems.iter_mut() {
-                        *is_global = true;
-                    }
-                }
-
-                if $pkg.insert(
-                    stringify!($mod).to_owned(), (false, $crate::bltn::Bltn::Map(elems))
-                ).is_some() { panic!(
-                    concat!("Package ", stringify!($mod), " redeclared")
-                )}
-            )*
-
-            $($crate::create_bltns!(@func $(#$meta)*,
-                "", false, ($pkg, $name, $func $args -> $ret $block)
+        // Declare standard method that can be called internally
+        pub fn build_pkg() -> $crate::pkg::Pkg {
+            let mut pkg = ::std::collections::HashMap::new();
+            $($crate::declare_pkg!(@func $(#$meta)*,
+                "", false, (pkg, $name, $func $args -> $ret $block)
             );)*
-            $crate::bltn::Bltn::Map($pkg)
+            $crate::pkg::Pkg::Map(pkg)
         }
     };
 
-    ($pkg:ident : $($rest:tt)*) =>
-        { $crate::create_bltns!{$pkg(stringify!($pkg)), make_bltns: $($rest)*} };
-    ($pkg:ident($name:expr) : $($rest:tt)*) =>
-        { $crate::create_bltns!{$pkg($name), make_bltns: $($rest)*} };
-    ($pkg:ident($name:expr), $make_bltns:ident : mod $mods:tt $($rest:tt)*) =>
-        { $crate::create_bltns!{$pkg($name), $make_bltns, mod $mods: $($rest)*} };
-    ($pkg:ident($name:expr), $make_bltns:ident : $($rest:tt)*) =>
-        { $crate::create_bltns!{$pkg($name), $make_bltns, mod {}: $($rest)*}};
+    ($name:expr,
+        $($(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block)*
+    ) => {
+        // Create impl block for functions
+        $($crate::declare_pkg!{@strip_meta $(#$meta)*, ,
+            ($vis fn $func $args -> $ret $block)
+        })*
 
-    (mod $mods:tt $(
-        $(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block
-    )*) => { $crate::create_bltns!{pkg ("pkg"), make_bltns, mod $mods:
-        $($(#$meta)* $vis fn $func $args -> $ret $block)*
-    }};
-
-    ($(
-        $(#$meta:tt)* $vis:vis fn $func:ident $args:tt -> $ret:ty $block:block
-    )*) => { $crate::create_bltns!{pkg ("pkg"), make_bltns, mod {}:
-        $($(#$meta)* $vis fn $func $args -> $ret $block)*
-    }};
+        // Declare hook to be called when library is loaded
+        #[no_mangle]
+        pub extern "C" fn _build_pkg() -> (::std::string::String, $crate::pkg::Pkg) {
+            let mut pkg = ::std::collections::HashMap::new();
+            $($crate::declare_pkg!(@func $(#$meta)*,
+                "", false, (pkg, $name, $func $args -> $ret $block)
+            );)*
+            ($name.into(), $crate::pkg::Pkg::Map(pkg))
+        }
+    };
 }

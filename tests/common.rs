@@ -2,11 +2,12 @@ use std::ffi::OsStr;
 use std::fs::{read_to_string, File};
 use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 
 const BINARY_PATH: &str = "./target/debug/afed";
 const TEST_FOLDER: &str = "./tests/examples";
 
+// Panics on first pair of lines that differ between `s1` and `s2`
 fn line_by_line(s1: &str, s2: &str) {
     let (mut lns1, mut lns2) = (s1.lines(), s2.lines());
     loop {
@@ -32,9 +33,14 @@ where
         .args(args)
         .output()
         .expect("Failed to execute process");
-    let Output { stdout, stderr, .. } = output;
-    let stdout = String::from_utf8(stdout).expect("Failed to parse STDOUT as Unicode");
-    let stderr = String::from_utf8(stderr).expect("Failed to parse STDERR as Unicode");
+    if let Some(code) = output.status.code() {
+        assert!(code <= 1, "Program errored with code {}", code);
+    } else {
+        panic!("Program was killed by signal")
+    }
+
+    let stdout = String::from_utf8(output.stdout).expect("Failed to parse STDOUT as Unicode");
+    let stderr = String::from_utf8(output.stderr).expect("Failed to parse STDERR as Unicode");
 
     println!("Stdout: \n{}", stdout);
     println!("Stderr: \n{}", stderr);
@@ -88,11 +94,11 @@ test_file! {object_string, "object/string.af"}
 test_file! {object_array, "object/array.af"}
 test_file! {object_map, "object/map.af"}
 
-test_file! {libs_num, "libs/num.af"}
-test_file! {libs_arr, "libs/arr.af"}
-test_file! {libs_prs, "libs/prs.af"}
-test_file! {libs_mod, "libs/mod.af"}
-test_file! {libs_vec, "libs/vec.af"}
-test_file! {libs_mat, "libs/mat.af"}
-test_file! {libs_calc, "libs/calc.af"}
-test_file! {libs_plt, "libs/plt.af"}
+test_file! {bltns_num, "bltns/num.af"}
+test_file! {bltns_arr, "bltns/arr.af"}
+test_file! {bltns_prs, "bltns/prs.af"}
+test_file! {bltns_mod, "bltns/mod.af"}
+test_file! {bltns_vec, "bltns/vec.af"}
+test_file! {bltns_mat, "bltns/mat.af"}
+test_file! {bltns_calc, "bltns/calc.af"}
+test_file! {bltns_plt, "bltns/plt.af"}

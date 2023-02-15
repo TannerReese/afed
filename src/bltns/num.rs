@@ -1,6 +1,6 @@
-use afed_objects::{call, create_bltns, Object};
+use afed_objects::{call, declare_pkg, Object};
 
-create_bltns! {num:
+declare_pkg! {num: #![bltn_pkg]
     fn pi() -> f64 { std::f64::consts::PI }
     fn e() -> f64 { std::f64::consts::E }
     fn gold() -> f64 { (1.0 + (5.0_f64).sqrt()) / 2.0 }
