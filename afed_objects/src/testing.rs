@@ -4,8 +4,7 @@ use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
-const BINARY_PATH: &str = "./target/debug/afed";
-const TEST_FOLDER: &str = "./tests/examples";
+const TEST_FOLDER: &str = "./tests";
 
 // Panics on first pair of lines that differ between `s1` and `s2`
 fn line_by_line(s1: &str, s2: &str) {
@@ -19,20 +18,28 @@ fn line_by_line(s1: &str, s2: &str) {
     }
 }
 
-fn run_file<I, S>(filename: &Path, args: I)
+// Execute .af file and check results
+pub fn run_file<I, S>(binary: S, filename: &Path, args: I)
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let mut path = Path::new(TEST_FOLDER).join(filename);
     path.set_extension("af");
-    println!("Testing {}", path.file_name().unwrap().to_str().unwrap());
+    // Make sure test file exists before proceeding
+    match path.try_exists() {
+        Ok(true) => {},
+        _ => panic!("Test file {:?} does not exist", path.display()),
+    }
+    println!("Testing {:?}", path.display());
 
-    let output = Command::new(BINARY_PATH)
+    // Execute Afed on test file with arguments
+    let output = Command::new(binary)
         .arg(path.as_os_str())
         .args(args)
         .output()
         .expect("Failed to execute process");
+    // Check that program wasn't killed or segfaulted
     if let Some(code) = output.status.code() {
         assert!(code <= 1, "Program errored with code {}", code);
     } else {
@@ -45,6 +52,7 @@ where
     println!("Stdout: \n{}", stdout);
     println!("Stderr: \n{}", stderr);
 
+    // Load expected output and check against result
     path.set_extension("out");
     println!(
         "Checking stdout against {}",
@@ -53,6 +61,7 @@ where
     let expected_stdout = read_to_string(&path).expect("Failed to read .out file");
     line_by_line(&stdout, &expected_stdout);
 
+    // Load expected error and check against result
     path.set_extension("err");
     let mut expected_stderr = String::new();
     if let Ok(mut fl) = File::open(&path) {
@@ -68,37 +77,28 @@ where
     line_by_line(&stderr, &expected_stderr);
 }
 
+// Creates functions to run test files
+#[macro_export]
 macro_rules! test_file {
     ($testname:ident, $filename:literal) => {
-        test_file! {$testname, $filename, ["-"]}
+        test_file! {$testname, $filename, "./target/debug", ["-", "--no-local-pkgs"]}
     };
-    ($testname:ident, $filename:literal, $args:expr) => {
+    ($testname:ident, $filename:literal, [$($arg:expr),*]) => {
+        test_file! {$testname, $filename, "./target/debug", [$($arg),*]}
+    };
+
+    // --no-local-pkgs is necessary to prevent the local configuration from affecting tests
+    ($testname:ident, $filename:literal, $pkg_folder:literal) => {
+        test_file! {$testname, $filename, $pkg_folder, ["-", "--no-local-pkgs"]}
+    };
+    ($testname:ident, $filename:literal, $pkg_folder:literal, [$($arg:expr),*]) => {
         #[test]
         fn $testname() {
-            run_file(Path::new($filename), $args);
+            afed_objects::testing::run_file(
+                "afed", ::std::path::Path::new($filename),
+                [$($arg),* , "--no-local-pkgs", "-L", $pkg_folder]
+            );
         }
     };
 }
 
-test_file! {parse, "parse.af"}
-test_file! {parse_errors, "parse_errors.af"}
-test_file! {help, "help.af"}
-test_file! {func, "func.af"}
-
-test_file! {use_stmt, "parent_use.af"}
-test_file! {clear, "clear.af", ["-d", "-"]}
-
-test_file! {object_bool, "object/bool.af"}
-test_file! {object_number, "object/number.af"}
-test_file! {object_string, "object/string.af"}
-test_file! {object_array, "object/array.af"}
-test_file! {object_map, "object/map.af"}
-
-test_file! {bltns_num, "bltns/num.af"}
-test_file! {bltns_arr, "bltns/arr.af"}
-test_file! {bltns_prs, "bltns/prs.af"}
-test_file! {bltns_mod, "bltns/mod.af"}
-test_file! {bltns_vec, "bltns/vec.af"}
-test_file! {bltns_mat, "bltns/mat.af"}
-test_file! {bltns_calc, "bltns/calc.af"}
-test_file! {bltns_plt, "bltns/plt.af"}

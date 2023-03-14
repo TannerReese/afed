@@ -4,7 +4,7 @@ use std::fmt::{Display, Error, Formatter, Write};
 use std::ops::{Add, AddAssign, Index, IndexMut};
 
 use afed_objects::{
-    call, declare_pkg, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
+    call, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -521,37 +521,3 @@ impl Add<Plot> for Object {
     }
 }
 
-declare_pkg! {plt: #![bltn_pkg]
-    /// plt.Plot (options: map) -> plot
-    /// Construct a plot using 'options'
-    /// Options:
-    ///   xmax: real -- X-coordinate of right side of the viewport
-    ///   xmin: real -- X-coordinate of left side of the viewport
-    ///   ymax: real -- Y-coordinate of top of the viewport
-    ///   ymin: real -- Y-coordinate of bottom of the viewport
-    ///   width: positive real -- Width of the the viewport (default: 2.0)
-    ///   height: positive real -- Height of the the viewport (default: 2.0)
-    ///   xcenter: real -- X-coordinate of center of the viewport (default: 0.0)
-    ///   ycenter: real -- Y-coordinate of center of the viewport (default: 0.0)
-    ///
-    ///   rows: natural -- Number of rows of characters in grid (default: 40)
-    ///   cols: natural -- Number of columns of characters in grid (default: 100)
-    ///   labels: bool -- Whether gridlines should be labelled (default: true)
-    ///   divs: positive real -- Approximate number of gridlines
-    ///       vertically and horizontally across the window (default: 5.0)
-    ///
-    /// Example:
-    ///     plt.Plot {
-    ///         rows: 50, cols: 80,
-    ///         divs: 7, labels: false,
-    ///         width: 2.1, height: 3,
-    ///         xmin: -0.5, ymax: 0,
-    ///     }
-    #[allow(non_snake_case)]
-    fn Plot(opts: HashMap<String, Object>) -> Result<Plot, ErrObject>
-        { Plot::new(opts) }
-
-    /// plt.draw (obj: any) (p: plot) -> plot
-    /// Draw the object 'obj' onto 'p' and return 'p'
-    fn draw(obj: Object, plot: Plot) -> Plot { plot + obj }
-}

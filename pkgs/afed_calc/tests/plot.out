@@ -1,13 +1,13 @@
 # Test plotting functions
 
 # Erroneous cases
-plt.Plot {jk: 5} [\x: x] = `Eval Error: Unknown options '["jk"]'`,
-errored: 4 + plt.Plot {rows: 10, cols: 10},
+calc.Plot {jk: 5} [\x: x] = `Eval Error: Unknown options '["jk"]'`,
+errored: 4 + calc.Plot {rows: 10, cols: 10},
 errored.errors = `["Cannot call method arity on type number"]`,
 
 
 {
-plt.draw [f, g] $ [\x: 0.8, [0.5, 0.6], [-0.5, -0.1]] + p = `
+calc.draw [f, g] $ [\x: 0.8, [0.5, 0.6], [-0.5, -0.1]] + p = `
              -1                         0                         1             
              |                          $                         |             
              |                          $                         |             
@@ -40,7 +40,7 @@ plt.draw [f, g] $ [\x: 0.8, [0.5, 0.6], [-0.5, -0.1]] + p = `
              |   ',                     $     ,'                  |             
 `,
 
-	p: plt.Plot {
+	p: calc.Plot {
 		ymin: -0.5, width: 3,
 		rows: 30, cols: 80, divs: 3,
 	},
@@ -48,7 +48,7 @@ plt.draw [f, g] $ [\x: 0.8, [0.5, 0.6], [-0.5, -0.1]] + p = `
 	g x: sin (2*x - 1),
 },
 
-plt.draw (\y: 2 * sqrt (1 - y^2 / 12)) p + \x: sin x / x = `
+calc.draw (\y: 2 * sqrt (1 - y^2 / 12)) p + \x: sin x / x = `
 !            1            2   '~,       3            4            5             
 !.4000-------+------------+-----',------+------------+------------+-------------
 !            |            |      '~,    |            |            |             
@@ -80,12 +80,12 @@ $            |            |             |            |            |
 -0.399-------+------------+-------------+------------+------------+-------------
 $            |            |             |            |            |             
 `,
-p: plt.Plot {
+p: calc.Plot {
 	ymin: -0.5, xcenter: 3, width: 6,
 	rows: 30, cols: 80, divs: 4,
 },
 
-plt.Plot {
+calc.Plot {
 	width: 5, height: 5,
 	rows: 30, cols: 80, labels: false,
 } + [\x: 3/2 - 2*x, \x y: x^3 - 2 * x - y^2] = `

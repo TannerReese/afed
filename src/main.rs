@@ -6,14 +6,11 @@ use std::process::exit;
 
 extern crate afed_objects;
 
-pub mod bltns;
 pub mod docmt;
 pub mod expr;
-mod linking;
+pub mod pkgs;
 
-use self::bltns::build_bltns;
-use self::linking::load_from_pkgs;
-use afed_objects::pkg::Pkg;
+use self::pkgs::LoadedPkgs;
 
 #[derive(Debug, Clone)]
 enum Stream {
@@ -97,6 +94,8 @@ struct Params {
     input: Stream,
     output: Stream,
     errors: Stream,
+    pkg_dirs: Vec<PathBuf>,
+    no_local_pkgs: bool,
 }
 
 const USAGE_MSG: &str = concat!(
@@ -109,14 +108,16 @@ const HELP_MSG: &str = concat!(
     "Evaluate expressions in place\n",
     "\n",
     "Options:\n",
-    "  -i, --input INPUT       Input file to evaluate\n",
-    "  -o, --output OUTPUT     Output file to store result to\n",
-    "  -C, --check             Don't output file only check for errors\n",
-    "  -d, --clear             Clear the content of every substitution (eg. = ``)\n",
-    "  -n, --no-clobber        Make sure INFILE is not used as the output\n",
-    "  -e, --errors ERRORS     File to send errors to. Defaults to STDERR\n",
-    "  -E, --no-errors         Don't print any error messages\n",
-    "  -h, -?, --help          Print this help message\n",
+    "  -i, --input INPUT        Input file to evaluate\n",
+    "  -o, --output OUTPUT      Output file to store result to\n",
+    "  -C, --check              Don't output file only check for errors\n",
+    "  -d, --clear              Clear the content of every substitution (eg. = ``)\n",
+    "  -n, --no-clobber         Make sure INFILE is not used as the output\n",
+    "  -e, --errors ERRORS      File to send errors to. Defaults to STDERR\n",
+    "  -E, --no-errors          Don't print any error messages\n",
+    "  -L, --pkg DIRECTORY      Search in given directory for more packages to load\n",
+    "  --no-local-pkgs          Don't attempt to load any packages from default locations\n",
+    "  -h, -?, --help           Print this help message\n",
     "\n",
     "'-' may be used with -o, -i, or -e to indicate STDOUT, STDIN, or STDOUT, respectively\n",
     "\n",
@@ -147,7 +148,9 @@ impl Params {
     fn parse() -> Params {
         let mut input_path = None;
         let (mut input, mut output, mut errors) = (None, None, None);
-        let (mut check, mut clear, mut no_clobber, mut no_errors) = (false, false, false, false);
+        let mut pkg_dirs = Vec::new();
+        let (mut check, mut clear, mut no_clobber, mut no_errors, mut no_local_pkgs) =
+            (false, false, false, false, false);
 
         let mut args = std::env::args();
         _ = args.next();
@@ -206,6 +209,17 @@ impl Params {
                     }
                 }
 
+                "-L" | "--pkg" => {
+                    if let Some(path) = args.next() {
+                        pkg_dirs.push(PathBuf::from(path))
+                    } else {
+                        usage!("No package directory given");
+                    }
+                }
+                "--no-local-pkgs" => {
+                    no_local_pkgs = true;
+                }
+
                 "-h" | "-?" | "--help" => {
                     println!("{}", HELP_MSG);
                     exit(0);
@@ -258,6 +272,8 @@ impl Params {
             input,
             output,
             errors,
+            pkg_dirs,
+            no_local_pkgs,
         }
     }
 }
@@ -271,15 +287,22 @@ fn parse_and_eval(prms: Params, libs: &mut Vec<Library>) -> Result<(), Error> {
     let mut any_errors = false;
     let mut errout = prms.errors.to_writer();
 
-    // Generate all of the builtins
-    let mut pkgs = build_bltns();
+    // Load packages and builtins
+    let mut pkgs = LoadedPkgs::new(libs);
+    pkgs.build_bltns(&mut errout); // Generate builtins
+    for folder in prms.pkg_dirs {
+        // Load packages from user provided folders
+        pkgs.load_from_folder(&mut errout, folder.as_path());
+    }
+    // Load the packages from pkgs folder in config folder
+    if !prms.no_local_pkgs {
+        pkgs.load_from_config(&mut errout);
+    }
 
-    // Load the packages from pkg folder
-    load_from_pkgs(&mut errout, &mut pkgs, libs).expect("IO Error while writing loading error");
-    let pkgs = Pkg::from_map(pkgs);
+    let pkg = pkgs.into_pkg();
 
     // Parse program and print parse errors to `errout`
-    if let Err(count) = doc.parse(&mut errout, pkgs) {
+    if let Err(count) = doc.parse(&mut errout, pkg) {
         any_errors = true;
         write!(
             &mut errout,

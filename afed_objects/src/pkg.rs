@@ -12,15 +12,6 @@ pub enum Pkg {
     Map(HashMap<String, (bool, Pkg)>),
 }
 
-impl Pkg {
-    pub fn from_map(map: HashMap<String, Pkg>) -> Pkg {
-        Pkg::Map(
-            map.into_iter()
-                .map(|(name, pkg)| (name, (false, pkg)))
-                .collect(),
-        )
-    }
-}
 
 // Wrapper for Rust functions so they can be used in Afed
 #[derive(Clone, Copy)]

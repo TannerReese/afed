@@ -30,6 +30,7 @@ mod opers;
 
 #[macro_use]
 pub mod macros;
+pub mod testing;
 
 pub mod array;
 pub mod bool;

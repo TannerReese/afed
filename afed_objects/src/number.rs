@@ -481,6 +481,7 @@ impl Div for Number {
 impl Rem for Number {
     type Output = Self;
     fn rem(self, rhs: Self) -> Self {
+        if rhs == Number::Ratio(0, 1) { return Number::Real(f64::NAN) }
         match (self, rhs) {
             (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
                 let mut rem = (n1 * d2 as i64) % (n2 * d1 as i64);

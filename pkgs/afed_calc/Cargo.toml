@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-afed_objects = { path = "../afed_objects" }
+afed_objects = { path = "../../afed_objects" }
 
 rand = "0.8"
 
