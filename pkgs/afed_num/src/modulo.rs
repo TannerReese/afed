@@ -4,7 +4,7 @@ use std::fmt::{Display, Error, Formatter};
 use std::mem::swap;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
-use afed_objects::{declare_pkg, impl_operable, name_type, number::Number, Object};
+use afed_objects::{impl_operable, name_type, number::Number, Object};
 
 fn bezout(a: u64, b: u64) -> (u64, (i64, i64)) {
     let (mut r, mut s) = ((a, 1, 0), (b, 0, 1));
@@ -125,10 +125,10 @@ impl_operable! {Modulo:
             return 0;
         }
 
-        use super::prs::{prime_factors, euler_totient};
+        use super::primes::{PrimeFactors, euler_totient};
         let max_order = euler_totient(self.modulo);
         let mut ord = max_order;
-        for (p, _) in prime_factors(max_order) {
+        for (p, _) in PrimeFactors::new(max_order) {
             while ord % p == 0
             && self.pow((ord / p) as i64).residue == 1 {
                 ord /= p;
@@ -139,7 +139,7 @@ impl_operable! {Modulo:
 }
 
 impl Modulo {
-    fn from(mut residue: i64, modulo: u64) -> Self {
+    pub fn from(mut residue: i64, modulo: u64) -> Self {
         if modulo > 0 {
             residue %= modulo as i64;
             if residue < 0 {
@@ -302,18 +302,4 @@ impl From<Modulo> for Object {
     fn from(m: Modulo) -> Self {
         Object::new(m)
     }
-}
-
-declare_pkg! {"mod": #![bltn_pkg]
-    /// mod.Mod (m: integer) -> modulo
-    /// Return residue class '1 (mod m)'
-    /// Can be used to generate all residue classes
-    /// so '6 * mod.Mod 15' represents '6 (mod 15)'
-    #[allow(non_snake_case)]
-    #[global]
-    fn Mod(m: Number) -> Result<Modulo, &'static str> { match m {
-        Number::Ratio(0, 1) => Err("Modulo can't be zero"),
-        Number::Ratio(m, 1) => Ok(Modulo::from(1, m.unsigned_abs())),
-        _ => Err("Modulo must be a non-zero integer"),
-    }}
 }

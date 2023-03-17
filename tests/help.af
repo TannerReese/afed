@@ -18,7 +18,7 @@ m: {a: 2, b: true, c: null},
 help m.c = ``,
 
 # Help messages for libraries
-help num.sqrt = ``,
+help math.sqrt = ``,
 help map = ``,
 
 # Test manipulation of help message

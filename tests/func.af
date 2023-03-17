@@ -50,7 +50,7 @@ scope.f 4 = ``,
 
 # Method support
 {
-	num.sqrt.arity = ``,
+	math.sqrt.arity = ``,
 	atan2.arity = ``,
 	f.arity = ``,
 	g.arity = ``,

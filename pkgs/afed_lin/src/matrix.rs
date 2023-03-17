@@ -7,10 +7,10 @@ use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 use std::ops::{Index, IndexMut};
 use std::vec::IntoIter;
 
-use super::augmat::AugMatrix;
-use super::vec::Vector;
+use super::aug_matrix::AugMatrix;
+use super::vector::Vector;
 
-use afed_objects::{call, declare_pkg, eval_err, impl_operable, name_type, Object};
+use afed_objects::{call, eval_err, impl_operable, name_type, Object};
 
 macro_rules! check_dims {
     ($a:expr, $b:expr) => {
@@ -207,15 +207,24 @@ impl Matrix {
             deter: Cell::new(None),
         }
     }
-    /*
-        pub fn identity(dims: usize) -> Self {
-            let ident = Self::build((dims, dims), |r, c|
-                if r == c { 1 } else { 0 }.into()
-            );
-            ident.deter.set(Some(1.into()));
-            ident
-        }
-    */
+
+    pub fn zero(rows: usize, cols: usize) -> Option<Matrix> {
+        if rows == 0 || cols == 0 { return None; }
+        let z = Matrix::build((rows, cols), |_, _| 0);
+        z.deter.set(Some(0.into()));
+        Some(z)
+    }
+
+    pub fn identity(dims: usize) -> Option<Self> {
+        if dims == 0 { return None }
+        let id = Matrix::build((dims, dims), |r, c|
+            if r == c { 1 } else { 0 }
+        );
+        id.deter.set(Some(1.into()));
+        Some(id)
+    }
+
+
     pub fn transpose(&mut self) {
         let (rows, cols) = self.dims;
         let comps = &mut self.comps;
@@ -287,7 +296,7 @@ impl Matrix {
         }
 
         let rows = self.rows();
-        let id = ident(rows).unwrap();
+        let id = Matrix::identity(rows).unwrap();
         let mut augmat = AugMatrix::new(vec![self, id.clone()]);
         if let Err(err) = augmat.gauss_elim(0) {
             return (err, None);
@@ -325,7 +334,7 @@ impl Matrix {
             return err;
         }
 
-        if augmat.matrices[0] == ident(rows).unwrap() {
+        if augmat.matrices[0] == Matrix::identity(rows).unwrap() {
             call!((augmat.deter).inv())
         } else {
             0.into()
@@ -549,69 +558,3 @@ impl From<Matrix> for Object {
     }
 }
 
-declare_pkg! {mat: #![bltn_pkg]
-    /// mat.M (rows: array of arrays) -> matrix
-    /// Construct a matrix from a array of rows
-    #[allow(non_snake_case)]
-    #[global]
-    fn M(rows: Vec<Object>) -> Object {
-        let mut comps = Vec::new();
-        for row in rows.into_iter() {
-            match row.cast() {
-                Err(err) => return err,
-                Ok(arr) => comps.push(arr),
-            }
-        }
-        Matrix::new(comps).into()
-    }
-
-    /// mat.zero (rows: natural) (cols: natural) -> matrix
-    /// A 'rows' by 'cols' dimensional zero matrix
-    pub fn zero(rows: usize, cols: usize) -> Result<Matrix, &'static str> {
-        if rows == 0 || cols == 0 { return Err(
-            "Matrix dimensions can't be zero"
-        )}
-        let z = Matrix::build((rows, cols), |_, _| 0);
-        z.deter.set(Some(0.into()));
-        Ok(z)
-    }
-
-    /// mat.ident (dims: natural) -> matrix
-    /// Identity matrix with dimension 'dims'
-    pub fn ident(dims: usize) -> Result<Matrix, &'static str> {
-        if dims == 0 { return Err("Dimension must be a positive integer") }
-        let id = Matrix::build((dims, dims), |r, c|
-            if r == c { 1 } else { 0 }
-        );
-        id.deter.set(Some(1.into()));
-        Ok(id)
-    }
-
-
-    /// mat.rows (x: any) -> any
-    /// Call method 'rows' on 'x'
-    fn rows(obj: Object) -> Object { call!(obj.rows) }
-    /// mat.cols (x: any) -> any
-    /// Call method 'cols' on 'x'
-    fn cols(obj: Object) -> Object { call!(obj.cols) }
-    /// mat.row_vecs (x: any) -> any
-    /// Call method 'row_vecs' on 'x'
-    fn row_vecs(obj: Object) -> Object { call!(obj.row_vecs) }
-    /// mat.col_vecs (x: any) -> any
-    /// Call method 'col_vecs' on 'x'
-    fn col_vecs(obj: Object) -> Object { call!(obj.col_vecs) }
-
-    /// mat.trsp (m: matrix) -> matrix
-    /// Transpose of 'm', where the rows and columns are swapped
-    pub fn trsp(m: Matrix) -> Matrix {
-        let mut m = m;
-        m.transpose(); m
-    }
-
-    /// mat.inv (m: matrix) -> matrix
-    /// Multiplicative inverse of the matrix 'm'
-    fn inv(m: Matrix) -> Object { m.inverse().0 }
-    /// mat.deter (m: matrix) -> any
-    /// Determinant of the matrix 'm'
-    fn deter(m: Matrix) -> Object { m.into_determinant() }
-}

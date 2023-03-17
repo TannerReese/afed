@@ -1,3 +1,0 @@
-line 4, column 9 of "mod.af" Eval Error: Modulo can't be zero
-line 5, column 26 of "mod.af" Eval Error: Binary operator ^ not implemented between 3 (mod 13) and 4 / 3
-2 Eval Errors encountered

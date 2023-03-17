@@ -18,9 +18,9 @@ calc.argmax [[0, 1], [-1, 1], [2, 3]] \x y: x^2 + y^2 = `Eval Error: Cannot call
 {
 	df: calc.deriv \x: x^3 - sqrt x,
 	df 3 = `26.711324866420096`,
-	v: V[0, 1, -1], dx: V[1, 2, 1],
-	dg: calc.direc_deriv dx \x: x - (x * x) * v,
-	dg (V[2, 3, 1]) = `V[1.0000000000052196, -15.999999999790166, 18.999999999860826]`,
+	dx: -3,
+	dg: calc.direc_deriv dx \x: x - (x * x) * 5,
+	dg 4 = `116.99999999982232`,
 },
 
 # Maximum functions

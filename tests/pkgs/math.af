@@ -1,17 +1,17 @@
 # Test num library
 
 # Constants
-pi = ``, num.pi = ``,
-e = ``, num.e = ``,
-gold = ``, num.gold = ``,
+pi = ``, math.pi = ``,
+e = ``, math.e = ``,
+gold = ``, math.gold = ``,
 
 # Functions print themselves
 ceil = ``, asinh = ``,
 
 # Piecewise functions
-abs (1 / 2) + num.abs (-4 / 5) = ``,
-abs (-4.38) - num.abs 8.9 = ``,
-num.signum 67.243 + 10 * signum (-5 / 3) = ``,
+abs (1 / 2) + math.abs (-4 / 5) = ``,
+abs (-4.38) - math.abs 8.9 = ``,
+math.signum 67.243 + 10 * signum (-5 / 3) = ``,
 real (450 / 23) = ``,
 floor (7843 / 193) - floor (-89.82) = ``,
 ceil 29.8493 * ceil (28 % (17/2)) = ``,
@@ -19,7 +19,7 @@ round 2.354 + round (31 / 2) = ``,
 
 # Real functions
 sqrt (32 / 12) = ``,
-num.sqrt (-1) = ``,
+math.sqrt (-1) = ``,
 cbrt (12 / 83) = ``,
 
 # Trig functions

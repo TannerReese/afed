@@ -36,7 +36,7 @@ arr2.sum = ``,
 pos: arr2.filter \x: x > 0 = ``,
 not_zero x: x != 0,
 (arr2.filter not_zero).prod = ``,
-pos.map num.sqrt = ``,
+pos.map math.sqrt = ``,
 
 arr2.any \x: x^2 > 50 = ``,
 arr2.all \x: x > 0 = ``,

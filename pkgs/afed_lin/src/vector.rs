@@ -4,9 +4,9 @@ use std::iter::{zip, FromIterator};
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 
-use super::mat::Matrix;
+use super::matrix::Matrix;
 
-use afed_objects::{array::Array, call, declare_pkg, impl_operable, name_type, Object};
+use afed_objects::{call, impl_operable, name_type, Object};
 
 macro_rules! check_dims_panic {
     ($a:expr, $b:expr) => {
@@ -99,6 +99,10 @@ impl_operable! {Vector:
 }
 
 impl Vector {
+    pub fn new(comps: Vec<Object>) -> Self {
+        Self(comps)
+    }
+
     fn check_dims(v1: Self, v2: Self) -> Result<(Self, Self), String> {
         if v1.dims() == v2.dims() {
             Ok((v1, v2))
@@ -259,26 +263,3 @@ impl From<Vector> for Object {
     }
 }
 
-declare_pkg! {vec: #![bltn_pkg]
-    /// vec.V (comps: array) -> vector
-    /// Construct a vector with the components 'comps'
-    #[allow(non_snake_case)]
-    #[global]
-    fn V(comps: Array) -> Result<Vector, &'static str> {
-        if !comps.0.is_empty() { Ok(Vector(comps.0)) }
-        else { Err("Vector cannot be zero dimensional") }
-    }
-
-    /// vec.dims (x: any) -> any
-    /// Call method 'dims' on 'x'
-    fn dims(obj: Object) -> Object { call!(obj.dims) }
-    /// vec.comps (x: any) -> any
-    /// Call method 'comps' on 'x'
-    fn comps(obj: Object) -> Object { call!(obj.dims) }
-    /// vec.mag (x: any) -> any
-    /// Call method 'mag' on 'x'
-    fn mag(obj: Object) -> Object { call!(obj.dims) }
-    /// vec.mag2 (x: any) -> any
-    /// Call method 'mag2' on 'x'
-    fn mag2(obj: Object) -> Object { call!(obj.dims) }
-}

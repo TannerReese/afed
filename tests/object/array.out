@@ -36,7 +36,7 @@ arr2.sum = `5`,
 pos: arr2.filter \x: x > 0 = `[8, 2, 3]`,
 not_zero x: x != 0,
 (arr2.filter not_zero).prod = `336`,
-pos.map num.sqrt = `[2.8284271247461903, 1.4142135623730951, 1.7320508075688772]`,
+pos.map math.sqrt = `[2.8284271247461903, 1.4142135623730951, 1.7320508075688772]`,
 
 arr2.any \x: x^2 > 50 = `true`,
 arr2.all \x: x > 0 = `false`,

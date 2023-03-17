@@ -1,7 +1,7 @@
 # Test vector operations
 
 v1: V[1, 2.5, -3 / 13],
-v2: vec.V[0, -7.234, 57 / 7],
+v2: lin.V[0, -7.234, 57 / 7],
 v3: V[12, 9.35, 23 / 27],
 
 # Linear operations
@@ -21,7 +21,7 @@ v3.dims = ``,
 (v2 + v1).comps = ``,
 
 # Dimension mismatch errors
-other: vec.V[1, 2, 0, 3],
+other: lin.V[1, 2, 0, 3],
 other + v1 = ``,
 v2 * other = ``,
 

@@ -31,9 +31,5 @@ test_bin! {object_string, "object/string.af"}
 test_bin! {object_array, "object/array.af"}
 test_bin! {object_map, "object/map.af"}
 
-test_bin! {bltns_num, "bltns/num.af"}
-test_bin! {bltns_arr, "bltns/arr.af"}
-test_bin! {bltns_prs, "bltns/prs.af"}
-test_bin! {bltns_mod, "bltns/mod.af"}
-test_bin! {bltns_vec, "bltns/vec.af"}
-test_bin! {bltns_mat, "bltns/mat.af"}
+test_bin! {pkgs_math, "pkgs/math.af"}
+test_bin! {pkgs_arr, "pkgs/arr.af"}

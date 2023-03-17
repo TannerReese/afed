@@ -10,17 +10,10 @@ use libloading::{Library, Symbol};
 use afed_objects::pkg::Pkg;
 
 pub mod arr;
-pub mod num;
-
-pub mod modulo;
-pub mod prs;
-
-mod augmat;
-pub mod mat;
-pub mod vec;
+pub mod math;
 
 const PACKAGE_FOLDERNAME: &str = "pkgs";
-const PACKAGE_BUILDER: &[u8] = b"_build_pkg\0";
+const PACKAGE_BUILDER: &str = "_build_pkg";
 
 fn print_error<W: Write>(errout: &mut W, msg: String) {
     writeln!(errout, "Loading Error: {}\n", msg).expect("IO Error while writing loading error")
@@ -103,7 +96,7 @@ impl<'lib> LoadedPkgs<'lib> {
             }
 
             let build: Symbol<unsafe extern "C" fn() -> (String, Pkg)>;
-            match lib.get(PACKAGE_BUILDER) {
+            match lib.get(PACKAGE_BUILDER.as_bytes()) {
                 Ok(result) => build = result,
                 Err(err) => {
                     print_error(
@@ -132,7 +125,7 @@ impl<'lib> LoadedPkgs<'lib> {
         let folder = match folder.canonicalize() {
             Ok(canonical) => canonical,
             Err(err) => {
-                print_error(errout, err.to_string());
+                print_error(errout, format!("Cannot canonicalize '{}', {}", folder.display(), err));
                 return false;
             }
         };
@@ -146,7 +139,7 @@ impl<'lib> LoadedPkgs<'lib> {
                             self.load(errout, path.as_path());
                         }
                     }
-                    Err(err) => print_error(errout, err.to_string()),
+                    Err(err) => print_error(errout, format!("Cannot read directory entry, {}", err)),
                 }
             }
         } else {
@@ -168,18 +161,12 @@ impl<'lib> LoadedPkgs<'lib> {
     }
 
     pub fn build_bltns<W: Write>(&mut self, errout: &mut W) {
-        let mut num = num::build_pkg();
-        make_all_global(&mut num);
-        self.add(errout, "num", num);
+        let mut math = math::build_pkg();
+        make_all_global(&mut math);
+        self.add(errout, "math", math);
 
         let mut arr = arr::build_pkg();
         make_all_global(&mut arr);
         self.add(errout, "arr", arr);
-
-        self.add(errout, "prs", prs::build_pkg());
-        self.add(errout, "mod", modulo::build_pkg());
-
-        self.add(errout, "vec", vec::build_pkg());
-        self.add(errout, "mat", mat::build_pkg());
     }
 }

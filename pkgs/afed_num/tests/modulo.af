@@ -5,7 +5,7 @@ Mod 0 = ``,
 (3 * Mod 13) ^ (4 / 3) = ``,
 
 # Standard Arithmetic
-43 * (mod.Mod 91 / 43) = ``,
+43 * (num.Mod 91 / 43) = ``,
 8 + 4 * Mod 7 - 10 = ``,
 8 / (22 - 9 * Mod 36) = ``,
 (101 * Mod 1427) ^ 72 = ``,
@@ -18,7 +18,7 @@ a: Mod (2^4 * 3^3 * 13) / 42 = ``,
 a * 42 = ``,
 
 # Modular Methods
-(mod.Mod 67 / 3).resid = ``,
+(num.Mod 67 / 3).resid = ``,
 (Mod 30 + Mod 21).modulo = ``,
 (m: 7823 * Mod 99901) ^ m.order = ``,
 (21 * Mod 28).order = ``,

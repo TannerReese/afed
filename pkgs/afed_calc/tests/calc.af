@@ -18,9 +18,9 @@ calc.argmax [[0, 1], [-1, 1], [2, 3]] \x y: x^2 + y^2 = ``,
 {
 	df: calc.deriv \x: x^3 - sqrt x,
 	df 3 = ``,
-	v: V[0, 1, -1], dx: V[1, 2, 1],
-	dg: calc.direc_deriv dx \x: x - (x * x) * v,
-	dg (V[2, 3, 1]) = ``,
+	dx: -3,
+	dg: calc.direc_deriv dx \x: x - (x * x) * 5,
+	dg 4 = ``,
 },
 
 # Maximum functions

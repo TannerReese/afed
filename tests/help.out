@@ -125,7 +125,7 @@ Operators:
 Methods:`,
 
 # Help messages for libraries
-help num.sqrt = ` num.sqrt (x: any) -> any
+help math.sqrt = ` math.sqrt (x: any) -> any
  Call method 'sqrt' on 'x'`,
 help map = ` arr.map (f: any -> any) (a: array) -> array
  Apply 'f' to every element of 'a'`,

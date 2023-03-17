@@ -1,4 +1,4 @@
-use super::mat::Matrix;
+use super::matrix::Matrix;
 use afed_objects::{call, Object};
 
 #[derive(Debug, Clone)]

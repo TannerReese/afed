@@ -5,7 +5,7 @@ Mod 0 = `Eval Error: Modulo can't be zero`,
 (3 * Mod 13) ^ (4 / 3) = `Eval Error: Binary operator ^ not implemented between 3 (mod 13) and 4 / 3`,
 
 # Standard Arithmetic
-43 * (mod.Mod 91 / 43) = `1 (mod 91)`,
+43 * (num.Mod 91 / 43) = `1 (mod 91)`,
 8 + 4 * Mod 7 - 10 = `2 (mod 7)`,
 8 / (22 - 9 * Mod 36) = `20 (mod 36)`,
 (101 * Mod 1427) ^ 72 = `1301 (mod 1427)`,
@@ -18,7 +18,7 @@ a: Mod (2^4 * 3^3 * 13) / 42 = `9 (mod 13)`,
 a * 42 = `1 (mod 13)`,
 
 # Modular Methods
-(mod.Mod 67 / 3).resid = `45`,
+(num.Mod 67 / 3).resid = `45`,
 (Mod 30 + Mod 21).modulo = `3`,
 (m: 7823 * Mod 99901) ^ m.order = `1 (mod 99901)`,
 (21 * Mod 28).order = `0`,
