@@ -3,9 +3,7 @@ use std::convert::TryInto;
 use std::fmt::{Display, Error, Formatter, Write};
 use std::ops::{Add, AddAssign, Index, IndexMut};
 
-use afed_objects::{
-    call, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object,
-};
+use afed_objects::{call, error::EvalError, eval_err, impl_operable, name_type, ErrObject, Object};
 
 #[derive(Debug, Clone)]
 pub struct Plot {
@@ -520,4 +518,3 @@ impl Add<Plot> for Object {
         rhs
     }
 }
-

@@ -6,7 +6,7 @@ const BINARY_PATH: &str = "./target/debug/afed";
 
 macro_rules! test_bin {
     ($testname:ident, $filename:literal) => {
-        test_bin! {$testname, $filename, ["-", "--no-local-pkgs"]}
+        test_bin! {$testname, $filename, []}
     };
 
     ($testname:ident, $filename:literal, $args:expr) => {
@@ -23,7 +23,7 @@ test_bin! {help, "help.af"}
 test_bin! {func, "func.af"}
 
 test_bin! {use_stmt, "parent_use.af"}
-test_bin! {clear, "clear.af", ["-d", "-", "--no-local-pkgs"]}
+test_bin! {clear, "clear.af", ["-d"]}
 
 test_bin! {object_bool, "object/bool.af"}
 test_bin! {object_number, "object/number.af"}

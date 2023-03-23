@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 afed_objects = { path = "afed_objects" }
 
+clap = "4.1"
 id-arena = "2"
 libloading = "0.7"
 directories = "4.0"

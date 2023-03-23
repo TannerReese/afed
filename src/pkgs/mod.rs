@@ -86,6 +86,11 @@ impl<'lib> LoadedPkgs<'lib> {
         let pkg: Pkg;
         let lib: Library;
 
+        if libname.as_os_str().is_empty() {
+            print_error(errout, "Path to library must be non-empty".to_string());
+            return false;
+        }
+
         unsafe {
             match Library::new(libname) {
                 Ok(result) => lib = result,
@@ -95,21 +100,30 @@ impl<'lib> LoadedPkgs<'lib> {
                 }
             }
 
-            let build: Symbol<unsafe extern "C" fn() -> (String, Pkg)>;
-            match lib.get(PACKAGE_BUILDER.as_bytes()) {
-                Ok(result) => build = result,
-                Err(err) => {
-                    print_error(
-                        errout,
-                        format!(
-                            "Library should have symbol {:?}, {}\n",
-                            PACKAGE_BUILDER, err
-                        ),
-                    );
-                    return false;
-                }
+            let build: Symbol<unsafe extern "C" fn() -> (String, &'lib str, Pkg)> =
+                match lib.get(PACKAGE_BUILDER.as_bytes()) {
+                    Ok(result) => result,
+                    Err(err) => {
+                        print_error(
+                            errout,
+                            format!(
+                                "Library should have symbol {:?}, {}\n",
+                                PACKAGE_BUILDER, err
+                            ),
+                        );
+                        return false;
+                    }
+                };
+
+            let version: &str;
+            (name, version, pkg) = (*build)();
+            if version != afed_objects::VERSION {
+                print_error(errout, format!(
+                    "Library uses version \"{}\" of afed_objects, instead of version \"{}\"",
+                    version, afed_objects::VERSION)
+                );
+                return false;
             }
-            (name, pkg) = (*build)();
         }
 
         if self.add(errout, name.as_str(), pkg) {
@@ -125,25 +139,34 @@ impl<'lib> LoadedPkgs<'lib> {
         let folder = match folder.canonicalize() {
             Ok(canonical) => canonical,
             Err(err) => {
-                print_error(errout, format!("Cannot canonicalize '{}', {}", folder.display(), err));
+                print_error(
+                    errout,
+                    format!("Cannot canonicalize '{}', {}", folder.display(), err),
+                );
                 return false;
             }
         };
 
-        if let Ok(entry_iter) = read_dir(folder) {
+        if let Ok(entry_iter) = read_dir(&folder) {
             for entry in entry_iter {
                 match entry {
                     Ok(filename) => {
-                        let path = filename.path();
-                        if is_library(path.as_path()) {
-                            self.load(errout, path.as_path());
+                        let buf = filename.path();
+                        let path = buf.as_path();
+                        if is_library(path) {
+                            self.load(errout, path);
                         }
                     }
-                    Err(err) => print_error(errout, format!("Cannot read directory entry, {}", err)),
+                    Err(err) => {
+                        print_error(errout, format!("Cannot read directory entry, {}", err))
+                    }
                 }
             }
         } else {
-            print_error(errout, "Failed to read entries of pkgs folder".into());
+            print_error(
+                errout,
+                format!("Failed to read entries of folder {}", folder.display()),
+            );
             return false;
         }
         true

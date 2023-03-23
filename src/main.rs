@@ -1,8 +1,10 @@
 use libloading::Library;
 use std::fs::{canonicalize, File};
 use std::io::{empty, sink, stderr, stdin, stdout, Error, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
+
+use clap::{arg, error::ErrorKind, value_parser, Command};
 
 extern crate afed_objects;
 
@@ -15,29 +17,26 @@ use self::pkgs::LoadedPkgs;
 #[derive(Debug, Clone)]
 enum Stream {
     Void, // Same as /dev/null
-    Stdin,
-    Stdout,
+    Std,  // STDIN or STDOUT
     Stderr,
     Path(PathBuf),
 }
 
 impl Stream {
-    fn new(path: String, is_input: bool) -> Stream {
-        if &path == "-" {
-            if is_input {
-                Stream::Stdin
-            } else {
-                Stream::Stdout
-            }
+    fn new(path: PathBuf) -> Stream {
+        if path.as_path() == Path::new("-") {
+            Stream::Std
+        } else if path.as_path() == Path::new("-2") {
+            Stream::Stderr
         } else {
-            Stream::Path(PathBuf::from(path))
+            Stream::Path(path)
         }
     }
 
     // Try to convert Stream into a PathBuf
     fn get_path(&self) -> Option<PathBuf> {
         match self {
-            Stream::Void | Stream::Stdin | Stream::Stdout | Stream::Stderr => None,
+            Stream::Void | Stream::Std | Stream::Stderr => None,
             Stream::Path(buf) => Some(buf.clone()),
         }
     }
@@ -46,13 +45,12 @@ impl Stream {
     fn to_reader(&self) -> Box<dyn Read> {
         match self {
             Stream::Void => Box::new(empty()),
-            Stream::Stdin => Box::new(stdin()),
+            Stream::Std => Box::new(stdin()),
             Stream::Path(p) => Box::new(File::open(p).unwrap_or_else(|err| {
                 eprintln!("IO Error while opening reader for {}: {}", p.display(), err);
                 exit(1);
             })),
 
-            Stream::Stdout => panic!("Cannot read from STDOUT"),
             Stream::Stderr => panic!("Cannot read from STDERR"),
         }
     }
@@ -61,14 +59,12 @@ impl Stream {
     fn to_writer(&self) -> Box<dyn Write> {
         match self {
             Stream::Void => Box::new(sink()),
-            Stream::Stdout => Box::new(stdout()),
+            Stream::Std => Box::new(stdout()),
             Stream::Stderr => Box::new(stderr()),
             Stream::Path(p) => Box::new(File::create(p).unwrap_or_else(|err| {
                 eprintln!("IO Error while opening writer for {}: {}", p.display(), err);
                 exit(1);
             })),
-
-            Stream::Stdin => panic!("Cannot write to STDIN"),
         }
     }
 }
@@ -77,8 +73,7 @@ impl PartialEq for Stream {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Stream::Void, Stream::Void) => true,
-            (Stream::Stdin, Stream::Stdin) => true,
-            (Stream::Stdout, Stream::Stdout) => true,
+            (Stream::Std, Stream::Std) => true,
             (Stream::Stderr, Stream::Stderr) => true,
             (Stream::Path(p1), Stream::Path(p2)) => canonicalize(p1)
                 .and_then(|abs1| canonicalize(p2).map(|abs2| abs1 == abs2))
@@ -89,192 +84,104 @@ impl PartialEq for Stream {
 }
 
 struct Params {
-    clear: bool,
-    input_path: Option<PathBuf>,
     input: Stream,
     output: Stream,
     errors: Stream,
+    clear: bool,
+    input_path: Option<PathBuf>,
     pkg_dirs: Vec<PathBuf>,
     no_local_pkgs: bool,
 }
 
-const USAGE_MSG: &str = concat!(
-    "Usage: afed [OPTION...] [-i] INPUT [[-o] OUTPUT]\n",
-    "Try 'afed -h' or 'afed --help' for more information",
-);
-const HELP_MSG: &str = concat!(
-    "Usage: afed [OPTION...] [-i] INPUT [[-o] OUTPUT]\n",
-    "\n",
-    "Evaluate expressions in place\n",
-    "\n",
-    "Options:\n",
-    "  -i, --input INPUT        Input file to evaluate\n",
-    "  -o, --output OUTPUT      Output file to store result to\n",
-    "  -C, --check              Don't output file only check for errors\n",
-    "  -d, --clear              Clear the content of every substitution (eg. = ``)\n",
-    "  -n, --no-clobber         Make sure INFILE is not used as the output\n",
-    "  -e, --errors ERRORS      File to send errors to. Defaults to STDERR\n",
-    "  -E, --no-errors          Don't print any error messages\n",
-    "  -L, --pkg DIRECTORY      Search in given directory for more packages to load\n",
-    "  --no-local-pkgs          Don't attempt to load any packages from default locations\n",
-    "  -h, -?, --help           Print this help message\n",
-    "\n",
-    "'-' may be used with -o, -i, or -e to indicate STDOUT, STDIN, or STDOUT, respectively\n",
-    "\n",
-    "Examples:\n",
-    "  # Read and Eval from STDIN, outputing and printing errors to STDOUT\n",
-    "  afed -e - -\n",
-    "  # Read and Eval file.af, printing back to file.af\n",
-    "  afed -i file.af\n",
-    "  # Read and Eval file.af, but don't output result\n",
-    "  afed file.af -C\n",
-    "  # Parse and clear all \"= ``\" expressions\n",
-    "  afed file.af -d\n",
-    "  # Read and Eval file.af and output to output.af\n",
-    "  afed file.af -o output.af\n",
-);
+fn get_params() -> Params {
+    let mut prog = Command::new("afed")
+    .about("Functionally evaluate expressions in place")
+    .args(&[
+        arg!([INPUT] "Input file to evaluate")
+            .default_value("-")
+            .value_parser(value_parser!(PathBuf)),
+        arg!([OUTPUT] "Output file to store result to. Defaults to the INPUT")
+            .value_parser(value_parser!(PathBuf)),
+        arg!(-C --check "Don't output file. Only check for errors"),
+        arg!(-d --clear "Clear the content of every substitution (eg. = ``)"),
+        arg!(-n --"no-clobber"  "Make sure INPUT is not used as the output"),
+        arg!(-e --errors <ERR_FILE> "File to send errors to. Defaults to STDERR")
+            .default_value("-2")
+            .value_parser(value_parser!(PathBuf)),
+        arg!(-E --"no-errors"  "Don't print any error messages"),
+        arg!(-f --filename <INPUT_PATH> "Indicate the internal name to use for the input")
+            .value_parser(value_parser!(PathBuf)),
+        arg!(-L --pkg <DIRECTORY> ... "Search in given directory for more packages to load")
+            .value_parser(value_parser!(PathBuf)),
+        arg!(--"no-local-pkgs"  "Don't attempt to load any packages from default locations")
+    ])
+    .after_help(concat!(
+        "'-' may be used with -o, -i, or -e to indicate STDOUT, STDIN, or STDOUT, respectively\n",
+        "'-2' may be used with -o and -e to indicate STDERR\n",
+        "-f exists primarily for when input is STDIN, but you want to assign an actual name to the file.\n",
+        "\n",
+        "Examples:\n",
+        "  # Read and Eval from STDIN, outputing and printing errors to STDOUT\n",
+        "  afed -e - -\n",
+        "  # Read and Eval file.af, printing back to file.af\n",
+        "  afed -i file.af\n",
+        "  # Read and Eval file.af, but don't output result\n",
+        "  afed file.af -C\n",
+        "  # Parse and clear all \"= ``\" expressions\n",
+        "  afed file.af -d\n",
+        "  # Read and Eval file.af and output to output.af\n",
+        "  afed file.af -o output.af\n",
+    ));
 
-// Die and print usage message
-macro_rules! usage {
-    ($($arg:tt),*) => {{
-        eprintln!($($arg),*);
-        eprintln!("{}", USAGE_MSG);
-        exit(1);
-    }};
-}
+    let err_stderr_input = prog.error(ErrorKind::InvalidValue, "Input file cannot be STDERR");
+    let err_no_clobber = prog.error(
+        ErrorKind::ArgumentConflict,
+        "Input and output files match, but --no-clobber is on",
+    );
+    let mut matches = prog.get_matches();
 
-// Parse command line arguments
-impl Params {
-    fn parse() -> Params {
-        let mut input_path = None;
-        let (mut input, mut output, mut errors) = (None, None, None);
-        let mut pkg_dirs = Vec::new();
-        let (mut check, mut clear, mut no_clobber, mut no_errors, mut no_local_pkgs) =
-            (false, false, false, false, false);
+    let input = Stream::new(matches.remove_one("INPUT").unwrap());
+    // Make sure input isn't being pulled from STDERR
+    if input == Stream::Stderr {
+        err_stderr_input.exit();
+    }
 
-        let mut args = std::env::args();
-        _ = args.next();
+    // Use path of `input` as default internal name
+    let input_path = matches
+        .remove_one::<PathBuf>("filename")
+        .or_else(|| input.get_path());
 
-        while let Some(opt) = args.next() {
-            match opt.as_str() {
-                "-i" | "--input" => {
-                    if input.is_some() {
-                        usage!("Input file already provided");
-                    } else if let Some(path) = args.next() {
-                        input = Some(Stream::new(path, true));
-                    } else {
-                        usage!("No input file provided to -i");
-                    }
-                }
-                "-o" | "--ouput" => {
-                    if output.is_some() {
-                        usage!("Output file already provided");
-                    } else if let Some(path) = args.next() {
-                        output = Some(Stream::new(path, false));
-                    } else {
-                        usage!("No output file provided to -o");
-                    }
-                }
+    // Use `input` as default for `output`
+    let output = if matches.remove_one("check").unwrap() {
+        Stream::Void
+    } else if let Some(out) = matches.remove_one("OUTPUT") {
+        Stream::new(out)
+    } else {
+        input.clone()
+    };
 
-                "-f" | "--filename" => {
-                    if input_path.is_some() {
-                        usage!("Input filename already provided");
-                    } else if let Some(path) = args.next() {
-                        input_path = Some(PathBuf::from(path));
-                    } else {
-                        usage!("No input name provided to -f");
-                    }
-                }
+    // Use STDERR as default for `errors`
+    let errors = if matches.remove_one("no-errors").unwrap() {
+        Stream::Void
+    } else {
+        Stream::new(matches.remove_one("errors").unwrap())
+    };
 
-                "-C" | "--check" => {
-                    check = true;
-                }
-                "-d" | "--clear" => {
-                    clear = true;
-                }
-                "-n" | "--no-clobber" => {
-                    no_clobber = true;
-                }
+    // Check that input file isn't getting clobbered
+    if matches.remove_one("no-clobber").unwrap() && input != Stream::Std && input == output {
+        err_no_clobber.exit();
+    }
 
-                "-E" | "--no-errors" => {
-                    no_errors = true;
-                }
-                "-e" | "--errors" => {
-                    if errors.is_some() {
-                        usage!("Error output already provided");
-                    } else if let Some(path) = args.next() {
-                        errors = Some(Stream::new(path, false));
-                    } else {
-                        usage!("No error file provided");
-                    }
-                }
-
-                "-L" | "--pkg" => {
-                    if let Some(path) = args.next() {
-                        pkg_dirs.push(PathBuf::from(path))
-                    } else {
-                        usage!("No package directory given");
-                    }
-                }
-                "--no-local-pkgs" => {
-                    no_local_pkgs = true;
-                }
-
-                "-h" | "-?" | "--help" => {
-                    println!("{}", HELP_MSG);
-                    exit(0);
-                }
-
-                _ => {
-                    if input.is_none() {
-                        input = Some(Stream::new(opt, true));
-                    } else if output.is_none() {
-                        output = Some(Stream::new(opt, false));
-                    } else {
-                        usage!("Extra positional argument: {}", opt);
-                    }
-                }
-            }
-        }
-
-        // Use STDIN as default
-        let input = input.unwrap_or(Stream::Stdin);
-        // Use `input` as default
-        let output = if check {
-            Stream::Void
-        } else if let Some(out) = output {
-            out
-        } else if let Stream::Stdin = input {
-            Stream::Stdout
-        } else {
-            input.clone()
-        };
-        // Use STDERR as default
-        let errors = if no_errors {
-            Stream::Void
-        } else if let Some(err) = errors {
-            err
-        } else {
-            Stream::Stderr
-        };
-
-        // Use path of `input` as default
-        let input_path = input_path.or_else(|| input.get_path());
-
-        // Make sure the program doesn't accidently overwrite the file
-        if no_clobber && input == output {
-            usage!("Input and output files match, but --no-clobber is on");
-        }
-
-        Params {
-            clear,
-            input_path,
-            input,
-            output,
-            errors,
-            pkg_dirs,
-            no_local_pkgs,
-        }
+    Params {
+        input,
+        output,
+        errors,
+        clear: matches.remove_one("clear").unwrap(),
+        input_path,
+        pkg_dirs: matches
+            .remove_many::<PathBuf>("pkg")
+            .map_or(vec![], |dirs| dirs.collect()),
+        no_local_pkgs: matches.remove_one("no-local-pkgs").unwrap(),
     }
 }
 
@@ -294,6 +201,7 @@ fn parse_and_eval(prms: Params, libs: &mut Vec<Library>) -> Result<(), Error> {
         // Load packages from user provided folders
         pkgs.load_from_folder(&mut errout, folder.as_path());
     }
+    // Load packages and builtins
     // Load the packages from pkgs folder in config folder
     if !prms.no_local_pkgs {
         pkgs.load_from_config(&mut errout);
@@ -338,7 +246,7 @@ fn main() {
      * will have lifetimes that outlive the `Docmt` and `ExprArena`.
      */
     let mut libs = Vec::new();
-    if let Err(err) = parse_and_eval(Params::parse(), &mut libs) {
+    if let Err(err) = parse_and_eval(get_params(), &mut libs) {
         eprintln!("IO Error: {}", err);
         exit(1);
     }

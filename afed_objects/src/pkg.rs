@@ -12,7 +12,6 @@ pub enum Pkg {
     Map(HashMap<String, (bool, Pkg)>),
 }
 
-
 // Wrapper for Rust functions so they can be used in Afed
 #[derive(Clone, Copy)]
 pub struct PkgFunc<const N: usize> {

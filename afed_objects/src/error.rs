@@ -57,7 +57,7 @@ impl<T: Into<Object>> From<Result<T, Object>> for Object {
 
 impl<T: Into<Object>> From<Result<T, String>> for Object {
     fn from(res: Result<T, String>) -> Self {
-        res.map_err(&EvalError::create).into()
+        res.map_err(EvalError::create).into()
     }
 }
 

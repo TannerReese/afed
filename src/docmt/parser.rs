@@ -70,7 +70,7 @@ impl_operable! {HelpStmt:
     #[call]
     fn __call(&self, attr: String, obj: Object) -> Result<PrintStr, String> {
         obj.help(if attr.is_empty() { None } else { Some(attr.as_str()) })
-        .map(&PrintStr)
+        .map(PrintStr)
         .ok_or_else(|| format!("No help exists for attribute '{}'", attr))
     }
 }

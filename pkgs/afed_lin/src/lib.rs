@@ -1,7 +1,7 @@
-use vector::Vector;
 use matrix::Matrix;
+use vector::Vector;
 
-use afed_objects::{call, declare_pkg, array::Array, Object};
+use afed_objects::{array::Array, call, declare_pkg, Object};
 
 mod aug_matrix;
 pub mod matrix;

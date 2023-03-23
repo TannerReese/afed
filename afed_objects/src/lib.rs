@@ -42,6 +42,9 @@ pub mod partial_eval;
 pub mod pkg;
 pub mod string;
 
+// Allows afed to check that afed_objects version match across dynamic link boundaries
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub trait Operable {
     fn unary(self, op: Unary) -> Option<Object>;
     fn binary(self, rev: bool, op: Binary, other: Object) -> Result<Object, (Object, Object)>;
@@ -201,7 +204,7 @@ impl Object {
     fn downcast_ref<T: NamedType>(&self) -> Option<&T> {
         if T::type_id() == (*self.0).type_id_dyn() {
             let dummy_ptr = (*self.0).as_dummy() as *const dyn DummySafe;
-            unsafe { (&*(dummy_ptr as *const Option<T>)).as_ref() }
+            unsafe { (*(dummy_ptr as *const Option<T>)).as_ref() }
         } else {
             None
         }

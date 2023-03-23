@@ -12,7 +12,7 @@ fn line_by_line(s1: &str, s2: &str) {
     loop {
         let (line1, line2) = (lns1.next(), lns2.next());
         assert_eq!(line1, line2);
-        if let None = line1 {
+        if line1.is_none() {
             return;
         }
     }
@@ -28,7 +28,7 @@ where
     path.set_extension("af");
     // Make sure test file exists before proceeding
     match path.try_exists() {
-        Ok(true) => {},
+        Ok(true) => {}
         _ => panic!("Test file {:?} does not exist", path.display()),
     }
     println!("Testing {:?}", path.display());
@@ -36,21 +36,23 @@ where
     // Execute Afed on test file with arguments
     let output = Command::new(binary)
         .arg(path.as_os_str())
+        .args(["-", "--no-local-pkgs"])
         .args(args)
         .output()
         .expect("Failed to execute process");
-    // Check that program wasn't killed or segfaulted
-    if let Some(code) = output.status.code() {
-        assert!(code <= 1, "Program errored with code {}", code);
-    } else {
-        panic!("Program was killed by signal")
-    }
 
     let stdout = String::from_utf8(output.stdout).expect("Failed to parse STDOUT as Unicode");
     let stderr = String::from_utf8(output.stderr).expect("Failed to parse STDERR as Unicode");
 
     println!("Stdout: \n{}", stdout);
     println!("Stderr: \n{}", stderr);
+
+    // Check that program wasn't killed or segfaulted
+    if let Some(code) = output.status.code() {
+        assert!(code <= 1, "Program errored with code {}", code);
+    } else {
+        panic!("Program was killed by signal")
+    }
 
     // Load expected output and check against result
     path.set_extension("out");
@@ -81,24 +83,36 @@ where
 #[macro_export]
 macro_rules! test_file {
     ($testname:ident, $filename:literal) => {
-        test_file! {$testname, $filename, "./target/debug", ["-", "--no-local-pkgs"]}
-    };
-    ($testname:ident, $filename:literal, [$($arg:expr),*]) => {
-        test_file! {$testname, $filename, "./target/debug", [$($arg),*]}
+        $crate::test_file! {$testname, $filename, []}
     };
 
-    // --no-local-pkgs is necessary to prevent the local configuration from affecting tests
-    ($testname:ident, $filename:literal, $pkg_folder:literal) => {
-        test_file! {$testname, $filename, $pkg_folder, ["-", "--no-local-pkgs"]}
-    };
-    ($testname:ident, $filename:literal, $pkg_folder:literal, [$($arg:expr),*]) => {
+    ($testname:ident, $filename:literal, $args:expr) => {
         #[test]
         fn $testname() {
-            afed_objects::testing::run_file(
-                "afed", ::std::path::Path::new($filename),
-                [$($arg),* , "--no-local-pkgs", "-L", $pkg_folder]
-            );
+            $crate::testing::run_file("afed", ::std::path::Path::new($filename), $args);
         }
     };
 }
 
+// Run test files on only the libraries in $pkg_folder
+#[macro_export]
+macro_rules! test_with_libs {
+    ($testname:ident, $filename:literal) => {
+        $crate::test_with_libs!{$testname, $filename, "./target/debug", []}
+    };
+
+    ($testname:ident, $filename:literal, [$($arg:expr),*]) => {
+        $crate::test_with_libs!{$testname, $filename, "./target/debug", [$($arg),*]}
+    };
+
+    ($testname:ident, $filename:literal, $pkg_folder:literal) => {
+        $crate::test_with_libs!{$testname, $filename, $pkg_folder, []}
+    };
+
+    // --no-local-pkgs is necessary to prevent the local configuration from affecting tests
+    ($testname:ident, $filename:literal, $pkg_folder:literal, [$($arg:expr),*]) => {
+        $crate::test_file!{$testname, $filename,
+            ["-L", $pkg_folder, $($arg),*]
+        }
+    };
+}

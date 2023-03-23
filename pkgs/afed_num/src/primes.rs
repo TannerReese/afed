@@ -95,8 +95,7 @@ impl Iterator for PrimeFactors {
 }
 
 pub fn euler_totient(x: u64) -> u64 {
-    PrimeFactors::new(x).map(|(p, k)|
-        (p - 1) * p.pow(k as u32 - 1)
-    ).product()
+    PrimeFactors::new(x)
+        .map(|(p, k)| (p - 1) * p.pow(k as u32 - 1))
+        .product()
 }
-

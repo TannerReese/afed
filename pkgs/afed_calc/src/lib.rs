@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use afed_objects::{call, declare_pkg, ErrObject, Object};
 
-use calc::{Bounds, pt_to_obj, integral, extremum_grid};
+use calc::{extremum_grid, integral, pt_to_obj, Bounds};
 use plot::Plot;
 
 pub mod calc;

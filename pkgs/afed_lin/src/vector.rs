@@ -262,4 +262,3 @@ impl From<Vector> for Object {
         }
     }
 }
-

@@ -4,10 +4,12 @@ afed - an interpreted functional language for interactive computations
 
 .SH SYNOPSIS
 .SY afed
-[ \fB-CdnE\fP ]
-[ \fB-e\fP \fIerrors\fP ]
-[ \fB-i\fP \fIinput\fP ]
-[ [ \fB\-o\fP ] output ]
+[ \fB\-CdnE\fP ]
+[ \fB\-e\fP \fI<ERR_FILE>\fP ]
+[ \fB\-f\fP \fI<INPUT_PATH>\fP ]
+[ \fB\-L\fP \fI<DIRECTORY>\fP ]
+[ \fB\-\-no\-local\-pkgs\fP ]
+[ \fI<INPUT>\fP [ \fI<OUTPUT>\fP ]]
 .SY afed
 [ \fB\-h\fP | \fB\-?\fP | \fB\-\-help\fP ]
 .YS
@@ -41,23 +43,19 @@ To this end, it has a number of libraries written in Rust that make it easy to s
 \fBafed\fP GNU-like syntax for command line arguments.
 
 .TP
-.BI \-i\  INPUT
-.TQ
-.BI \-\-input\  INPUT
+.B <INPUT>
 Afed program file that will be parsed and evaluated.
-The results of each computation attahced to an \fIequals expression\fP
+The results of each computation attached to an \fIequals expression\fP
 will be printed in the area between the graves.
 If parse errors occur nothing will be printed in that expression.
 INPUT can be '-' to pull the file from STDIN.
 If not given the input defaults to STDIN.
 
 .TP
-.BI \-o\  OUTPUT
-.TQ
-.BI \-\-output\  OUTPUT
+.B <OUTPUT>
 Filename to which the results will be written.
 If there is no output given then the result is written back to the input.
-OUTPUT can be '-' so the result will be printed on STDOUT.
+OUTPUT can be '-' to print to STDOUT or '-2' to print to STDERR.
 
 .TP
 .B \-C
@@ -82,12 +80,12 @@ If \fB-n\fP is set and the input and output are the same
 the program exit with an error.
 
 .TP
-.BI \-e\  ERRORS
+.BI \-e\  <ERR_FILE>
 .TQ
-.BI \-\-errors\  ERRORS
+.BI \-\-errors\  <ERR_FILE>
 Filename to which the parsing and evaluation errors will be written.
-ERRORS can be '-' to write the errors to STDOUT.
-If not given the program defaults to STDERR.
+ERR_FILE can be '-' to write the errors to STDOUT.
+If not given the program defaults to '-2' which is STDERR.
 
 .TP
 .B \-E
@@ -95,6 +93,28 @@ If not given the program defaults to STDERR.
 .B \-\-no\-errors
 Suppresses any parsing or evaluation errors from being written anywhere.
 If present then any \fB-e\fP flag will be ignored.
+
+.TP
+.B \-f\  <INPUT_PATH>
+.TQ
+.B \-\-filename\  <INPUT_PATH>
+Name used internally for INPUT.
+This will show up when parsing and evaluation errors are printed.
+This is most useful when you want to provide
+the name of a file that is passed in through STDIN.
+
+.TP
+.B \-L\  <DIRECTORY>
+.TQ
+.B \-\-pkg\  <DIRECTORY>
+Check for packages in <DIRECTORY> to load.
+By default, \fBafed\fP will search the \fIprogram's config folder\fP for packages to load.
+See the \fBPACKAGES\fP section.
+
+.TP
+.B \-\-no\-local\-pkgs
+Prevent \fBafed\fP from searching for packages in the \fIconfig folder\fP.
+Only directories given with \fB-L\fP will be searched.
 
 .TP
 .B \-h, \-?, \-\-help
@@ -143,6 +163,50 @@ afed input.af --errors afed_errors.err
 .P
 
 
+.SH PACKAGES
+Packages are collections of variables and functions under a given name.
+They behave the same as maps in \fBafed\fP.
+The builtin \fIpackages\fP are
+.IP \fBmath\fP
+Standard rounding, trigonometric, exponential, logarithmic, and combinatorics functions.
+These are also accessible as methods on numbers.
+For convenience, all members of this library are available in the global namespace.
+.IP \fBarr\fP
+Array manipulation functions including \fBmap\fP, \fBfilter\fP, \fBfold\fP, and others.
+These functions can also be called as methods on arrays.
+For convenience, all members of this library are available in the global namespace.
+.P
+
+Afed's standard functionality can be extended with dynamically linked \fIpackages\fP.
+These are distributed as dynamically linked libraries (e.g. \fB.dll\fP or \fB.so\fP files).
+By default \fBafed\fP will search for \fIpackages\fP in
+\fI$XDG_CONFIG_HOME/afed/pkgs\fP or \fI$HOME/.config/afed/pkgs\fP on Linux systems,
+\fI$HOME/Library/Application Support/Afed/pkgs\fP on macOS, and
+\fI{FOLDERID_RoamingAppData}\\Afed\\config\\pkgs\fP on Windows.
+The standard dynamically linked \fIpackages\fP are
+.IP \fBnum\fP
+Functions dealing with prime numbers and factorization of positive integers.
+This includes \fBis_prime\fP and \fBprime_factors\fP.
+A type for modular arithmetic constructed using \fBmod.Mod\fP
+(\fBMod\fP is also available in the global namespace).
+For example, \fI3 (mod 7)\fP is written '\fB3 * Mod 7\fP'.
+.IP \fBlin\fP
+Contains constructor for a vector type, \fBlin.V\fP, and a matrix type, \fBlin.M\fP.
+Both of these constructors are available in the global namespace.
+It also provides vector and matrix manipulations functions.
+.IP \fBcalc\fP
+Includes functions for calculating the derivative, integral, maximum, and minimum of real valued functions.
+It also provides the a plot type with constructor, \fBcalc.Plot\fP for creating plots.
+Plots can be used to created 2D graphs of real valued functions that are displayed in the document.
+.P
+
+To create an afed \fIpackage\fP, one can use the \fBafed_objects\fP crate.
+This crate provides the basic \fBafed\fP datatypes as well as
+several macros for making \fIpackages\fP.
+Specifically, one must call the \fBdeclare_pkg\fP macro to indicate
+which constants and functions should be exported.
+
+
 .SH LANGUAGE
 Afed supports a set of primitive types similar to JavaScript, Python, and many other interpreted languages.
 This includes numerics, strings, booleans, a null type, arrays (lists), and maps (dictionaries).
@@ -186,37 +250,7 @@ f [3, 2] {a: 5, b: ""} = `11`,
 .EE
 .P
 
-There are a number of builtin libraries to help with calculations.
-.IP \fBnum\fP
-Standard rounding, trigonometric, exponential, logarithmic, and combinatorics functions.
-These are also accessible as methods on numbers
-For convenience, all members of this library are available in the global namespace.
-.IP \fBarr\fP
-Array manipulation functions including \fBmap\fP, \fBfilter\fP, \fBfold\fP, and others.
-These functions can also be called as methods on arrays.
-For convenience, all members of this library are available in the global namespace.
-.IP \fBprs\fP
-Functions dealing with prime numbers and factorization of positive integers.
-This includes \fBis_prime\fP and \fBprime_factors\fP.
-.IP \fBmod\fP
-Contains constructor for modular type, \fBmod.Mod\fP.
-This constructor is available as \fBMod\fP in the global namespace.
-.IP \fBvec\fP
-Contains constructor for vector type, \fBvec.V\fP,
-as well as vector manipulation functions.
-The constructor \fBV\fP is available in the global namespace.
-.IP \fBmat\fP
-Contains constructor for matrix type, \fBmat.M\fP,
-as well as matrix manipulation functions.
-The constructor \fBM\fP is available in the global namespace.
-.IP \fBcalc\fP
-Library for calculating the derivative, integral, maximum, and minimum of real valued functions.
-.IP \fBplt\fP
-Provides constructor, \fBplt.Plot\fP, for creating plots.
-Plots can be used to created 2D graphs of real valued functions that are displayed in the document.
-.P
-
-More information about any objects, methods, or libraries can be found by calling \fBhelp\fP.
+More information about any objects, methods, or packages can be found by calling \fBhelp\fP.
 For example, to get information about the \fBlen\fP method or the number,
 we can call
 .IP
@@ -226,6 +260,7 @@ help [1, true, 3].len = ``,
 help arr = ``,
 .EE
 .P
+
 
 .SH IMPORTING
 An Afed file may import other Afed files with \fBuse\fP statements.

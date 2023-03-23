@@ -1,3 +1,3 @@
-use afed_objects::test_file;
-test_file! {primes, "primes.af"}
-test_file! {modulo, "modulo.af"}
+use afed_objects::test_with_libs;
+test_with_libs! {primes, "primes.af"}
+test_with_libs! {modulo, "modulo.af"}

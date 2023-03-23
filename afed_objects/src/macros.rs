@@ -472,12 +472,14 @@ macro_rules! declare_pkg {
 
         // Declare hook to be called when library is loaded
         #[no_mangle]
-        pub extern "C" fn _build_pkg() -> (::std::string::String, $crate::pkg::Pkg) {
+        pub extern "C" fn _build_pkg() -> (
+            ::std::string::String, &'static str, $crate::pkg::Pkg
+        ) {
             let mut pkg = ::std::collections::HashMap::new();
             $($crate::declare_pkg!(@func $(#$meta)*,
                 "", false, (pkg, $name, $func $args -> $ret $block)
             );)*
-            ($name.into(), $crate::pkg::Pkg::Map(pkg))
+            ($name.into(), $crate::VERSION, $crate::pkg::Pkg::Map(pkg))
         }
     };
 }

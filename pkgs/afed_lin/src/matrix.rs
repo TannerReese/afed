@@ -209,21 +209,22 @@ impl Matrix {
     }
 
     pub fn zero(rows: usize, cols: usize) -> Option<Matrix> {
-        if rows == 0 || cols == 0 { return None; }
+        if rows == 0 || cols == 0 {
+            return None;
+        }
         let z = Matrix::build((rows, cols), |_, _| 0);
         z.deter.set(Some(0.into()));
         Some(z)
     }
 
     pub fn identity(dims: usize) -> Option<Self> {
-        if dims == 0 { return None }
-        let id = Matrix::build((dims, dims), |r, c|
-            if r == c { 1 } else { 0 }
-        );
+        if dims == 0 {
+            return None;
+        }
+        let id = Matrix::build((dims, dims), |r, c| if r == c { 1 } else { 0 });
         id.deter.set(Some(1.into()));
         Some(id)
     }
-
 
     pub fn transpose(&mut self) {
         let (rows, cols) = self.dims;
@@ -557,4 +558,3 @@ impl From<Matrix> for Object {
         }
     }
 }
-

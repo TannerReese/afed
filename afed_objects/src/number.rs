@@ -197,7 +197,7 @@ impl_operable! {Number:
     pub fn gcd(self, other: Self) -> Result<Self, &'static str> {
         match (self, other) {
             (Number::Ratio(na, da), Number::Ratio(nb, db)) => Ok({
-                let g = gcd(na.unsigned_abs() as u64 * db, nb.unsigned_abs() as u64 * da);
+                let g = gcd(na.unsigned_abs() * db, nb.unsigned_abs() * da);
                 Number::Ratio(g as i64, da * db)
             }.simplify()),
             _ => Err("Cannot take GCD of reals"),
@@ -209,7 +209,7 @@ impl_operable! {Number:
     pub fn lcm(self, other: Self) -> Result<Self, &'static str> {
         match (self, other) {
             (Number::Ratio(na, da), Number::Ratio(nb, db)) => Ok({
-                let g = gcd(na.unsigned_abs() as u64 * db, nb.unsigned_abs() as u64 * da);
+                let g = gcd(na.unsigned_abs() * db, nb.unsigned_abs() * da);
                 Number::Ratio(na * nb, g)
             }.simplify()),
             _ => Err("Cannot take LCM of reals"),
@@ -254,7 +254,7 @@ impl Number {
     pub fn simplify(&self) -> Self {
         match self {
             &Number::Ratio(n, d) => {
-                let g = gcd(n.unsigned_abs() as u64, d);
+                let g = gcd(n.unsigned_abs(), d);
                 Number::Ratio(n / g as i64, d / g)
             }
             num => *num,
@@ -283,11 +283,11 @@ impl Number {
         match (self, rhs) {
             (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
                 if (n1 < 0) == (n2 < 0) || n1 == 0 || n2 == 0 {
-                    let n = (n1.unsigned_abs() as u64 * d2) / (n2.unsigned_abs() as u64 * d1);
+                    let n = (n1.unsigned_abs() * d2) / (n2.unsigned_abs() * d1);
                     (n as i64).into()
                 } else {
                     let n =
-                        (n1.unsigned_abs() as u64 * d2 - 1) / (n2.unsigned_abs() as u64 * d1) + 1;
+                        (n1.unsigned_abs() * d2 - 1) / (n2.unsigned_abs() * d1) + 1;
                     (-(n as i64)).into()
                 }
             }
@@ -481,7 +481,9 @@ impl Div for Number {
 impl Rem for Number {
     type Output = Self;
     fn rem(self, rhs: Self) -> Self {
-        if rhs == Number::Ratio(0, 1) { return Number::Real(f64::NAN) }
+        if rhs == Number::Ratio(0, 1) {
+            return Number::Real(f64::NAN);
+        }
         match (self, rhs) {
             (Number::Ratio(n1, d1), Number::Ratio(n2, d2)) => {
                 let mut rem = (n1 * d2 as i64) % (n2 * d1 as i64);

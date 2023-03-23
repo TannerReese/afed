@@ -10,27 +10,27 @@ Afed is an interpreted functional language inspired by Haskell.
 The contents of the input file is parsed and evaluated.
 The results of computations are substituted into the document
 and the whole contents (with substitutions) is written to the output file.
-All of the following commands are equivalent
 ```
 afed input.af output.af
-afed input.af -o output.af
-afed -o output.af -i input.af
 ```
 If no output file is given then the contents is written back to the input file
-so `afed input.af` is the same as `afed input.af -o input.af`.
+so `afed input.af` is the same as `afed input.af input.af`.
 `-` can be used for either the input or output file
 to mean `STDIN` or `STDOUT`, respectively.
 
 Along with the input and output files,
 the `afed` command can take the following options
-- `-C` suppresses the printing of results so only errors are shown
-- `-d` removes the contents of every equals expression
-- `-n` ensures that the input file is not modified
-- `-e ERRORS` specifies a file to output errors to (use `-e -` to send to `STDOUT`)
-- `-E` suppresses any parsing or evaluation errors
+- `-C`, `--check` suppresses the printing of results so only errors are shown
+- `-d`, `--clear` removes the contents of every equals expression
+- `-n`, `--no-clobber` ensures that the input file is not modified
+- `-e`, `--errors <ERR_FILE>` specifies a file to output errors to. By default it sends to STDERR
+- `-E`, `--no-errors` suppresses any parsing or evaluation errors
+- `-f`, `--filename <INPUT_PATH>` indicates the internal name to use for the input
+- `-L`, `--pkg <DIRECTORY>` searches the given directory for more packages
+- `--no-local-pkgs` prevents `afed` from loading packages from the default locations
 
 More information can be found about the command line options
-can be found in the help message `afed -h`
+can be found in the help message `afed -h` or `afed --help`
 or in the manpages `man afed`.
 
 ### From Vim
@@ -80,7 +80,7 @@ For a larger source, take a look at the test cases in `tests/examples`.
 
 ## Installation
 
-After cloning this repository, you can build the source using `cargo build -r`.
+After cloning this repository, you can build the source using `cargo build --release`.
 The Afed interpreter executable will be available at `./target/release/afed`.
 This executable or a link to it should be placed in `/usr/local/bin`
 (or anywhere else in the `$PATH`).

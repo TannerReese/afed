@@ -278,5 +278,3 @@ pub fn pt_to_obj<T: Into<Object>>(mut pt: Point<T>) -> Object {
         pt.into()
     }
 }
-
-

@@ -1,5 +1,3 @@
-use afed_objects::test_file;
-
-test_file! {calc, "calc.af"}
-test_file! {plot, "plot.af"}
-
+use afed_objects::test_with_libs;
+test_with_libs! {calc, "calc.af"}
+test_with_libs! {plot, "plot.af"}
