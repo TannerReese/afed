@@ -118,9 +118,13 @@ impl<'lib> LoadedPkgs<'lib> {
             let version: &str;
             (name, version, pkg) = (*build)();
             if version != afed_objects::VERSION {
-                print_error(errout, format!(
-                    "Library uses version \"{}\" of afed_objects, instead of version \"{}\"",
-                    version, afed_objects::VERSION)
+                print_error(
+                    errout,
+                    format!(
+                        "Library uses version \"{}\" of afed_objects, instead of version \"{}\"",
+                        version,
+                        afed_objects::VERSION
+                    ),
                 );
                 return false;
             }

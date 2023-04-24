@@ -245,8 +245,17 @@ These definitions also support destructuring of arrays and maps.
 For maps, the destructuring may be fuzzy about the presence of other keys.
 .IP
 .EX
-f [x, y] {a: c, ..}: x * y + c,
-f [3, 2] {a: 5, b: ""} = `11`,
+f [_, x, y, _] {a: c, ..}: x * y + c,
+f [0, 3, 2, -1] {a: 5, b: ""} = `11`,
+.EE
+.P
+The '\fB_\fP' indicates an argument that will be ignored. It may be present zero or more times.
+The '\fB..\fP' indicates that the map may have unmatched keys.
+Destructuring can also be used to define variables.
+.IP
+.EX
+[{q: [_, y], r: z}, _, x]: [{"q": [8, false], r: null}, 1, 2],
+x = `2`, y = `false`, z = `null`,
 .EE
 .P
 
@@ -280,7 +289,8 @@ We can also do qualified imports by encompassing the \fBuse\fP in a map
 my_child: { use "child.af" },
 .EE
 .P
-Note that \fBuse\fP can only occur inside of a map body cannot be used as a variable.
+Note that \fBuse\fP can only occur inside of a map body.
+Also, \fBuse\fP cannot be used as a variable name.
 
 .SH AUTHOR
 .IP

@@ -37,7 +37,7 @@ or in the manpages `man afed`.
 
 - `,,`  Evaluate and place results in the document(doesn't print errors)
 - `,.`  Print out errors (doesn't place results)
-- `,l`  Clear all equals expressions (e.g. ``3 + 4 = `7` `` becomes ```3 + 4 = `` ```)
+- `,l`  Clear all equals expressions (e.g. ``3 + 4 = `7`,`` becomes ```3 + 4 = ``,```)
 
 All key bindings are defined in `vim/ftplugin/afed.vim`.
 

@@ -48,3 +48,11 @@ a1.a2.a3.a4.a5 = `{a6: 2}`,
 # Test map evaluating to its target
 { x: 54 - 9, [: x / y] = `[45 / 77]`, y: 11 * 7 } = `45 / 77`,
 
+# Test destructuring for variable definition
+{
+    [x, {"a": [y, _], ..}, _, z]: [2.3, {a: ["hello", "world"], other: null}, 3, true],
+	x = `2.3`, y = `"hello"`, z = `true`,
+	f r s: {[rp, sp]: [2 * r - 1, s + " "], : rp * sp},
+	f 2 "ab" = `"ab ab ab "`,
+},
+

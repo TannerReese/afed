@@ -379,7 +379,12 @@ impl<'a> ParsingContext<'a> {
                         many0!(self.pattern())
                     ),
                     self.char(':')
-                )
+                ),
+                // Try treating the key as a pattern instead
+                match self.defn_with_pat(doc) {
+                    Ok(id) => return Ok(id),
+                    Err(err) => Err(err),
+                }
             )),
             self.equals(doc)
         )?;
@@ -397,6 +402,11 @@ impl<'a> ParsingContext<'a> {
         } else {
             Ok(body)
         }
+    }
+
+    fn defn_with_pat(&mut self, doc: &mut Docmt) -> ParseResult<ExprId> {
+        let (pat, _, body) = tuple!(self: self.pattern(), self.char(':'), self.equals(doc))?;
+        Ok(doc.arena.create_defn_with_pat(pat, body))
     }
 
     // Parse optional equals statement (e.g. '3 + 4 = ``' but also '3 + 4')

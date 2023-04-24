@@ -1,9 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::iter::zip;
 
-use super::{ArgId, ExprArena};
-
-use afed_objects::{array::Array, eval_err, map::Map, Object};
+use afed_objects::{array::Array, eval_err, map::Map, ErrObject, Object};
 
 // Tree of arguments used for destructuring calls
 #[derive(Debug, Clone)]
@@ -99,7 +98,7 @@ impl<T: Eq> Pattern<T> {
     }
 }
 
-impl<T: Eq> Pattern<T> {
+impl<T: Eq + Hash + Clone> Pattern<T> {
     pub fn contains(&self, x: &T) -> bool {
         match self {
             Pattern::Ignore => false,
@@ -108,14 +107,34 @@ impl<T: Eq> Pattern<T> {
             Pattern::Map(_, pats) => pats.values().any(|p| p.contains(x)),
         }
     }
+
+    pub fn arg_set(&self) -> HashSet<T> {
+        let mut set = HashSet::new();
+        self.arg_set_raw(&mut set);
+        set
+    }
+
+    fn arg_set_raw(&self, set: &mut HashSet<T>) {
+        match self {
+            Pattern::Ignore => {}
+            Pattern::Arg(arg) => {
+                set.insert(arg.clone());
+            }
+            Pattern::Array(pats) => pats.iter().for_each(|p| p.arg_set_raw(set)),
+            Pattern::Map(_, pats) => pats.values().for_each(|p| p.arg_set_raw(set)),
+        }
+    }
 }
 
-impl Pattern<ArgId> {
-    pub fn match_args(&self, arena: &ExprArena, input: Object) -> Result<(), Object> {
+impl<I> Pattern<I> {
+    pub fn match_args<F>(&self, setter: &mut F, input: Object) -> Result<(), ErrObject>
+    where
+        F: FnMut(&I, Object),
+    {
         match self {
             Pattern::Ignore => Ok(()),
             Pattern::Arg(id) => {
-                arena.set_arg(*id, input);
+                setter(id, input);
                 Ok(())
             }
             // Try to destructure `input` as an Array of arguments
@@ -130,7 +149,7 @@ impl Pattern<ArgId> {
                 }
 
                 for (x, p) in zip(elems, pats.iter()) {
-                    p.match_args(arena, x)?;
+                    p.match_args(setter, x)?;
                 }
                 Ok(())
             }
@@ -140,7 +159,7 @@ impl Pattern<ArgId> {
                 let Map(mut elems) = input.cast()?;
                 for (key, p) in pats.iter() {
                     if let Some(x) = elems.remove(key) {
-                        p.match_args(arena, x)?;
+                        p.match_args(setter, x)?;
                     } else {
                         return Err(eval_err!("Map is missing key {}", key,));
                     }

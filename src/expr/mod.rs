@@ -1,7 +1,8 @@
 use id_arena::{Arena, Id};
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::fmt::{Debug, Error, Formatter};
+use std::hash::Hasher;
 use std::slice::Iter;
 
 use afed_objects::{array::Array, eval_err, map::Map, pkg::Pkg, Binary, Object, Unary};
@@ -15,7 +16,7 @@ use func::Func;
 pub use pattern::Pattern;
 
 #[derive(Debug, Clone)]
-pub struct ExprArena(Arena<Node>);
+pub struct ExprArena(Arena<Node>, HashSet<String>);
 pub type ExprId = Id<Node>;
 type VarId = ExprId;
 pub type ArgId = ExprId;
@@ -62,7 +63,7 @@ enum Inner {
         elems: HashMap<String, ExprId>,
     },
 
-    // Variable node that repre
+    // Effectively a pointer node to other nodes
     Var {
         name: String,
         // Reference to other node whose value this one takes
@@ -70,6 +71,11 @@ enum Inner {
         // Whether this variable node is the definition of the variable
         is_defn: bool,
     },
+
+    // Destructure value and store the values in variable nodes
+    // Ids for Pattern are the IDs of the associated DestructArgs
+    Destruct(Pattern<String>, ExprId),
+
     Unary(Unary, ExprId),
     Binary(Binary, ExprId, ExprId),
     Access {
@@ -242,7 +248,7 @@ impl Default for ExprArena {
  */
 impl ExprArena {
     pub fn new() -> Self {
-        Self(Arena::new())
+        Self(Arena::new(), HashSet::new())
     }
 
     // Helper method for other create methods
@@ -294,6 +300,20 @@ impl ExprArena {
                 }
             })
             .collect()
+    }
+
+    // Create a string not used before for a variable
+    fn make_unique_name(&self) -> String {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_usize(self.1.len());
+        loop {
+            hasher.write_usize(0); // Make sure the hash changes every loop
+            let hash = hasher.finish();
+            let unique = format!("UNIQUE<{}>", hash);
+            if !self.1.contains(&unique) {
+                break unique;
+            }
+        }
     }
 
     pub fn create_array(&mut self, elems: Vec<ExprId>) -> ExprId {
@@ -354,6 +374,7 @@ impl ExprArena {
     }
 
     pub fn create_var(&mut self, name: String) -> VarId {
+        self.1.insert(name.clone());
         self.0.alloc_with_id(|id| Node {
             simplifying: Cell::new(false),
             vars: vec![id],
@@ -369,6 +390,7 @@ impl ExprArena {
 
     pub fn create_defn(&mut self, name: String, body: ExprId) -> VarId {
         let mut vars = self.take_vars(body);
+        self.1.insert(name.clone());
         self.0.alloc_with_id(|id| {
             vars.push(id);
             Node {
@@ -383,6 +405,28 @@ impl ExprArena {
                 },
             }
         })
+    }
+
+    fn create_destruct(&mut self, pat: Pattern<String>, body: ExprId) -> ExprId {
+        let vars = self.take_vars(body);
+        self.create_node(vars, Inner::Destruct(pat, body))
+    }
+
+    pub fn create_defn_with_pat(&mut self, pat: Pattern<String>, body: ExprId) -> VarId {
+        let arg_set = pat.arg_set();
+        let dstr = self.create_destruct(pat, body);
+        let unique_name = self.make_unique_name();
+        let dstr_defn = self.create_defn(unique_name.clone(), dstr);
+
+        for arg in arg_set.into_iter() {
+            let dstr_ref = self.create_var(unique_name.clone());
+            let access = self.create_access(dstr_ref, vec![arg.clone()]);
+            let var_id = self.create_defn(arg, access);
+
+            let mut vars = self.take_vars(var_id);
+            self.0[dstr_defn].vars.append(&mut vars);
+        }
+        dstr_defn
     }
 
     pub fn create_unary(&mut self, op: Unary, arg: ExprId) -> ExprId {
@@ -673,6 +717,27 @@ impl ExprArena {
                 }
             }
 
+            // Try to simplify argument and then destructure it and make a map
+            // Its value isn't set. Instead it sets the values for its DestructArgs
+            Inner::Destruct(pattern, target) => {
+                let target = *target;
+                if simplify!(target) {
+                    let mut args = HashMap::new();
+                    if let Err(err) = pattern.match_args(
+                        &mut |name, obj| {
+                            args.insert(name.clone(), obj);
+                        },
+                        self.take(target),
+                    ) {
+                        Some(err)
+                    } else {
+                        Some(Object::new(Map(args)))
+                    }
+                } else {
+                    None
+                }
+            }
+
             // Try to simplify argument and apply unary operator
             &Inner::Unary(op, arg) => {
                 if simplify!(arg) {
@@ -853,6 +918,11 @@ impl ExprArena {
 
             // The `target` is no longer valid in the new arena
             Inner::Var { name, .. } => arena.create_var(name.clone()),
+            Inner::Destruct(pattern, target) => {
+                let target = self.clone_into(arena, *target);
+                arena.create_destruct(pattern.clone(), target)
+            }
+
             &Inner::Unary(op, arg) => {
                 let arg = self.clone_into(arena, arg);
                 arena.create_unary(op, arg)

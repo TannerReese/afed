@@ -91,7 +91,9 @@ impl Operable for Func {
                 self.arena.clear_cache();
                 // Match up given arguments with pattern `self.pats`
                 for (pat, obj) in zip(self.pats.iter(), args.into_iter()) {
-                    if let Err(err) = pat.match_args(&self.arena, obj) {
+                    if let Err(err) =
+                        pat.match_args(&mut |id: &ArgId, val| self.arena.set_arg(*id, val), obj)
+                    {
                         return err;
                     }
                 }
