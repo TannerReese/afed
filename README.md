@@ -73,6 +73,7 @@ This is implemented by plugins that call the primary Afed interpreter.
 - Argument destructuring of maps and arrays in lambdas and functions
 - First-class functions that can be passed to other functions
 - Importing of other Afed files using `use`
+- User-definable classes with operator overloading using `Class`
 - Help messages for all builtin types and methods (e.g. `help 5.gcd`)
 
 There is some example code presented in the manual page, `afed.1`.

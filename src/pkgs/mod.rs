@@ -10,6 +10,7 @@ use libloading::{Library, Symbol};
 use afed_objects::pkg::Pkg;
 
 pub mod arr;
+pub mod cls;
 pub mod math;
 
 const PACKAGE_FOLDERNAME: &str = "pkgs";
@@ -195,5 +196,9 @@ impl<'lib> LoadedPkgs<'lib> {
         let mut arr = arr::build_pkg();
         make_all_global(&mut arr);
         self.add(errout, "arr", arr);
+
+        let mut cls = cls::build_pkg();
+        make_all_global(&mut cls);
+        self.add(errout, "cls", cls);
     }
 }

@@ -286,8 +286,7 @@ impl Number {
                     let n = (n1.unsigned_abs() * d2) / (n2.unsigned_abs() * d1);
                     (n as i64).into()
                 } else {
-                    let n =
-                        (n1.unsigned_abs() * d2 - 1) / (n2.unsigned_abs() * d1) + 1;
+                    let n = (n1.unsigned_abs() * d2 - 1) / (n2.unsigned_abs() * d1) + 1;
                     (-(n as i64)).into()
                 }
             }

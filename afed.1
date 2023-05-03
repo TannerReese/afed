@@ -216,9 +216,12 @@ There are methods defined on many of these types which can be called like
 .EX
 3.log 81 = `4`,  # Log base 3 of 81
 [1, 2, 3].len = `3`,
-"hello".upper = `"HELLO"`,
+"foo".upper = `"FOO"`,
+"Hello\\nWorld".print = `Hello
+World`,
 .EE
 .P
+Notice that \fB.print\fP can be used to print strings raw and unquoted.
 Values can be assigned to variables and used later.
 The order of declaration is irrelevant for evaluation.
 These variables can be scoped using maps.
@@ -259,8 +262,49 @@ x = `2`, y = `false`, z = `null`,
 .EE
 .P
 
+Classes can be defined by passing a map to the \fBClass\fP function.
+The passed map contains the constructor (labelled "new"), the instance methods,
+and the operator overloads (e.g. \fB__call\fP, \fB__add\fP, ...).
+The string converter method is \fB__str\fP.
+Like Python, the first argument of instance methods will be the instance itself.
+The instance variables are called the \fIdata\fP.
+It can be any object, though a map would be a prudent choice.
+The \fIdata\fP for any instance will be set to the object returned by \fBnew\fP.
+To construct instances inside of the methods, one can call \fB.new\fP on any existing instance.
+.IP
+.EX
+Person: Class {
+    POPULATION: 10 ^ 5,
+
+    new n a: {name: n, age: a},
+    __add self shift: self.new self.name (self.age + shift),
+
+    mult_by_age self x: x * self.age,
+    add_surname self lastname: self.new (self.name + " " + lastname) self.age,
+    __str self: "Person(" + self.name + ", " + self.age.str + ")",
+},
+Person.POPULATION = `100000`,
+
+george: Person "George" 35 = `Person(George, 35)`,
+george.__data = `{age: 35, name: "George"}`,
+george + 10 = `Person(George, 45)`,
+
+george.mult_by_age 2 = `70`,
+Person.mult_by_age george 3 = `105`,
+george_jones: george.add_surname "Jones" = `Person(George Jones, 35)`,
+.EE
+.P
+Here \fBPerson\fP serves as the constructor and representative of the class.
+Whenever a attribute or method is accessed that is not defined in the class,
+the \fIdata\fP will be queried instead.
+Above the \fIdata\fP object is directly obtained using \fB__data\fP.
+The constructor \fBnew\fP may be omitted.
+Then, the constructor will take a single object and set it as the \fIdata\fP object.
+\fBClass\fP may also be accessed as \fBcls.Class\fP.
+
+
 More information about any objects, methods, or packages can be found by calling \fBhelp\fP.
-For example, to get information about the \fBlen\fP method or the number,
+For example, to get information about the \fBlen\fP method or the number type,
 we can call
 .IP
 .EX

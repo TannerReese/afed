@@ -12,7 +12,7 @@ syn keyword afedOper if
 hi link afedOper Operator
 
 " Syntactic Keywords
-syn keyword afedKeyword use help
+syn keyword afedKeyword use help Class
 hi link afedKeyword Keyword
 
 " Variable name
@@ -32,9 +32,16 @@ syn keyword afedConstant null true false
 hi link afedConstant Constant
 
 " Builtin objects
-syn keyword afedBuiltin math arr num lin calc contained
+syn keyword afedBuiltin math arr cls num lin calc contained
 syn match afedBuiltinWithPeriod /\v\a\w*\./ contains=afedBuiltin,afedOper
 hi link afedBuiltin Structure
+
+" Class keywords
+syn keyword afedClassKeywords new clsname __data __call __str
+syn keyword afedClassKeywords __and __rand __or __ror __eq __leq
+syn keyword afedClassKeywords __add __radd __sub __rsub __mul __rmul __div __rdiv
+syn keyword afedClassKeywords __mod __rmod __flrdiv __rflrdiv __pow __rpow
+hi link afedClassKeywords Structure
 
 " Results of Calculation
 syn region afedResult start=/`/ skip=/?./ end=/`/ keepend contained
@@ -42,7 +49,7 @@ syn region afedEqualsStmt start=/\v\=(\s|\n|#[^\n]*\n|#\{.{-}\}#)*`/ skip=/?./ e
 hi link afedResult Special
 
 " Identifier in Map
-syn match afedLabel /\v(\a\w*|\s|\n|_|\[.{-}\]|\{.{-}\}|#[^\n]*\n|#\{.{-}\}#)*:/ contains=afedName,afedIgnorePattern,afedString,afedOper,afedComment
+syn match afedLabel /\v(\a\w*|\s|\n|_|\[.{-}\]|\{.{-}\}|#[^\n]*\n|#\{.{-}\}#)*:/ contains=afedName,afedIgnorePattern,afedString,afedOper,afedComment,afedClassKeywords
 hi link afedLabel Ignore
 syn keyword afedIgnorePattern _
 hi link afedIgnorePattern Structure

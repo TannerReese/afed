@@ -1,0 +1,4 @@
+line 4, column 23 of "cls.af" Eval Error: Cannot call method invalid_method on type class instance
+line 5, column 13 of "cls.af" Eval Error: Binary operator % not implemented between Person(John) and 23
+line 6, column 9 of "cls.af" Eval Error: Binary operator * not implemented between NumStr(2, 'a') and 5
+3 Eval Errors encountered

@@ -543,15 +543,18 @@ impl ExprArena {
             let node = &self.0[exp];
             if let Some(obj) = node.value.take() {
                 node.value.set(Some(obj));
-                return node
-            } else if let Inner::Var {target: Some(id), ..} = &node.inner {
+                return node;
+            } else if let Inner::Var {
+                target: Some(id), ..
+            } = &node.inner
+            {
                 exp = *id;
                 if !var_ids.insert(exp) {
                     node.value.set(Some(eval_err!("Circular dependency")));
-                    return node
+                    return node;
                 }
             } else {
-                return node
+                return node;
             }
         }
     }

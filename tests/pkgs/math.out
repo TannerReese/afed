@@ -1,4 +1,4 @@
-# Test num library
+# Test math library
 
 # Constants
 pi = `3.141592653589793`, math.pi = `3.141592653589793`,

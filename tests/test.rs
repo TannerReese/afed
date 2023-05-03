@@ -33,3 +33,4 @@ test_bin! {object_map, "object/map.af"}
 
 test_bin! {pkgs_math, "pkgs/math.af"}
 test_bin! {pkgs_arr, "pkgs/arr.af"}
+test_bin! {pkgs_cls, "pkgs/cls.af"}

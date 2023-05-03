@@ -1,0 +1,49 @@
+# Test cls builtin package
+
+# Erroneous statements
+john.invalid_method = ``,
+john % 23 = ``,
+x * 5 = ``,
+
+# Create constructors
+Person: Class {
+	clsname: "Person",
+	THE_ANSWER: 42,
+	CITY_CONSTANT: "New York",
+	in_city p: (p.__data + " is in " + CITY_CONSTANT).print,
+
+	__call p msg: (p.__data + " says '" + msg + "'").print,
+    __str p: "Person(" + p.__data + ")",
+	meet p1 p2: (p1.__data + " meets " + p2.__data).print,
+},
+
+NumStr: cls.Class {
+    new n s: [n, s],
+    nmb ns: ns 0, str ns: ns 1,
+	nmb_pow ns p: ns.nmb ^ p,
+    __call ns i: ns.__data i,
+
+    __add ns1 ns2: ns1.new (ns1.nmb + ns2 0) (ns1 1 + ns2.str),
+    __rmul ns i: ns.new (i * ns.nmb) (ns.str * i),
+    __str ns: "NumStr(" + ns.nmb.str + ", '" + ns.str + "')",
+},
+
+# Test class constants
+Person.clsname = ``,
+Person.CITY_CONSTANT.print = ``,
+Person.THE_ANSWER = ``,
+
+
+# Test instances
+john: Person "John",
+mary: Person "Mary",
+john "Goodbye" = ``,
+Person.meet john mary = ``,
+mary.meet john = ``,
+mary.in_city = ``,
+
+x: NumStr 2 "a", y: NumStr (-7) "c",
+y.nmb_pow 2 = ``,
+x + y = ``,
+5 * x = ``,
+

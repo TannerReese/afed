@@ -388,7 +388,10 @@ impl Object {
 
     pub fn call(&self, attr: Option<&str>, args: Vec<Object>) -> Object {
         let arity: usize;
-        if let Some(x) = (*self.0).arity(attr) {
+        if attr.is_none() && args.is_empty() {
+            // Pass through trivial calls
+            return self.clone();
+        } else if let Some(x) = (*self.0).arity(attr) {
             arity = x;
         } else if let Some(method) = attr {
             return eval_err!(
@@ -397,11 +400,13 @@ impl Object {
                 (*self.0).type_name_dyn()
             );
         } else {
-            return eval_err!("Cannot call type {}", (*self.0).type_name_dyn(),);
+            return eval_err!("Cannot call type {}", (*self.0).type_name_dyn());
         }
 
         match args.len().cmp(&arity) {
+            // Call attribute if arguments match
             Ordering::Equal => return (*self.0).call(attr, args),
+            // Defer call if not enough arguments present
             Ordering::Less => {
                 let attr = attr.map(|s| s.to_owned());
                 return PartialEval::create(self.clone(), attr, args);
