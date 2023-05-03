@@ -5,6 +5,8 @@
 
 # Circular dependence error
 {
+    q: q, q = `Eval Error: Circular dependency`,
+    a: b, b: c, c: a, a = `Eval Error: Circular dependency`,
     foo: {x: 5 * bar.y = `Eval Error: Circular dependency`},
     bar: {y: baz.z - 2 = `Eval Error: Circular dependency`},
     baz: {z: 7 / foo.x = `Eval Error: Circular dependency`},

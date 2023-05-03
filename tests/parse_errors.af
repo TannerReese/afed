@@ -5,6 +5,8 @@
 
 # Circular dependence error
 {
+    q: q, q = ``,
+    a: b, b: c, c: a, a = ``,
     foo: {x: 5 * bar.y = ``},
     bar: {y: baz.z - 2 = ``},
     baz: {z: 7 / foo.x = ``},

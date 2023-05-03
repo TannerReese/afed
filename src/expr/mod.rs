@@ -536,18 +536,22 @@ impl ExprArena {
 impl ExprArena {
     // Iteratively follow variable references to find first non-variable node
     fn get_node(&self, mut exp: ExprId) -> &Node {
+        // Track visited Var nodes to prevent circular dependency
+        let mut var_ids = HashSet::new();
+        var_ids.insert(exp);
         loop {
             let node = &self.0[exp];
             if let Some(obj) = node.value.take() {
                 node.value.set(Some(obj));
-                return node;
-            } else if let Inner::Var {
-                target: Some(id), ..
-            } = &node.inner
-            {
+                return node
+            } else if let Inner::Var {target: Some(id), ..} = &node.inner {
                 exp = *id;
+                if !var_ids.insert(exp) {
+                    node.value.set(Some(eval_err!("Circular dependency")));
+                    return node
+                }
             } else {
-                return node;
+                return node
             }
         }
     }

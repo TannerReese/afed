@@ -25,6 +25,7 @@ impl Operable for Map {
     fn unary(self, _: Unary) -> Option<Object> {
         None
     }
+
     fn binary(mut self, _: bool, op: Binary, other: Object) -> Result<Object, (Object, Object)> {
         if Binary::Add == op {
             match other.try_cast::<Map>() {
